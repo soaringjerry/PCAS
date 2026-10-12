@@ -3,13 +3,15 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -27,7 +29,7 @@ func TestQ5LiveSecretaryUnderExtractionLoad(t *testing.T) {
 	scope := owner()
 	models := q5LiveModels(t, false)
 	s.SetModels(models)
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	dir := t.TempDir()
 	binary, err := os.Executable()
 	if err != nil {

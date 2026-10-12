@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 const comparisonBlockSize = compareLimit / 2
@@ -110,7 +111,7 @@ func comparisonPlanTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 					batch.Memories[i].N = i + 1
 					batch.Refs = append(batch.Refs, batch.Memories[i].Ref)
 				}
-				hash := sha256.Sum256(asJSON([]any{batch.Refs, batch.Memories}))
+				hash := sha256.Sum256(kernel.JSON([]any{batch.Refs, batch.Memories}))
 				batch.Fingerprint = fmt.Sprintf("%x", hash)
 				out = append(out, batch)
 			}
@@ -215,7 +216,7 @@ func writeComparisonReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, v
  ON CONFLICT(owner_id,group_key,block_a,block_b) DO UPDATE SET fingerprint=excluded.fingerprint,rule=excluded.rule,attempts=memory_comparison_batches.attempts+1,completed_at=NULL RETURNING attempts`, string(owner), b.Group.Key, b.A, b.B, b.Fingerprint, version).Scan(&attempts); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, "UPDATE memory_comparison_batches SET retry_after=clock_timestamp()+$5*interval '1 second' WHERE owner_id=$1 AND group_key=$2 AND block_a=$3 AND block_b=$4", string(owner), b.Group.Key, b.A, b.B, retryDelay(attempts).Seconds())
+		_, err := tx.Exec(ctx, "UPDATE memory_comparison_batches SET retry_after=clock_timestamp()+$5*interval '1 second' WHERE owner_id=$1 AND group_key=$2 AND block_a=$3 AND block_b=$4", string(owner), b.Group.Key, b.A, b.B, kernel.RetryDelay(attempts).Seconds())
 		return err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO memory_comparison_batches(owner_id,group_key,block_a,block_b,fingerprint,rule,completed_at)
@@ -229,7 +230,7 @@ func writeComparisonReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, v
  SELECT $1,$2,input.id,input.version,$3,clock_timestamp() FROM jsonb_to_recordset($4::jsonb) input(id uuid,version integer)
  JOIN claims cl ON(cl.owner_id,cl.id)=($1::uuid,input.id)
  ON CONFLICT(owner_id,group_key,claim_id) DO UPDATE SET claim_version=excluded.claim_version,rule=excluded.rule,compared_at=excluded.compared_at,completed=false
- WHERE (memory_group_progress.claim_version,memory_group_progress.rule) IS DISTINCT FROM (excluded.claim_version,excluded.rule)`, string(owner), b.Group.Key, version, asJSON(b.Refs))
+ WHERE (memory_group_progress.claim_version,memory_group_progress.rule) IS DISTINCT FROM (excluded.claim_version,excluded.rule)`, string(owner), b.Group.Key, version, kernel.JSON(b.Refs))
 	return err
 }
 

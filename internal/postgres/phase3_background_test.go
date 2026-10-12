@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -86,7 +87,7 @@ func phase3NewModel(t *testing.T, f *phase3LoadedFixture) *phase3Model {
 			evidence := func(kind, id string, version int) []map[string]any {
 				return []map[string]any{{"kind": kind, "id": id, "version": version}}
 			}
-			out = string(asJSON(map[string]any{"conclusion": []any{map[string]any{"text": fmt.Sprintf("虚构项目当前方案为第%d版，预算%d虚构单位。", v.Number, v.BudgetUnits), "evidence": evidence("documentVersion", doc.ID, v.Number)}}, "blockers": []any{map[string]any{"text": "虚构卡点已经解决，该事项状态为done。", "evidence": evidence("item", p.Items[0].ID, 0)}}, "nextSteps": []any{map[string]any{"text": "根据虚构最新更正和最新预算续做。", "evidence": evidence("memory", string(f.Claims[p.CurrentMemory]), 1)}}}))
+			out = string(kernel.JSON(map[string]any{"conclusion": []any{map[string]any{"text": fmt.Sprintf("虚构项目当前方案为第%d版，预算%d虚构单位。", v.Number, v.BudgetUnits), "evidence": evidence("documentVersion", doc.ID, v.Number)}}, "blockers": []any{map[string]any{"text": "虚构卡点已经解决，该事项状态为done。", "evidence": evidence("item", p.Items[0].ID, 0)}}, "nextSteps": []any{map[string]any{"text": "根据虚构最新更正和最新预算续做。", "evidence": evidence("memory", string(f.Claims[p.CurrentMemory]), 1)}}}))
 		}
 		if logical == "effort" {
 			items := []any{}
@@ -95,7 +96,7 @@ func phase3NewModel(t *testing.T, f *phase3LoadedFixture) *phase3Model {
 					items = append(items, map[string]any{"itemId": it.ID, "id": it.ID, "estimatedHours": 8, "hours": 8, "reason": "虚构步骤需要两个半天，每天可投入四小时。"})
 				}
 			}
-			out = string(asJSON(map[string]any{"items": items}))
+			out = string(kernel.JSON(map[string]any{"items": items}))
 		}
 		if override != nil {
 			out = override(logical, out)

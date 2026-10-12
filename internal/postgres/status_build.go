@@ -3,10 +3,12 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -156,9 +158,9 @@ func statusCallLock(ctx context.Context, s *Store) (func(), error) {
 // Kept as a compatibility handler for pre-upgrade queue slots. Cards are frozen.
 func (s *Store) ProcessCard(ctx context.Context, j worker.Job) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		return acknowledge(ctx, tx, j)
+		return kernel.Acknowledge(ctx, tx, j)
 	})
 }

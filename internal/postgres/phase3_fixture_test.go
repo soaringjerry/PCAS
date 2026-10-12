@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -186,7 +187,7 @@ func phase3LoadFixture(t *testing.T) *phase3LoadedFixture {
 				}
 			}
 			for _, run := range p.Runs {
-				if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(owner_id,id,thing_id,agent_id,status,reserved_cost,created_at,document) VALUES($1,$2,$3,$4,'done',0,$5,$6)`, scope.OwnerID, run.ID, p.ID, run.AgentID, run.CreatedAt, asJSON(run)); err != nil {
+				if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(owner_id,id,thing_id,agent_id,status,reserved_cost,created_at,document) VALUES($1,$2,$3,$4,'done',0,$5,$6)`, scope.OwnerID, run.ID, p.ID, run.AgentID, run.CreatedAt, kernel.JSON(run)); err != nil {
 					return err
 				}
 			}
@@ -207,7 +208,7 @@ func phase3LoadFixture(t *testing.T) *phase3LoadedFixture {
 				values, uploadErr := phase3ReflectCall(s, "UploadProjectFile", ctx, scope, p.ID, file.Title, file.MediaType, bytes.NewReader(file.Bytes))
 				if uploadErr == nil {
 					var uploaded phase3FileUpload
-					decodePhase3(t, asJSON(values[0].Interface()), &uploaded)
+					decodePhase3(t, kernel.JSON(values[0].Interface()), &uploaded)
 					if uploaded.File.ProjectID != p.ID {
 						t.Fatal("fixture upload lost project scope")
 					}

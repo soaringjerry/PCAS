@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
@@ -57,7 +58,7 @@ func projectHandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id st
 }
 func (s *Store) ReadProjectHandover(ctx context.Context, scope memory.Scope, id string) (workspace.ProjectHandover, error) {
 	out := emptyProjectHandover(id)
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !memory.ID(id).Valid() {
@@ -133,7 +134,7 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 	if err = tx.QueryRow(ctx, `SELECT count(*) FROM project_input_events WHERE owner_id=$1 AND project_id=$2`, string(scope.OwnerID), id).Scan(&out.Events); err != nil {
 		return out, nil, err
 	}
-	items, err := queryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND (id=$2 OR project_id=$2) ORDER BY id`, string(scope.OwnerID), id)
+	items, err := kernel.QueryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND (id=$2 OR project_id=$2) ORDER BY id`, string(scope.OwnerID), id)
 	if err != nil {
 		return out, nil, err
 	}
@@ -143,7 +144,7 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 		item.ProjectHandover = nil
 		out.Parts = append(out.Parts, projectInputPart{Evidence: workspace.ProjectEvidence{Kind: "item", ID: item.ID}, Content: item})
 	}
-	docs, err := queryDocuments[workspace.Doc](ctx, tx, `SELECT d.document FROM work_documents d JOIN work_items w ON(w.owner_id,w.id)=(d.owner_id,d.thing_id) WHERE d.owner_id=$1 AND (w.id=$2 OR w.project_id=$2) ORDER BY d.id`, string(scope.OwnerID), id)
+	docs, err := kernel.QueryDocuments[workspace.Doc](ctx, tx, `SELECT d.document FROM work_documents d JOIN work_items w ON(w.owner_id,w.id)=(d.owner_id,d.thing_id) WHERE d.owner_id=$1 AND (w.id=$2 OR w.project_id=$2) ORDER BY d.id`, string(scope.OwnerID), id)
 	if err != nil {
 		return out, nil, err
 	}
@@ -154,7 +155,7 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 		}
 		out.Parts = append(out.Parts, projectInputPart{Evidence: workspace.ProjectEvidence{Kind: "documentVersion", ID: doc.ID, Version: version}, Content: doc})
 	}
-	runs, err := queryDocuments[workspace.Run](ctx, tx, `SELECT document FROM (SELECT a.document,a.created_at,a.id,row_number() OVER(ORDER BY a.created_at DESC,a.id DESC) AS ordinal FROM agent_runs a JOIN work_items w ON(w.owner_id,w.id)=(a.owner_id,a.thing_id) WHERE a.owner_id=$1 AND (w.id=$2 OR w.project_id=$2) AND a.status='done') r ORDER BY created_at,id`, string(scope.OwnerID), id)
+	runs, err := kernel.QueryDocuments[workspace.Run](ctx, tx, `SELECT document FROM (SELECT a.document,a.created_at,a.id,row_number() OVER(ORDER BY a.created_at DESC,a.id DESC) AS ordinal FROM agent_runs a JOIN work_items w ON(w.owner_id,w.id)=(a.owner_id,a.thing_id) WHERE a.owner_id=$1 AND (w.id=$2 OR w.project_id=$2) AND a.status='done') r ORDER BY created_at,id`, string(scope.OwnerID), id)
 	if err != nil {
 		return out, nil, err
 	}
@@ -169,7 +170,7 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 			out.Parts = append(out.Parts, projectInputPart{Evidence: workspace.ProjectEvidence{Kind: "run", ID: run.ID}, Content: map[string]any{"output": run.Output, "adopted": run.Adopted, "createdAt": run.CreatedAt, "finishedAt": run.FinishedAt}})
 		}
 	}
-	ids, err := queryDocuments[string](ctx, tx, `SELECT to_jsonb(r.id::text) FROM memory_records r JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id) JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
+	ids, err := kernel.QueryDocuments[string](ctx, tx, `SELECT to_jsonb(r.id::text) FROM memory_records r JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id) JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
  WHERE r.owner_id=$1 AND r.state='active' AND cl.retired='' AND claim_source_is_current(r.owner_id,r.id,r.version,now()) AND (
  c.scope->>'project_id'=$2 OR EXISTS(SELECT 1 FROM status_current_members m JOIN entity_versions ev ON ev.owner_id=m.owner_id AND 'entity:'||ev.entity_id::text=m.key JOIN memory_records er ON(er.owner_id,er.id,er.version)=(ev.owner_id,ev.entity_id,ev.version) WHERE m.owner_id=r.owner_id AND m.claim_id=r.id AND ev.disambiguation->>'work_item_id'=$2)) ORDER BY r.id`, string(scope.OwnerID), id)
 	if err != nil {
@@ -200,7 +201,7 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 			out.Deadlines = append(out.Deadlines, d)
 		}
 	}
-	hash := sha256.Sum256(asJSON(out))
+	hash := sha256.Sum256(kernel.JSON(out))
 	out.Hash = hex.EncodeToString(hash[:])
 	return out, refs, nil
 }
@@ -215,12 +216,12 @@ func (a projectHandoverStore) Exclusive(ctx context.Context) (func(), error) {
 }
 
 func (a projectHandoverStore) RetryLater(j worker.Job, code string) error {
-	return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts)), NoAttempt: false}
+	return &worker.JobError{Code: code, Until: time.Now().Add(kernel.RetryDelay(j.Attempts)), NoAttempt: false}
 }
 
 func (a projectHandoverStore) Read(ctx context.Context, j worker.Job, fn func(projecthandover.Reader) error) error {
 	return pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		return fn(projectHandoverUnit{ctx: ctx, tx: tx, job: j, store: a.store, scope: memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}})
@@ -232,7 +233,7 @@ func (a projectHandoverStore) Apply(ctx context.Context, j worker.Job, fn func(p
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
 		}
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		return fn(projectHandoverUnit{ctx: ctx, tx: tx, job: j, store: a.store, scope: memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}})
@@ -272,12 +273,12 @@ func (u projectHandoverUnit) Event(outcome, reason string, count int) error {
 }
 
 func (u projectHandoverUnit) SaveHandover(project string, handover workspace.ProjectHandover, input projecthandover.Input) error {
-	_, err := u.tx.Exec(u.ctx, `INSERT INTO project_handovers(owner_id,project_id,body,written_at,input_events,input_hash) VALUES($1,$2,$3,clock_timestamp(),$4,$5) ON CONFLICT(owner_id,project_id) DO UPDATE SET body=excluded.body,written_at=excluded.written_at,input_events=excluded.input_events,input_hash=excluded.input_hash`, string(u.job.OwnerID), project, asJSON(handover), input.Events, input.Hash)
+	_, err := u.tx.Exec(u.ctx, `INSERT INTO project_handovers(owner_id,project_id,body,written_at,input_events,input_hash) VALUES($1,$2,$3,clock_timestamp(),$4,$5) ON CONFLICT(owner_id,project_id) DO UPDATE SET body=excluded.body,written_at=excluded.written_at,input_events=excluded.input_events,input_hash=excluded.input_hash`, string(u.job.OwnerID), project, kernel.JSON(handover), input.Events, input.Hash)
 	return err
 }
 
 func (u projectHandoverUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
-func (u projectHandoverUnit) Acknowledge() error   { return acknowledge(u.ctx, u.tx, u.job) }
+func (u projectHandoverUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }
 
 func currentProjectEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, input projectHandoverInput, out workspace.ProjectHandover) (projectHandoverInput, error) {
 	current := projectHandoverInput{Project: input.Project, Parts: []projectInputPart{}}

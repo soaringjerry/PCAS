@@ -150,6 +150,15 @@ Three flows keep their order in storage and get their model steps from the appli
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. Compose it after the store has its models.
 Tests in the storage package compose the same services in `internal/postgres/compose_test.go`, at each call.
 
+## Storage Packages
+
+The PostgreSQL adapter is being split by domain into storage packages over a shared kernel. The declarations of `internal/postgres` have no cycle among them, so a domain can leave in one behavior-neutral change when the kernel holds what it shares.
+
+| Package | Content | State |
+|---|---|---|
+| `internal/postgres/kernel` | The encoding of a document, the checks of a request, the reads of document rows, the lease and the queueing of a job, and the owner lock. No business rule and no table of one domain. | Since 2026-10-12. |
+| `internal/postgres` | Everything else, and the composition of the store. | Each domain leaves in its own change. The deputy's storage leaves last. |
+
 ## Pattern for the Next Paths
 
 1. Put each business rule in the domain package as a function that needs no database.

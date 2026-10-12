@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -57,7 +58,7 @@ func TestCompareImportedHumanMemoryUsableWithoutConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 	ref := b1Claim(t, s, scope, "云杉喜欢虚构松林。", "preference", "candidate", src)
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: asJSON(map[string]any{"includeInferred": false})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: kernel.JSON(map[string]any{"includeInferred": false})})
 	req := turnRequest("云杉喜欢虚构松林吗")
 	out := mustTurn(t, s, scope, req)
 	if out.Turn.Reply != "云杉喜欢虚构松林。" || !strings.Contains(f.last(t).Prompt, "trust=stated") {

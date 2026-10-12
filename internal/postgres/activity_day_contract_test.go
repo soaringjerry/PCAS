@@ -10,6 +10,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -59,7 +60,7 @@ func TestDayActivityAnswersWhatHappenedItsCostAndItsReasons(t *testing.T) {
 	})
 	s.models.Config.Providers[0].CostMode = ""
 	s.models.Config.Providers[0].InputPerMillion, s.models.Config.Providers[0].OutputPerMillion = 2, 4
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 
 	// One paid call leads to two actions. One of them is reversed.
 	request := turnRequest("Fictitious request with two tasks.")

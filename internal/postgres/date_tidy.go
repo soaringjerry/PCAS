@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/currentstate/datereview"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -153,7 +154,7 @@ func dateTidyInputTx(ctx context.Context, tx pgx.Tx, j worker.Job, class string,
 	left += cut
 	in.Entry.Memory, cut = clipRunes(in.Entry.Memory, dateTidyTextCharacters)
 	left += cut
-	if in.SameTitle, err = queryDocuments[dateTidySame](ctx, tx, `SELECT jsonb_build_object('at',coalesce(to_char(d.at AT TIME ZONE $4,'YYYY-MM-DD HH24:MI'),''),'saidOn',coalesce(to_char(rv.expressed_at AT TIME ZONE $4,'YYYY-MM-DD'),''),'originalText',left(d.original_text,$5))
+	if in.SameTitle, err = kernel.QueryDocuments[dateTidySame](ctx, tx, `SELECT jsonb_build_object('at',coalesce(to_char(d.at AT TIME ZONE $4,'YYYY-MM-DD HH24:MI'),''),'saidOn',coalesce(to_char(rv.expressed_at AT TIME ZONE $4,'YYYY-MM-DD'),''),'originalText',left(d.original_text,$5))
  FROM deadlines d
  JOIN memory_records r ON(r.owner_id,r.id,r.version)=(d.owner_id,d.claim_id,d.claim_version)
  JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(d.owner_id,d.claim_id,d.claim_version)
@@ -166,7 +167,7 @@ func dateTidyInputTx(ctx context.Context, tx pgx.Tx, j worker.Job, class string,
 		return in, false, 0, err
 	}
 	titles := func(kind, where string, limit int) ([]string, error) {
-		return queryDocuments[string](ctx, tx, "SELECT to_jsonb(document->>'title') FROM work_items WHERE owner_id=$1 AND kind=$2 AND "+where+" ORDER BY updated_at DESC,id LIMIT $3", string(j.OwnerID), kind, limit)
+		return kernel.QueryDocuments[string](ctx, tx, "SELECT to_jsonb(document->>'title') FROM work_items WHERE owner_id=$1 AND kind=$2 AND "+where+" ORDER BY updated_at DESC,id LIMIT $3", string(j.OwnerID), kind, limit)
 	}
 	if in.OpenTasks, err = titles("task", "status IN('todo','doing','waiting')", dateTidyTaskTitles); err != nil {
 		return in, false, 0, err
@@ -194,13 +195,13 @@ func (a dateReviewStore) Input(ctx context.Context, j worker.Job, class string) 
 
 func (a dateReviewStore) Drop(ctx context.Context, j worker.Job) error {
 	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		if err := discardPaidResultTx(ctx, tx, j); err != nil {
 			return err
 		}
-		return acknowledge(ctx, tx, j)
+		return kernel.Acknowledge(ctx, tx, j)
 	})
 }
 
@@ -209,13 +210,13 @@ func (a dateReviewStore) DiscardResult(ctx context.Context, j worker.Job) error 
 }
 
 func (a dateReviewStore) RetryLater(j worker.Job, code string) error {
-	return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts))}
+	return &worker.JobError{Code: code, Until: time.Now().Add(kernel.RetryDelay(j.Attempts))}
 }
 
 func (a dateReviewStore) Apply(ctx context.Context, j worker.Job, fn func(datereview.Unit) error) error {
 	now := a.store.businessNow()
 	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		return fn(dateReviewUnit{ctx: ctx, tx: tx, job: j, now: now, scope: memory.Scope{OwnerID: j.OwnerID, PrincipalID: "owner", IsOwner: true}})
@@ -258,7 +259,7 @@ func (u dateReviewUnit) RecordDecision(class string, input datereview.Input, out
 }
 
 func (u dateReviewUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
-func (u dateReviewUnit) Acknowledge() error   { return acknowledge(u.ctx, u.tx, u.job) }
+func (u dateReviewUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }
 
 type dateReviewAction struct {
 	ctx  context.Context

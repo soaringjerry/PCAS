@@ -3,9 +3,11 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/workspace"
 	"strings"
 	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func TestRunKeepsRelevantOldMemoryAheadOfRecentNoise(t *testing.T) {
@@ -25,7 +27,7 @@ func TestRunKeepsRelevantOldMemoryAheadOfRecentNoise(t *testing.T) {
 	if !strings.Contains(st.Runs[0].Brief, "蓝色灯塔") {
 		t.Fatal("relevant older memory was crowded out")
 	}
-	if !oneOf(relevant, st.Runs[0].ContextMemoryIDs...) {
+	if !kernel.OneOf(relevant, st.Runs[0].ContextMemoryIDs...) {
 		t.Fatal("retrieved memory missing dependency")
 	}
 	if _, err := s.Snapshot(ctx, scope); err != nil {

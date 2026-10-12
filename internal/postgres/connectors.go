@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 const connectionColumns = `id::text,name,kind,url,token_env,interval_seconds,enabled,version,status,last_sync,next_sync,imported,error_code,gaps`
@@ -28,7 +29,7 @@ func scanConnection(row pgx.Row) (connectors.Connection, error) {
 }
 func (s *Store) ListConnections(ctx context.Context, scope memory.Scope) ([]connectors.Connection, error) {
 	out := []connectors.Connection{}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	rows, err := s.pool.Query(ctx, "SELECT "+connectionColumns+" FROM connector_configs WHERE owner_id=$1 ORDER BY name,id", string(scope.OwnerID))
@@ -47,15 +48,15 @@ func (s *Store) ListConnections(ctx context.Context, scope memory.Scope) ([]conn
 }
 func (s *Store) ConfigureConnection(ctx context.Context, scope memory.Scope, in connectors.ConfigureRequest) (connectors.Configured, error) {
 	out := connectors.Configured{}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	if strings.TrimSpace(in.Name) == "" || len(in.Name) > 200 || !oneOf(in.Kind, "webhook", "poll", "folder") || in.IntervalSeconds < 15 || in.IntervalSeconds > 86400 {
+	if strings.TrimSpace(in.Name) == "" || len(in.Name) > 200 || !kernel.OneOf(in.Kind, "webhook", "poll", "folder") || in.IntervalSeconds < 15 || in.IntervalSeconds > 86400 {
 		return out, memory.ErrInvalid
 	}
 	if in.Kind == "poll" {
 		u, e := url.Parse(in.URL)
-		if e != nil || !oneOf(u.Scheme, "https", "http") || u.Host == "" || u.User != nil || u.Fragment != "" || len(in.URL) > 4096 {
+		if e != nil || !kernel.OneOf(u.Scheme, "https", "http") || u.Host == "" || u.User != nil || u.Fragment != "" || len(in.URL) > 4096 {
 			return out, memory.ErrInvalid
 		}
 	} else if in.URL != "" || in.TokenEnv != "" {
@@ -107,7 +108,7 @@ func (s *Store) ConfigureConnection(ctx context.Context, scope memory.Scope, in 
 	return out, err
 }
 func (s *Store) SyncConnection(ctx context.Context, scope memory.Scope, id memory.ID, version int) error {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
 	if !id.Valid() {
@@ -136,7 +137,7 @@ func (s *Store) AuthenticateConnection(ctx context.Context, id memory.ID, token 
 }
 func (s *Store) ImportBatch(ctx context.Context, scope memory.Scope, id memory.ID, batch connectors.Batch) (connectors.Result, error) {
 	out := connectors.Result{Refs: []memory.Ref{}, Gaps: []string{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !id.Valid() || len(batch.Records) > 100 {
@@ -159,7 +160,7 @@ func (s *Store) ImportBatch(ctx context.Context, scope memory.Scope, id memory.I
 		if e != nil {
 			return e
 		}
-		_, e = tx.Exec(ctx, "UPDATE connector_configs SET last_sync=now(),status='idle',error_code='',imported=imported+$3,gaps=$4 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(id), out.Imported, asJSON(out.Gaps))
+		_, e = tx.Exec(ctx, "UPDATE connector_configs SET last_sync=now(),status='idle',error_code='',imported=imported+$3,gaps=$4 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(id), out.Imported, kernel.JSON(out.Gaps))
 		return e
 	})
 	return out, err
@@ -194,7 +195,7 @@ func (s *Store) importBatchTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 				gaps = []string{}
 			}
 			var matches bool
-			err := tx.QueryRow(ctx, `SELECT conversation_key=$4 AND parent_key=$5 AND role=$6 AND branch=$7 AND gaps=$8::jsonb FROM source_contexts WHERE owner_id=$1 AND source_id=$2 AND source_version=$3`, string(scope.OwnerID), string(result.ID), result.Version, conversation, r.ParentID, r.Role, r.Branch, asJSON(gaps)).Scan(&matches)
+			err := tx.QueryRow(ctx, `SELECT conversation_key=$4 AND parent_key=$5 AND role=$6 AND branch=$7 AND gaps=$8::jsonb FROM source_contexts WHERE owner_id=$1 AND source_id=$2 AND source_version=$3`, string(scope.OwnerID), string(result.ID), result.Version, conversation, r.ParentID, r.Role, r.Branch, kernel.JSON(gaps)).Scan(&matches)
 			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 				return out, err
 			}
@@ -220,7 +221,7 @@ func (s *Store) importBatchTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 		if gaps == nil {
 			gaps = []string{}
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO source_contexts(owner_id,source_id,source_version,conversation_key,parent_key,role,branch,gaps) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, string(scope.OwnerID), string(result.ID), result.Version, conversation, r.ParentID, r.Role, r.Branch, asJSON(gaps))
+		_, err = tx.Exec(ctx, `INSERT INTO source_contexts(owner_id,source_id,source_version,conversation_key,parent_key,role,branch,gaps) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, string(scope.OwnerID), string(result.ID), result.Version, conversation, r.ParentID, r.Role, r.Branch, kernel.JSON(gaps))
 		if err != nil {
 			return out, err
 		}
@@ -319,7 +320,7 @@ func (s *Store) linkEpisodeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 			return err
 		}
 	}
-	return enqueue(ctx, tx, scope.OwnerID, memory.ID(id), version, "memory.index")
+	return kernel.Enqueue(ctx, tx, scope.OwnerID, memory.ID(id), version, "memory.index")
 }
 func (s *Store) ImportArchive(ctx context.Context, scope memory.Scope, name string, data []byte) (connectors.Result, error) {
 	return s.ingestArchive(ctx, scope, name, data, "archive")

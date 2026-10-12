@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -110,7 +111,7 @@ SELECT jsonb_build_object(
 // DayActivity returns one local day of the owner's recorded work. An empty
 // date selects the current local day.
 func (s *Store) DayActivity(ctx context.Context, scope memory.Scope, date string, limit, offset int) (json.RawMessage, error) {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return nil, err
 	}
 	if limit <= 0 {
@@ -121,7 +122,7 @@ func (s *Store) DayActivity(ctx context.Context, scope memory.Scope, date string
 	}
 	var out json.RawMessage
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if errors.Is(err, memory.ErrNotFound) {
 			settings.Timezone = "UTC"
 		} else if err != nil {
@@ -154,16 +155,16 @@ func (s *Store) DayActivity(ctx context.Context, scope memory.Scope, date string
 		if err := json.Unmarshal(result["events"], &events); err != nil {
 			return err
 		}
-		result["date"], result["timezone"] = asJSON(start.Format(time.DateOnly)), asJSON(settings.Timezone)
-		result["omittedEvents"] = asJSON(max(count-offset-len(events), 0))
+		result["date"], result["timezone"] = kernel.JSON(start.Format(time.DateOnly)), kernel.JSON(settings.Timezone)
+		result["omittedEvents"] = kernel.JSON(max(count-offset-len(events), 0))
 		// These records have no link that the system wrote. The query does not
 		// invent one from similar times.
-		result["gaps"] = asJSON([]string{
+		result["gaps"] = kernel.JSON([]string{
 			"an action has no recorded link to the model call that proposed it; both carry the execution identity when the action came from a secretary turn",
 			"a background action and a date review decision carry no execution identity",
 			"usage written before the call journal has no outcome or reason",
 		})
-		out = asJSON(result)
+		out = kernel.JSON(result)
 		return nil
 	})
 	return out, err

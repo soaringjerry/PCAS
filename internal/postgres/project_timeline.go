@@ -6,25 +6,26 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
 func refreshTaskPlansTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
-	items, err := queryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND document->>'estimatedHours' IS NOT NULL ORDER BY id`, string(scope.OwnerID))
+	items, err := kernel.QueryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND document->>'estimatedHours' IS NOT NULL ORDER BY id`, string(scope.OwnerID))
 	if err != nil {
 		return err
 	}
 	for _, item := range items {
-		before := string(asJSON(item))
+		before := string(kernel.JSON(item))
 		if err = maintainTaskPlanTx(ctx, tx, scope, &item); err != nil {
 			return err
 		}
-		if before == string(asJSON(item)) {
+		if before == string(kernel.JSON(item)) {
 			continue
 		}
 		item.Version++
-		item.UpdatedAt = stamp()
+		item.UpdatedAt = kernel.Stamp()
 		if err = saveItem(ctx, tx, scope, item); err != nil {
 			return err
 		}
@@ -33,7 +34,7 @@ func refreshTaskPlansTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) erro
 }
 func (s *Store) ReadProjectTimeline(ctx context.Context, scope memory.Scope, project string) (workspace.ProjectTimeline, error) {
 	out := workspace.ProjectTimeline{ProjectID: project, DailyHours: effort.DailyHours, Items: []workspace.TimelineItem{}, WithoutDue: []workspace.Item{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !memory.ID(project).Valid() {
@@ -47,11 +48,11 @@ func (s *Store) ReadProjectTimeline(ctx context.Context, scope memory.Scope, pro
 		if p.Kind != "project" {
 			return memory.ErrInvalid
 		}
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if err != nil {
 			return err
 		}
-		items, err := queryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND project_id=$2 ORDER BY due_at NULLS LAST,created_at,id`, string(scope.OwnerID), project)
+		items, err := kernel.QueryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND project_id=$2 ORDER BY due_at NULLS LAST,created_at,id`, string(scope.OwnerID), project)
 		if err != nil {
 			return err
 		}

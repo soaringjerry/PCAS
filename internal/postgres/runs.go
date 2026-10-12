@@ -12,6 +12,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -42,7 +43,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err != nil {
 			return err
 		}
-		agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
+		agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
 		if err != nil {
 			return err
 		}
@@ -67,7 +68,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			return err
 		}
 
-		run := workspace.Run{DocumentVersions: []workspace.RunDocumentVersion{}, DocumentID: c.DocumentID, BaseVersion: c.BaseVersion, TargetHash: targetHash, SmokeID: smokeID(ctx), ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: stamp()}
+		run := workspace.Run{DocumentVersions: []workspace.RunDocumentVersion{}, DocumentID: c.DocumentID, BaseVersion: c.BaseVersion, TargetHash: targetHash, SmokeID: smokeID(ctx), ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: kernel.Stamp()}
 		var brief deputy.Brief
 		projectID := item.ProjectID
 		var project *workspace.Item
@@ -91,7 +92,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			if !memory.ID(c.DocumentID).Valid() || c.BaseVersion < 1 {
 				return memory.ErrInvalid
 			}
-			target, e := queryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.DocumentID)
+			target, e := kernel.QueryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.DocumentID)
 			if e != nil {
 				return e
 			}
@@ -117,7 +118,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 		}
 		artifactRefs = append(artifactRefs, docRefs...)
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if err != nil {
 			return err
 		}
@@ -252,7 +253,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		brief.Request(c.Prompt, c.Kind, recallDates)
 		run.ContextMemoryIDs = append(run.ContextMemoryIDs, brief.MemoryIDs...)
 		run.ContextVersions = append(run.ContextVersions, brief.Versions...)
-		run.ContextVersions = uniqueRefs(run.ContextVersions)
+		run.ContextVersions = kernel.UniqueRefs(run.ContextVersions)
 		run.Brief = brief.String()
 		dbStatus := "queued"
 		if agent.Channel == "manual" {
@@ -278,7 +279,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				return workspace.ErrBudget
 			}
 		}
-		if _, err := tx.Exec(ctx, "INSERT INTO agent_runs(owner_id,id,thing_id,agent_id,status,reserved_cost,created_at,document) VALUES($1,$2,$3,$4,$5,$6,$7,$8)", string(scope.OwnerID), run.ID, run.ThingID, run.AgentID, dbStatus, run.Cost, run.CreatedAt, asJSON(run)); err != nil {
+		if _, err := tx.Exec(ctx, "INSERT INTO agent_runs(owner_id,id,thing_id,agent_id,status,reserved_cost,created_at,document) VALUES($1,$2,$3,$4,$5,$6,$7,$8)", string(scope.OwnerID), run.ID, run.ThingID, run.AgentID, dbStatus, run.Cost, run.CreatedAt, kernel.JSON(run)); err != nil {
 			return err
 		}
 
@@ -297,7 +298,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if !memory.ID(c.ID).Valid() {
 		return memory.ErrInvalid
 	}
-	run, err := queryDocument[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), c.ID)
+	run, err := kernel.QueryDocument[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2 FOR UPDATE", string(scope.OwnerID), c.ID)
 	if err != nil {
 		return err
 	}
@@ -316,7 +317,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				if err := stageEventTx(ctx, tx, scope.OwnerID, "deputy", "failure", "revise_invalid_output", 1); err != nil {
 					return err
 				}
-				_, err = tx.Exec(ctx, "UPDATE agent_runs SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, asJSON(run))
+				_, err = tx.Exec(ctx, "UPDATE agent_runs SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, kernel.JSON(run))
 				return err
 			}
 		}
@@ -332,7 +333,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			return err
 		}
 	}
-	_, err = tx.Exec(ctx, "UPDATE agent_runs SET status=$3,document=$4 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, run.Status, asJSON(run))
+	_, err = tx.Exec(ctx, "UPDATE agent_runs SET status=$3,document=$4 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, run.Status, kernel.JSON(run))
 	if err != nil {
 		return err
 	}
@@ -352,7 +353,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 	// A completed draft can be adopted again after undo, whose audit/version
 	// changes do not alter its content. Generation fences the destination;
 	// adoption still fences revoked or deleted input and disabled agents.
-	agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
+	agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
 	if err != nil {
 		return err
 	}
@@ -377,7 +378,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 			if err := s.adoptReviseDocumentTx(ctx, tx, scope, *run, text); err != nil {
 				return err
 			}
-		} else if err := saveDoc(ctx, tx, scope, workspace.Doc{ID: string(memory.NewID()), ThingID: item.ID, Title: item.Title + " · " + run.Kind, Body: text, By: "ai", RunID: run.ID, CreatedAt: stamp(), UpdatedAt: stamp()}); err != nil {
+		} else if err := saveDoc(ctx, tx, scope, workspace.Doc{ID: string(memory.NewID()), ThingID: item.ID, Title: item.Title + " · " + run.Kind, Body: text, By: "ai", RunID: run.ID, CreatedAt: kernel.Stamp(), UpdatedAt: kernel.Stamp()}); err != nil {
 			return err
 		}
 	case "progress":
@@ -428,12 +429,12 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 		}
 	}
 	item.Version++
-	item.UpdatedAt = stamp()
+	item.UpdatedAt = kernel.Stamp()
 	if err := s.saveAction(ctx, tx, scope, item, "采纳副手结果"); err != nil {
 		return err
 	}
-	run.Adopted = &workspace.Adoption{As: as, At: stamp(), Edited: !auto && text != run.Output, Auto: auto, ActionID: actionID}
-	if err := sampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "adopted-result", Prompt: run.Brief, Response: text, Origin: workspace.Origin{Label: item.Title, RunID: run.ID}, Version: 1, State: "candidate", Epistemic: "inferred", CreatedAt: stamp()}); err != nil {
+	run.Adopted = &workspace.Adoption{As: as, At: kernel.Stamp(), Edited: !auto && text != run.Output, Auto: auto, ActionID: actionID}
+	if err := sampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "adopted-result", Prompt: run.Brief, Response: text, Origin: workspace.Origin{Label: item.Title, RunID: run.ID}, Version: 1, State: "candidate", Epistemic: "inferred", CreatedAt: kernel.Stamp()}); err != nil {
 		return err
 	}
 	if !auto {
@@ -462,7 +463,7 @@ func verifyRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspa
 // Checking only the agent grant would let a previous output reintroduce an
 // excluded memory, or a memory from the item's former project.
 func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run, item *workspace.Item) error {
-	agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
+	agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
 	if err != nil {
 		return err
 	}
@@ -476,13 +477,13 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 		if item.Kind == "project" {
 			projectID = item.ID
 		}
-		excluded, err = queryDocuments[string](ctx, tx, "SELECT to_jsonb(memory_id::text) FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
+		excluded, err = kernel.QueryDocuments[string](ctx, tx, "SELECT to_jsonb(memory_id::text) FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
 		if err != nil {
 			return err
 		}
 	}
 	claimIDs, sourceIDs := []string{}, []string{}
-	for _, ref := range uniqueRefs(run.ContextVersions) {
+	for _, ref := range kernel.UniqueRefs(run.ContextVersions) {
 		if ref.Kind == memory.SourceKind {
 			sourceIDs = append(sourceIDs, string(ref.ID))
 		} else {
@@ -503,7 +504,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 	if len(claimIDs) > 0 {
 		// Resolve applicable versions once. Preserve the original readClaim grant,
 		// revision, nature, inference, and project checks for every supplied identity.
-		rows, err := queryDocuments[dependency](ctx, tx, `WITH applicable AS MATERIALIZED (
+		rows, err := kernel.QueryDocuments[dependency](ctx, tx, `WITH applicable AS MATERIALIZED (
  SELECT claim_id,version FROM applicable_claim_versions($1,now(),now()) WHERE claim_id=ANY($2::uuid[])
 ) SELECT jsonb_build_object('id',r.id,'version',c.version,'nature',c.nature,'acquisition',c.acquisition,'scope',c.scope)
  FROM applicable a JOIN memory_records r ON r.owner_id=$1 AND r.id=a.claim_id
@@ -523,7 +524,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 		if item != nil && item.ID != "" {
 			thingID = &item.ID
 		}
-		rows, err := queryDocuments[dependency](ctx, tx, `SELECT jsonb_build_object('id',r.id,'version',r.version)
+		rows, err := kernel.QueryDocuments[dependency](ctx, tx, `SELECT jsonb_build_object('id',r.id,'version',r.version)
  FROM memory_records r JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version)
  WHERE r.owner_id=$1 AND r.id=ANY($2::uuid[]) AND r.kind='source' AND r.state='active' AND v.state='active' AND `+teamSourceVisibleSQL("$1", "r.id", "$3", "$4"), string(scope.OwnerID), sourceIDs, run.AgentID, thingID)
 		if err != nil {
@@ -533,7 +534,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 			sources[source.ID] = source.Version
 		}
 	}
-	for _, ref := range uniqueRefs(run.ContextVersions) {
+	for _, ref := range kernel.UniqueRefs(run.ContextVersions) {
 		if ref.Kind == memory.SourceKind {
 			version, ok := sources[string(ref.ID)]
 			if !ok || version != ref.Version {
@@ -545,7 +546,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 			return memory.ErrConflict
 		}
 		claim, ok := claims[string(ref.ID)]
-		if !ok || claim.Version != ref.Version || !oneOf(claim.Nature, agent.MemoryKinds...) || !agent.IncludeInferred && (claim.Acquisition == "inferred" || statuses[string(ref.ID)].AI) {
+		if !ok || claim.Version != ref.Version || !kernel.OneOf(claim.Nature, agent.MemoryKinds...) || !agent.IncludeInferred && (claim.Acquisition == "inferred" || statuses[string(ref.ID)].AI) {
 			return memory.ErrConflict
 		}
 		if item != nil {
@@ -553,7 +554,7 @@ func verifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 			if raw, ok := claim.Scope["project_id"]; ok && modelcall.DecodeStrict(raw, &claimProject) != nil {
 				return memory.ErrConflict
 			}
-			if oneOf(string(ref.ID), excluded...) || claimProject != "" && claimProject != projectID {
+			if kernel.OneOf(string(ref.ID), excluded...) || claimProject != "" && claimProject != projectID {
 				return memory.ErrConflict
 			}
 		}
@@ -571,7 +572,7 @@ func verifyRunAccessTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run w
 	for i, ref := range run.ContextVersions {
 		ids[i] = string(ref.ID)
 	}
-	rows, err := queryDocuments[struct {
+	rows, err := kernel.QueryDocuments[struct {
 		ID      string
 		Version int
 	}](ctx, tx, `SELECT jsonb_build_object('id',id,'version',version) FROM memory_records WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND state='active'`, string(scope.OwnerID), ids)
@@ -590,20 +591,6 @@ func verifyRunAccessTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run w
 		run.ContextVersions[i].Version = version
 	}
 	return verifyRunTx(ctx, tx, scope, run)
-}
-
-// uniqueRefs keeps the first occurrence of each exact reference. Dependency
-// lists are sets: history and recall can name the same memory many times.
-func uniqueRefs(refs []memory.Ref) []memory.Ref {
-	seen := make(map[memory.Ref]bool, len(refs))
-	out := make([]memory.Ref, 0, len(refs))
-	for _, ref := range refs {
-		if !seen[ref] {
-			seen[ref] = true
-			out = append(out, ref)
-		}
-	}
-	return out
 }
 
 // RunAgentJobs owns costly jobs: an ambiguous provider timeout/crash is marked
@@ -684,7 +671,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		if err := modelcall.DecodeStrict(data, &run); err != nil {
 			return err
 		}
-		if !oneOf(run.MemoryTier, "light", "medium", "heavy") {
+		if !kernel.OneOf(run.MemoryTier, "light", "medium", "heavy") {
 			run.MemoryTier = "heavy"
 		}
 		if run.Kind == "revise" {
@@ -708,7 +695,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 				run.Status = "failed"
 				run.Cost = 0
 				run.Error = "记忆或授权已变化，请重新生成"
-				_, err = tx.Exec(ctx, "UPDATE agent_runs SET status='failed',reserved_cost=0,document=$3 WHERE owner_id=$1 AND id=$2", ownerID, id, asJSON(run))
+				_, err = tx.Exec(ctx, "UPDATE agent_runs SET status='failed',reserved_cost=0,document=$3 WHERE owner_id=$1 AND id=$2", ownerID, id, kernel.JSON(run))
 				return err
 			}
 		}
@@ -716,7 +703,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			if err := validateReviseTargetTx(ctx, tx, scope, run); err != nil {
 				run.Status = "failed"
 				run.Error = "目标文档已改变或不存在，请重新发起修改"
-				_, e := tx.Exec(ctx, "UPDATE agent_runs SET status='failed',document=$3,reserved_cost=0 WHERE owner_id=$1 AND id=$2", ownerID, id, asJSON(run))
+				_, e := tx.Exec(ctx, "UPDATE agent_runs SET status='failed',document=$3,reserved_cost=0 WHERE owner_id=$1 AND id=$2", ownerID, id, kernel.JSON(run))
 				return e
 			}
 		}
@@ -777,11 +764,11 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 				picked, refs, keys := steps.Reader.Read(readerCtx, ctx, reader.Task{Scope: scope, Agent: agent, Thing: &run.ThingID, Text: taskText, Run: run.ID, Phase: "reader:prepare"}, u)
 				readerCancel()
 				run.MemoryGroups = keys
-				run.ContextVersions = uniqueRefs(append(run.ContextVersions, refs...))
+				run.ContextVersions = kernel.UniqueRefs(append(run.ContextVersions, refs...))
 				u.Cards = nil
 				u.Supplemental = picked
 			}
-			run.ContextVersions = uniqueRefs(append(run.ContextVersions, u.Dependencies...))
+			run.ContextVersions = kernel.UniqueRefs(append(run.ContextVersions, u.Dependencies...))
 			deputy.RefreshMemory(&run, u)
 		}
 	}
@@ -920,7 +907,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
-		current, err := queryDocument[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2 AND lease_token=$3 AND lease_until>now() AND document->>'createdAt'=$4 FOR UPDATE", string(scope.OwnerID), run.ID, token, run.CreatedAt)
+		current, err := kernel.QueryDocument[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2 AND lease_token=$3 AND lease_until>now() AND document->>'createdAt'=$4 FOR UPDATE", string(scope.OwnerID), run.ID, token, run.CreatedAt)
 		if errors.Is(err, memory.ErrNotFound) {
 			return nil
 		}
@@ -931,7 +918,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			if _, err := tx.Exec(ctx, "INSERT INTO run_dependencies(owner_id,run_id,memory_id,memory_version) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING", string(scope.OwnerID), run.ID, string(ref.ID), ref.Version); err != nil {
 				return err
 			}
-			if !oneOf(string(ref.ID), run.ContextMemoryIDs...) {
+			if !kernel.OneOf(string(ref.ID), run.ContextMemoryIDs...) {
 				run.ContextMemoryIDs = append(run.ContextMemoryIDs, string(ref.ID))
 			}
 		}
@@ -942,7 +929,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		current.MemoryTier = run.MemoryTier
 		current.MemoryContextRange = run.MemoryContextRange
 		current.Brief = run.Brief
-		current.FinishedAt = stamp()
+		current.FinishedAt = kernel.Stamp()
 		current.Status = "done"
 		current.Output = result.Text
 		current.Searches = result.Searches
@@ -959,7 +946,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			var provider *siwc.ProviderError
 			if errors.As(generationErr, &provider) {
 				current.Error = provider.Message()
-				current.ProviderError = asJSON(provider)
+				current.ProviderError = kernel.JSON(provider)
 			}
 		}
 		current.Cost = cost
@@ -976,7 +963,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			current.Output += "\n这几组没来得及看：" + strings.Join(u.Coverage.Skipped, "、")
 		}
 
-		if _, err := tx.Exec(ctx, "UPDATE agent_runs SET status=$4,reserved_cost=$5,document=$6,lease_until=NULL,lease_token=NULL WHERE owner_id=$1 AND id=$2 AND lease_token=$3", string(scope.OwnerID), run.ID, token, current.Status, current.Cost, asJSON(current)); err != nil {
+		if _, err := tx.Exec(ctx, "UPDATE agent_runs SET status=$4,reserved_cost=$5,document=$6,lease_until=NULL,lease_token=NULL WHERE owner_id=$1 AND id=$2 AND lease_token=$3", string(scope.OwnerID), run.ID, token, current.Status, current.Cost, kernel.JSON(current)); err != nil {
 			return err
 		}
 		if err := s.autoAdoptRunTx(ctx, tx, scope, &current); err != nil {
@@ -1090,7 +1077,7 @@ func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if err := s.adoptRunTx(ctx, tx, scope, run, as, run.Output, id, true); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, "UPDATE agent_runs SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, asJSON(run)); err != nil {
+	if _, err := tx.Exec(ctx, "UPDATE agent_runs SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, kernel.JSON(run)); err != nil {
 		return err
 	}
 	return flushActionLog(ctx, tx, scope)

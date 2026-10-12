@@ -4,13 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
-	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -196,7 +198,7 @@ func TestB4SelfcheckPreservesSlotAuthority(t *testing.T) {
 	before := secretaryOutput{Actions: []secretaryAction{{Op: "create_task", Title: "原任务"}, {Op: "add_steps", Ref: "N1", Steps: []string{"原步骤"}}}}
 	after := secretaryOutput{Actions: []secretaryAction{{Op: "delete", Ref: "T1"}, {Op: "add_steps", Ref: "T2", Steps: []string{"别的目标"}}, {Op: "create_task", Title: "额外任务"}}}
 	got := secretary.ConstrainCheck(before, after)
-	if string(asJSON(got.Actions)) != string(asJSON(before.Actions)) {
+	if string(kernel.JSON(got.Actions)) != string(kernel.JSON(before.Actions)) {
 		t.Fatal(got)
 	}
 }
@@ -446,7 +448,7 @@ func TestB4HeavyCutoffUsesFinishedReaders(t *testing.T) {
 	var agent workspace.Agent
 	if err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
 		var err error
-		agent, err = queryDocument[workspace.Agent](context.Background(), tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id='model'", scope.OwnerID)
+		agent, err = kernel.QueryDocument[workspace.Agent](context.Background(), tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id='model'", scope.OwnerID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -505,11 +507,11 @@ func TestRuleScopeRequiresModelAndUsagePlansRemainReadable(t *testing.T) {
 		t.Fatal("rule applicability")
 	}
 	raw := safeUsePlan(json.RawMessage(`{"groups":["secret text","self:rule"],"question":"private text"}`))
-	if strings.Contains(string(asJSON(raw)), "private") || strings.Contains(string(asJSON(raw)), "secret") {
+	if strings.Contains(string(kernel.JSON(raw)), "private") || strings.Contains(string(kernel.JSON(raw)), "secret") {
 		t.Fatal("usage plan leaked text")
 	}
 	var plan usePlan
-	if err := json.Unmarshal(asJSON(raw), &plan); err != nil || len(plan.Groups) != 1 || plan.Groups[0] != "self:rule" {
+	if err := json.Unmarshal(kernel.JSON(raw), &plan); err != nil || len(plan.Groups) != 1 || plan.Groups[0] != "self:rule" {
 		t.Fatal("safe plan must remain a readable group object", plan, err)
 	}
 }

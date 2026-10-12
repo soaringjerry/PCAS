@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -61,7 +62,7 @@ func (s *Store) DeleteSubscription(ctx context.Context, owner, endpoint string) 
 }
 func (n *Notifier) NotifyConfig(ctx context.Context, scope memory.Scope) (workspace.NotifyConfig, error) {
 	var out workspace.NotifyConfig
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	keys, err := n.Settings.EnsureVAPID()
@@ -77,7 +78,7 @@ func (n *Notifier) NotifyConfig(ctx context.Context, scope memory.Scope) (worksp
 	return out, nil
 }
 func (n *Notifier) SavePushSubscription(ctx context.Context, scope memory.Scope, sub webpush.Subscription) error {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
 	u, err := url.Parse(sub.Endpoint)
@@ -112,7 +113,7 @@ func (n *Notifier) SavePushSubscription(ctx context.Context, scope memory.Scope,
 	})
 }
 func (n *Notifier) RemovePushSubscription(ctx context.Context, scope memory.Scope, endpoint string) error {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
 	if endpoint == "" {
@@ -124,7 +125,7 @@ func (n *Notifier) RemovePushSubscription(ctx context.Context, scope memory.Scop
 var telegramTokenPattern = regexp.MustCompile(`^[0-9]+:[A-Za-z0-9_-]+$`)
 
 func (n *Notifier) SaveTelegram(ctx context.Context, scope memory.Scope, in workspace.TelegramConfig) (bool, error) {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return false, err
 	}
 	token, chatID := strings.TrimSpace(in.BotToken), strings.TrimSpace(in.ChatID)
@@ -160,7 +161,7 @@ func (n *Notifier) SaveTelegram(ctx context.Context, scope memory.Scope, in work
 	return true, nil
 }
 func (n *Notifier) TestNotify(ctx context.Context, scope memory.Scope) ([]string, error) {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return nil, err
 	}
 	state, err := n.Snapshot(ctx, scope)
@@ -182,7 +183,7 @@ func (n *Notifier) TestNotify(ctx context.Context, scope memory.Scope) ([]string
 }
 func (n *Notifier) DismissNotice(ctx context.Context, scope memory.Scope, id string) (workspace.State, error) {
 	var out workspace.State
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !memory.ID(id).Valid() {
@@ -345,7 +346,7 @@ func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []n
 					}
 					slog.WarnContext(ctx, "notification delivery failed", "channel", name, "error_type", notificationErrorType(err), "attempt", attempts, "status", status)
 				}
-				if _, err := tx.Exec(ctx, "UPDATE workspace_notices SET delivered=delivered || $2::jsonb WHERE id=$1", id, asJSON(patch)); err != nil {
+				if _, err := tx.Exec(ctx, "UPDATE workspace_notices SET delivered=delivered || $2::jsonb WHERE id=$1", id, kernel.JSON(patch)); err != nil {
 					return err
 				}
 			}

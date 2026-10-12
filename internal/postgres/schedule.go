@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -19,11 +20,11 @@ var _ workspace.ScheduleReader = (*Store)(nil)
 
 func (s *Store) ListSchedule(ctx context.Context, scope memory.Scope, q workspace.ScheduleQuery) (workspace.Schedule, error) {
 	out := workspace.Schedule{From: q.From, To: q.To, Days: []workspace.ScheduleDay{}, Unclear: []workspace.ScheduleEntry{}, Overdue: []workspace.ScheduleEntry{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if err != nil {
 			return err
 		}
@@ -141,7 +142,7 @@ func (s *Store) ListSchedule(ctx context.Context, scope memory.Scope, q workspac
 		if err != nil {
 			return err
 		}
-		items, err := queryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND status NOT IN('done','cancelled') AND (due_at IS NOT NULL OR scheduled_at IS NOT NULL) ORDER BY id`, string(scope.OwnerID))
+		items, err := kernel.QueryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND status NOT IN('done','cancelled') AND (due_at IS NOT NULL OR scheduled_at IS NOT NULL) ORDER BY id`, string(scope.OwnerID))
 		if err != nil {
 			return err
 		}
@@ -216,11 +217,11 @@ func (s *Store) ListSchedule(ctx context.Context, scope memory.Scope, q workspac
 }
 func (s *Store) ListInProgress(ctx context.Context, scope memory.Scope) (workspace.InProgress, error) {
 	out := workspace.InProgress{Items: []workspace.Item{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
-		items, err := queryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND status NOT IN('done','cancelled') AND due_at IS NULL AND scheduled_at IS NULL AND NOT coalesce((document->>'urgent')::boolean,false) ORDER BY coalesce(nullif(document->>'updatedAt','')::timestamptz,updated_at) DESC,id`, string(scope.OwnerID))
+		items, err := kernel.QueryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND status NOT IN('done','cancelled') AND due_at IS NULL AND scheduled_at IS NULL AND NOT coalesce((document->>'urgent')::boolean,false) ORDER BY coalesce(nullif(document->>'updatedAt','')::timestamptz,updated_at) DESC,id`, string(scope.OwnerID))
 		if err != nil {
 			return err
 		}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -63,7 +64,7 @@ func TestStabilizationD1_ReferencedMemoryDeletionClearsWholeTurn(t *testing.T) {
 	}
 	cited := false
 	for _, card := range first.Turn.Cards {
-		if card.Kind == "sources" && strings.Contains(string(asJSON(card.Items)), id) {
+		if card.Kind == "sources" && strings.Contains(string(kernel.JSON(card.Items)), id) {
 			cited = true
 		}
 	}
@@ -89,7 +90,7 @@ func TestStabilizationD1_ReferencedMemoryDeletionClearsWholeTurn(t *testing.T) {
 		t.Fatal("audit skeleton lost")
 	}
 	history, err := s.DeskTurns(context.Background(), scope, first.ConversationID)
-	if err != nil || len(history.Turns) != 1 || strings.Contains(string(asJSON(history)), "银色森林") {
+	if err != nil || len(history.Turns) != 1 || strings.Contains(string(kernel.JSON(history)), "银色森林") {
 		t.Fatal("history leaked deleted memory", err)
 	}
 	if strings.Contains(logs.String(), "银色森林") {
@@ -114,7 +115,7 @@ func TestStabilizationD2_OriginalSourceDeletionClearsWholeTurn(t *testing.T) {
 	}
 	stabilizationDeletionAssertScrubbed(t, s, scope, req.RequestID, "私密原話")
 	history, err := s.DeskTurns(context.Background(), scope, first.ConversationID)
-	if err != nil || len(history.Turns) != 1 || history.Turns[0].Text != "" || history.Turns[0].Ask != nil || strings.Contains(string(asJSON(history)), "私密原話") {
+	if err != nil || len(history.Turns) != 1 || history.Turns[0].Text != "" || history.Turns[0].Ask != nil || strings.Contains(string(kernel.JSON(history)), "私密原話") {
 		t.Fatal("original remains in history", err)
 	}
 }
@@ -151,7 +152,7 @@ func TestStabilizationD3_DeletedSourceExpiresRelatedUndoSnapshot(t *testing.T) {
 		token := strings.Repeat("t", 64)
 		api := httpapi.New(s, s, httpapi.NewOwnerToken(token, scope.OwnerID), func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s})
 		command := workspace.Command{Type: "undoAction", ID: action, RequestID: string(memory.NewID()), ExpectedRevision: st.Revision}
-		request := httptest.NewRequest("POST", "/v1/workspace/commands", strings.NewReader(string(asJSON(command))))
+		request := httptest.NewRequest("POST", "/v1/workspace/commands", strings.NewReader(string(kernel.JSON(command))))
 		request.Header.Set("Authorization", "Bearer "+token)
 		request.Header.Set("Content-Type", "application/json")
 		response := httptest.NewRecorder()
@@ -200,7 +201,7 @@ func TestStabilizationD4_ReplayCannotRestoreDeletedOriginal(t *testing.T) {
 			}
 			before := calls.Load()
 			replay := mustTurn(t, s, scope, req)
-			if replay.Turn.ID != first.Turn.ID || calls.Load() != before || strings.Contains(string(asJSON(replay)), "紫色山谷") || strings.Contains(logs.String(), "紫色山谷") {
+			if replay.Turn.ID != first.Turn.ID || calls.Load() != before || strings.Contains(string(kernel.JSON(replay)), "紫色山谷") || strings.Contains(logs.String(), "紫色山谷") {
 				t.Fatal("deleted input restored or re-executed")
 			}
 			stabilizationDeletionAssertScrubbed(t, s, scope, req.RequestID, "紫色山谷")
@@ -255,12 +256,12 @@ func TestStabilizationD1_DeletionDuringGenerationCannotCommitDerivedText(t *test
 	case <-time.After(5 * time.Second):
 		t.Fatal("deletion blocked generation completion")
 	}
-	if len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "capture" || !strings.Contains(out.Turn.Receipts[0].Text, "上下文已变更") || strings.Contains(string(asJSON(out.Turn)), "私密红色地平线") {
+	if len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "capture" || !strings.Contains(out.Turn.Receipts[0].Text, "上下文已变更") || strings.Contains(string(kernel.JSON(out.Turn)), "私密红色地平线") {
 		t.Fatal("deleted model context committed", out.Turn)
 	}
 	stabilizationSecretaryTasks(t, s, scope, 0)
 	replay := mustTurn(t, s, scope, req)
-	if calls.Load() != 1 || strings.Contains(string(asJSON(replay.Turn)), "私密红色地平线") {
+	if calls.Load() != 1 || strings.Contains(string(kernel.JSON(replay.Turn)), "私密红色地平线") {
 		t.Fatal("replay regenerated deleted content")
 	}
 	var cache []byte

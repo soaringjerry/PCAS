@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -24,11 +25,11 @@ func TestUndoIgnoresOnlyBookkeeping(t *testing.T) {
 			}
 			// Change each field independently without changing the task's content.
 			// The original trigger fingerprint must still permit undo.
-			value := asJSON([]any{map[string]string{"text": "新的簿记"}})
+			value := kernel.JSON([]any{map[string]string{"text": "新的簿记"}})
 			if field == "recordVersion" {
-				value = asJSON(st.Tasks[0].Version + 1)
+				value = kernel.JSON(st.Tasks[0].Version + 1)
 			} else if field == "updatedAt" {
-				value = asJSON("2026-10-01T00:00:00Z")
+				value = kernel.JSON("2026-10-01T00:00:00Z")
 			}
 			if _, err := s.pool.Exec(ctx, "UPDATE work_items SET document=jsonb_set(document,ARRAY[$3::text],$4::jsonb) WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id, field, value); err != nil {
 				t.Fatal(err)
@@ -48,8 +49,8 @@ func TestUndoRejectsContentChanges(t *testing.T) {
 	for _, edit := range []workspace.Command{
 		{Type: "renameThing", Title: "用户改了标题"},
 		{Type: "setTaskStatus", Status: "cancelled"},
-		{Type: "updateTask", Patch: asJSON(map[string]string{"due": "2026-10-02T08:00:00Z"})},
-		{Type: "updateTask", Patch: asJSON(map[string]string{"scheduled": "2026-10-02T08:00:00Z"})},
+		{Type: "updateTask", Patch: kernel.JSON(map[string]string{"due": "2026-10-02T08:00:00Z"})},
+		{Type: "updateTask", Patch: kernel.JSON(map[string]string{"scheduled": "2026-10-02T08:00:00Z"})},
 		{Type: "addCheck", Text: "新步骤"},
 		{Type: "setNotes", Text: "新的说明"},
 		{Type: "moveThing", ProjectID: project},

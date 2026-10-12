@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -21,7 +22,7 @@ func stageEventTx(ctx context.Context, tx pgx.Tx, owner memory.ID, stage, outcom
 			return err
 		}
 	}
-	_, err := tx.Exec(ctx, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,$2,$3,$4,$5)", nullString(string(owner)), stage, outcome, reason, count)
+	_, err := tx.Exec(ctx, "INSERT INTO background_stage_events(owner_id,stage,outcome,reason,count) VALUES($1,$2,$3,$4,$5)", kernel.NullString(string(owner)), stage, outcome, reason, count)
 	return err
 }
 
@@ -71,7 +72,7 @@ func (s *Store) recordScheduleFailure(ctx context.Context, stage string, err err
 }
 
 func (s *Store) BackgroundHealth(ctx context.Context, scope memory.Scope) (json.RawMessage, error) {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return nil, err
 	}
 	var out json.RawMessage
@@ -89,7 +90,7 @@ func (s *Store) BackgroundHealth(ctx context.Context, scope memory.Scope) (json.
  'requirements',coalesce((SELECT sum(count) FROM background_stage_events e WHERE e.owner_id=$1 AND e.stage=s.stage AND e.reason='reorganize_requirements_withdrawn' AND e.at>now()-interval '1 hour'),0)),
  'calls',(SELECT count(*) FROM background_usage b WHERE b.stage=s.stage AND b.created_at>now()-interval '1 hour')) ORDER BY s.stage),'[]'::jsonb),
  'overflow',coalesce((SELECT jsonb_agg(jsonb_build_object('stage',stage,'reason',reason,'count',n)) FROM (
- SELECT stage,reason,sum(count) AS n FROM background_stage_events WHERE owner_id=$1 AND outcome='overflow' AND at>now()-interval '1 hour' GROUP BY stage,reason) excess),'[]'::jsonb)) FROM stages s`, string(scope.OwnerID), asJSON(backgroundHourlyBudgets)).Scan(&out)
+ SELECT stage,reason,sum(count) AS n FROM background_stage_events WHERE owner_id=$1 AND outcome='overflow' AND at>now()-interval '1 hour' GROUP BY stage,reason) excess),'[]'::jsonb)) FROM stages s`, string(scope.OwnerID), kernel.JSON(backgroundHourlyBudgets)).Scan(&out)
 	return out, err
 }
 

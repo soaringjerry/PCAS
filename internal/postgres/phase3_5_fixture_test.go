@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -140,7 +141,7 @@ func phase35Load(t *testing.T) *phase35Fixture {
 	src := phase35Source(t, f.Store, f.Scope, f.Inputs)
 	err = pgx.BeginFunc(f.Context, f.Store.pool, func(tx pgx.Tx) error {
 		for _, it := range f.Inputs {
-			v := workspace.Candidate{ID: string(memory.NewID()), Kind: it.Kind, Text: it.Text, Confidence: it.Confidence, State: "pending", CreatedAt: stamp(), Source: workspace.SourceRef{SourceID: string(src.ID), Version: src.Version, Excerpt: it.Quote, Label: "虚构抽取候选", At: stamp()}}
+			v := workspace.Candidate{ID: string(memory.NewID()), Kind: it.Kind, Text: it.Text, Confidence: it.Confidence, State: "pending", CreatedAt: kernel.Stamp(), Source: workspace.SourceRef{SourceID: string(src.ID), Version: src.Version, Excerpt: it.Quote, Label: "虚构抽取候选", At: kernel.Stamp()}}
 			if err := saveCandidate(f.Context, tx, f.Scope, v); err != nil {
 				return err
 			}

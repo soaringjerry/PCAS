@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -69,12 +70,12 @@ func TestP3SecretaryDelegateHistoryRetrievesMemory(t *testing.T) {
 					t.Fatalf("history missing %q: %s", text, run.Brief)
 				}
 			}
-			if !strings.Contains(run.Brief, "松果灯塔") || !oneOf(relevant, run.ContextMemoryIDs...) {
+			if !strings.Contains(run.Brief, "松果灯塔") || !kernel.OneOf(relevant, run.ContextMemoryIDs...) {
 				t.Fatalf("history query did not retrieve memory: %+v", run)
 			}
 			manual := workspaceCommand(t, s, scope, workspace.Command{Type: "delegateTask", ID: string(memory.NewID()), Title: "手动写方案", AgentID: "model", Kind: "plan", Prompt: "接着刚才聊的做", DeskTurnIDs: ids})
 			for _, r := range manual.Runs {
-				if r.ID != run.ID && (!strings.Contains(r.Brief, "松果灯塔") || !oneOf(relevant, r.ContextMemoryIDs...)) {
+				if r.ID != run.ID && (!strings.Contains(r.Brief, "松果灯塔") || !kernel.OneOf(relevant, r.ContextMemoryIDs...)) {
 					t.Fatalf("manual history retrieval lost: %+v", r)
 				}
 			}
@@ -186,7 +187,7 @@ func TestP3LiveDelegateHistory(t *testing.T) {
 			t.Fatalf("missing history %q", text)
 		}
 	}
-	if !oneOf(relevant, run.ContextMemoryIDs...) {
+	if !kernel.OneOf(relevant, run.ContextMemoryIDs...) {
 		t.Fatal("relevant memory missing")
 	}
 	if err := s.runAgentOnce(context.Background()); err != nil {

@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -20,7 +21,7 @@ func (a readerStore) GroupMembers(ctx context.Context, scope memory.Scope, key s
 	ids := []string{}
 	err := pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var e error
-		ids, e = queryDocuments[string](ctx, tx, "SELECT to_jsonb(claim_id::text) FROM status_current_members WHERE owner_id=$1 AND key=$2 ORDER BY claim_id", string(scope.OwnerID), key)
+		ids, e = kernel.QueryDocuments[string](ctx, tx, "SELECT to_jsonb(claim_id::text) FROM status_current_members WHERE owner_id=$1 AND key=$2 ORDER BY claim_id", string(scope.OwnerID), key)
 		return e
 	})
 	return ids, err
@@ -45,7 +46,7 @@ func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *w
 	var agent workspace.Agent
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		agent, err = queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
+		agent, err = kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
 		if err != nil {
 			return err
 		}
@@ -57,7 +58,7 @@ func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *w
 		if err != nil {
 			return err
 		}
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if err != nil {
 			return err
 		}

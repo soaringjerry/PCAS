@@ -3,8 +3,10 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strings"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -38,7 +40,7 @@ func (s *Store) applySignalsTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		return memory.ErrInvalid
 	}
 	for _, signal := range signals {
-		if signal.Confidence < 0.98 || signal.Confidence > 1 || signal.Quote == "" || !strings.Contains(source.Text, signal.Quote) || requireText(signal.Explanation) != nil || len(signal.Explanation) > 2000 || !memory.ID(signal.IdeaID).Valid() {
+		if signal.Confidence < 0.98 || signal.Confidence > 1 || signal.Quote == "" || !strings.Contains(source.Text, signal.Quote) || kernel.RequireText(signal.Explanation) != nil || len(signal.Explanation) > 2000 || !memory.ID(signal.IdeaID).Valid() {
 			continue
 		}
 		item, err := getItem(ctx, tx, scope, signal.IdeaID)
@@ -64,13 +66,13 @@ func (s *Store) applySignalsTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 			if tag.RowsAffected() == 0 {
 				continue
 			}
-			c.MetBy = &workspace.SourceRef{SourceID: string(source.ID), Version: source.Version, Label: source.Title, Excerpt: signal.Quote, At: stamp()}
+			c.MetBy = &workspace.SourceRef{SourceID: string(source.ID), Version: source.Version, Label: source.Title, Excerpt: signal.Quote, At: kernel.Stamp()}
 			// A model finding relevant evidence does not confirm the condition.
 			item.Status = "awakened"
-			item.Wake = &workspace.Wake{At: stamp(), Reason: reason, ConditionID: c.ID}
-			item.Evolution = append(item.Evolution, workspace.Revision{At: stamp(), By: "ai", Summary: reason, SourceID: string(source.ID)})
+			item.Wake = &workspace.Wake{At: kernel.Stamp(), Reason: reason, ConditionID: c.ID}
+			item.Evolution = append(item.Evolution, workspace.Revision{At: kernel.Stamp(), By: "ai", Summary: reason, SourceID: string(source.ID)})
 			item.Version++
-			item.UpdatedAt = stamp()
+			item.UpdatedAt = kernel.Stamp()
 			if err := saveItem(ctx, tx, scope, item); err != nil {
 				return err
 			}

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -30,7 +31,7 @@ func validDeadlineClose(as string) (string, bool) {
 	if as == "" {
 		return "done", true
 	}
-	return as, oneOf(as, "done", "dropped", "task")
+	return as, kernel.OneOf(as, "done", "dropped", "task")
 }
 
 func deadlineCompletionFromScope(version int, data []byte) (deadlineCompletion, error) {
@@ -60,7 +61,7 @@ func deadlineCompletionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, cl
 }
 
 func (v deadlineCompletion) hash() string {
-	return fmt.Sprintf("%x", sha256.Sum256(asJSON(v)))
+	return fmt.Sprintf("%x", sha256.Sum256(kernel.JSON(v)))
 }
 
 func completeDeadlineTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, claim string, version int, as string) error {
@@ -92,9 +93,9 @@ func completeDeadlineTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, clai
 		return nil
 	}
 	hash := after.hash()
-	change := actionChange{Table: "deadline_completion", ID: claim, Before: asJSON(before), AfterHash: &hash}
+	change := actionChange{Table: "deadline_completion", ID: claim, Before: kernel.JSON(before), AfterHash: &hash}
 	_, err = tx.Exec(ctx, `SELECT set_config('pcas.action_changes',
- (current_setting('pcas.action_changes')::jsonb||$1::jsonb)::text,true)`, asJSON([]actionChange{change}))
+ (current_setting('pcas.action_changes')::jsonb||$1::jsonb)::text,true)`, kernel.JSON([]actionChange{change}))
 	return err
 }
 
@@ -123,6 +124,6 @@ func restoreDeadlineCompletionTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 	}
 	_, err := tx.Exec(ctx, `UPDATE claim_revisions SET scope=(scope-
  ARRAY['deadline_completed','deadline_completed_version','deadline_completed_at','deadline_closed_as'])||$4::jsonb
- WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, string(scope.OwnerID), change.ID, before.Version, asJSON(before.Mark))
+ WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, string(scope.OwnerID), change.ID, before.Version, kernel.JSON(before.Mark))
 	return err
 }

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,6 +16,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 	"github.com/jackc/pgx/v5"
@@ -133,7 +135,7 @@ func stabilizationTimeSeedSchedule(t *testing.T, s *Store, scope memory.Scope, t
 	t.Helper()
 	task.Due = due.UTC().Format(time.RFC3339)
 	task.Triggers = []workspace.Trigger{{ID: "due-reminder", Kind: "time", Description: task.Title, Active: true, Offset: "at", NextAt: next.UTC().Format(time.RFC3339)}}
-	_, err := s.pool.Exec(context.Background(), "UPDATE work_items SET due_at=$3, document=$4 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), task.ID, due, asJSON(task))
+	_, err := s.pool.Exec(context.Background(), "UPDATE work_items SET due_at=$3, document=$4 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), task.ID, due, kernel.JSON(task))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +150,7 @@ func TestR1_ElapsedLeadFallsBackAndElapsedDueHasNoReminder(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			s := testStore(t)
 			scope := owner()
-			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "UTC"})})
+			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "UTC"})})
 			due := time.Now().UTC().Truncate(time.Second).Add(5 * time.Minute)
 			if past {
 				due = due.Add(-10 * time.Minute)
@@ -196,7 +198,7 @@ func TestR2_DateOnlyCreatedAfterNineFallsBackTo2359(t *testing.T) {
 	if loc == nil {
 		t.Fatal("no daytime fixture timezone")
 	}
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": loc.String()})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": loc.String()})})
 	localNow := time.Now().In(loc)
 	due := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 23, 59, 0, 0, loc)
 	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "日期提醒", "due": localNow.Format("2006-01-02")})
@@ -222,7 +224,7 @@ func TestR3_RescheduleRetainsLeadAndRemovingDueDeletesReminder(t *testing.T) {
 	scope := owner()
 	due := testsupport.DateFromToday(t, "Australia/Melbourne", 1, 15, 0)
 	updatedDue := testsupport.DateFromToday(t, "Australia/Melbourne", 2, 16, 0)
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Australia/Melbourne"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Australia/Melbourne"})})
 	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "改期", "due": due.Format("2006-01-02T15:04"), "remind": "-2h"})
 	task := stabilizationTimeTask(t, out.State, "")
 	stabilizationTimeReminder(t, task, due.UTC().Format(time.RFC3339), due.Add(-2*time.Hour).UTC().Format(time.RFC3339), "-2h")
@@ -304,7 +306,7 @@ func TestR6_NonexistentMelbourne0230Becomes0330(t *testing.T) {
 	october := time.Date(year, 10, 1, 0, 0, 0, 0, time.UTC)
 	sunday := october.AddDate(0, 0, (7-int(october.Weekday()))%7)
 	expected := sunday.AddDate(0, 0, -1).Add(16*time.Hour + 30*time.Minute)
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Australia/Melbourne"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Australia/Melbourne"})})
 	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "夏令时安排", "due": sunday.Format("2006-01-02") + "T02:30", "remind": "at"})
 	task := stabilizationTimeTask(t, out.State, "")
 	// Independent UTC fixture: 03:30 AEDT is 16:30Z the previous day.
@@ -322,7 +324,7 @@ func TestR7_ReminderAcrossDSTUsesMondayLocalTime(t *testing.T) {
 	sunday := october.AddDate(0, 0, (7-int(october.Weekday()))%7)
 	monday := sunday.AddDate(0, 0, 1)
 	due := sunday.Add(22 * time.Hour) // Monday 09:00 AEDT, independently in UTC.
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Australia/Melbourne"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Australia/Melbourne"})})
 	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "跨夏令时", "due": monday.Format("2006-01-02") + "T09:00", "remind": "at"})
 	task := stabilizationTimeTask(t, out.State, "")
 	stabilizationTimeReminder(t, task, due.Format(time.RFC3339), due.Format(time.RFC3339), "at")
@@ -358,13 +360,13 @@ func TestR8_ChangingTimezonePreservesUTCAndChangesFutureInterpretation(t *testin
 		t.Fatal(err)
 	}
 	newDue := time.Date(due.Year(), due.Month(), due.Day(), 9, 0, 0, 0, shanghai)
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Australia/Melbourne"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Australia/Melbourne"})})
 	out := stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "原事项", "due": due.Format("2006-01-02T15:04")})
 	before := stabilizationTimeTask(t, out.State, "")
 	stabilizationTimeReminder(t, before, due.UTC().Format(time.RFC3339), due.Add(-30*time.Minute).UTC().Format(time.RFC3339), "-30m")
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	after := stabilizationTimeTask(t, stabilizationTimeSnapshot(t, s, scope), before.ID)
-	if after.Due != before.Due || string(asJSON(after.Triggers)) != string(asJSON(before.Triggers)) {
+	if after.Due != before.Due || string(kernel.JSON(after.Triggers)) != string(kernel.JSON(before.Triggers)) {
 		t.Fatalf("timezone translated persisted UTC: before=%+v after=%+v", before, after)
 	}
 	out = stabilizationTimeTurn(t, s, scope, map[string]any{"op": "create_task", "title": "新事项", "due": due.Format("2006-01-02T15:04")})

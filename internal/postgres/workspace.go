@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
 
@@ -19,65 +20,12 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
 
-func requireOwner(scope memory.Scope) error {
-	if !scope.Valid() || !scope.IsOwner {
-		return memory.ErrForbidden
-	}
-	return nil
-}
-func stamp() string       { return time.Now().UTC().Format(time.RFC3339Nano) }
-func asJSON(v any) []byte { b, _ := json.Marshal(v); return b }
-func requireText(v string) error {
-	if strings.TrimSpace(v) == "" || len(v) > 1<<20 {
-		return memory.ErrInvalid
-	}
-	return nil
-}
-func nullString(v string) any {
-	if v == "" {
-		return nil
-	}
-	return v
-}
-func queryDocument[T any](ctx context.Context, tx pgx.Tx, sql string, args ...any) (T, error) {
-	var result T
-	var data []byte
-	err := tx.QueryRow(ctx, sql, args...).Scan(&data)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return result, memory.ErrNotFound
-	}
-	if err != nil {
-		return result, err
-	}
-	err = json.Unmarshal(data, &result)
-	return result, err
-}
-func queryDocuments[T any](ctx context.Context, tx pgx.Tx, sql string, args ...any) ([]T, error) {
-	out := []T{}
-	rows, err := tx.Query(ctx, sql, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var data []byte
-		var v T
-		if err = rows.Scan(&data); err != nil {
-			return nil, err
-		}
-		if err = json.Unmarshal(data, &v); err != nil {
-			return nil, err
-		}
-		out = append(out, v)
-	}
-	return out, rows.Err()
-}
 func patchAllowed(dst any, patch json.RawMessage, keys ...string) error {
 	return itemcommand.Patch(dst, patch, keys...)
 }
 func (s *Store) ensureOwner(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	settings := workspace.Settings{WakeIdeas: true, FollowUps: true, DailyReviewAt: "09:00", DailyBudget: 10, Timezone: workspace.InitialTimezone(ctx)}
-	if _, err := tx.Exec(ctx, "INSERT INTO workspace_owners(owner_id,settings) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), asJSON(settings)); err != nil {
+	if _, err := tx.Exec(ctx, "INSERT INTO workspace_owners(owner_id,settings) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), kernel.JSON(settings)); err != nil {
 		return err
 	}
 	agents := []workspace.Agent{{ID: "manual", Name: "手动交接", Channel: "manual", Enabled: true, MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}, Note: "复制上下文到任意 AI，再粘贴结果"}}
@@ -98,7 +46,7 @@ func (s *Store) ensureOwner(ctx context.Context, tx pgx.Tx, scope memory.Scope) 
 	}
 	for _, a := range agents {
 		if a.ID == "chatgpt-direct" {
-			legacy, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id='chatgpt'", string(scope.OwnerID))
+			legacy, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id='chatgpt'", string(scope.OwnerID))
 			if err == nil {
 				a.Enabled = legacy.Enabled
 				a.MemoryKinds = legacy.MemoryKinds
@@ -107,7 +55,7 @@ func (s *Store) ensureOwner(ctx context.Context, tx pgx.Tx, scope memory.Scope) 
 				return err
 			}
 		}
-		tag, err := tx.Exec(ctx, "INSERT INTO workspace_agents(owner_id,id,document) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", string(scope.OwnerID), a.ID, asJSON(a))
+		tag, err := tx.Exec(ctx, "INSERT INTO workspace_agents(owner_id,id,document) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", string(scope.OwnerID), a.ID, kernel.JSON(a))
 		if err != nil {
 			return err
 		}
@@ -134,7 +82,7 @@ func (s *Store) ensureOwner(ctx context.Context, tx pgx.Tx, scope memory.Scope) 
 }
 func (s *Store) Snapshot(ctx context.Context, scope memory.Scope) (workspace.State, error) {
 	var out workspace.State
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -177,7 +125,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		return out, err
 	}
 	out.Settings.AutoAccept = false
-	items, err := queryDocuments[workspace.Item](ctx, tx, `SELECT document || CASE WHEN coalesce(document->>'createdAt','')='' THEN jsonb_build_object('createdAt',created_at) ELSE '{}'::jsonb END FROM work_items WHERE owner_id=$1 ORDER BY updated_at DESC,id`, string(scope.OwnerID))
+	items, err := kernel.QueryDocuments[workspace.Item](ctx, tx, `SELECT document || CASE WHEN coalesce(document->>'createdAt','')='' THEN jsonb_build_object('createdAt',created_at) ELSE '{}'::jsonb END FROM work_items WHERE owner_id=$1 ORDER BY updated_at DESC,id`, string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
@@ -206,7 +154,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 			out.Projects = append(out.Projects, item)
 		}
 	}
-	if out.Notices, err = queryDocuments[workspace.Notice](ctx, tx, `SELECT jsonb_build_object(
+	if out.Notices, err = kernel.QueryDocuments[workspace.Notice](ctx, tx, `SELECT jsonb_build_object(
         'id',n.id,'thingId',n.thing_id,'title',w.title,'reason',n.reason,
         'dueAt',n.due_at,'createdAt',n.created_at) ||
         CASE WHEN n.trigger_id LIKE 'run:%' THEN '{"result":true}'::jsonb ELSE '{}'::jsonb END ||
@@ -228,7 +176,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	// a claims parent by foreign key, so the organizing count already supplies
 	// the established memory total without evaluating source validity twice.
 	out.MemoryTotal = out.Organize.Total
-	if out.Agents, err = queryDocuments[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 ORDER BY id", string(scope.OwnerID)); err != nil {
+	if out.Agents, err = kernel.QueryDocuments[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 ORDER BY id", string(scope.OwnerID)); err != nil {
 		return out, err
 	}
 	for i := range out.Agents {
@@ -268,16 +216,16 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if err := tx.QueryRow(ctx, "SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1 AND created_at>=$2),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1 AND created_at>=$2),0)", string(scope.OwnerID), start).Scan(&out.BudgetUsage); err != nil {
 		return out, err
 	}
-	if out.Candidates, err = queryDocuments[workspace.Candidate](ctx, tx, "SELECT document FROM capture_candidates WHERE owner_id=$1 ORDER BY document->>'createdAt' DESC,id", string(scope.OwnerID)); err != nil {
+	if out.Candidates, err = kernel.QueryDocuments[workspace.Candidate](ctx, tx, "SELECT document FROM capture_candidates WHERE owner_id=$1 ORDER BY document->>'createdAt' DESC,id", string(scope.OwnerID)); err != nil {
 		return out, err
 	}
-	if out.Docs, err = queryDocuments[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 ORDER BY document->>'updatedAt' DESC,id", string(scope.OwnerID)); err != nil {
+	if out.Docs, err = kernel.QueryDocuments[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 ORDER BY document->>'updatedAt' DESC,id", string(scope.OwnerID)); err != nil {
 		return out, err
 	}
-	if out.Runs, err = queryDocuments[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 ORDER BY created_at DESC,id", string(scope.OwnerID)); err != nil {
+	if out.Runs, err = kernel.QueryDocuments[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 ORDER BY created_at DESC,id", string(scope.OwnerID)); err != nil {
 		return out, err
 	}
-	if out.Samples, err = queryDocuments[workspace.Sample](ctx, tx, "SELECT document || jsonb_build_object('stale',stale,'state',state) FROM training_samples WHERE owner_id=$1 ORDER BY document->>'createdAt' DESC,id", string(scope.OwnerID)); err != nil {
+	if out.Samples, err = kernel.QueryDocuments[workspace.Sample](ctx, tx, "SELECT document || jsonb_build_object('stale',stale,'state',state) FROM training_samples WHERE owner_id=$1 ORDER BY document->>'createdAt' DESC,id", string(scope.OwnerID)); err != nil {
 		return out, err
 	}
 	if out.Sources, err = sourceGroupsTx(ctx, tx, scope); err != nil {
@@ -314,7 +262,7 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 		}
 		if state == "blocked" {
 			j.Recovery = "配置对应模型或处理器后重试"
-			if oneOf(code, "model_call_failed", "model_output_invalid") {
+			if kernel.OneOf(code, "model_call_failed", "model_output_invalid") {
 				j.Recovery = "可以直接重试"
 			}
 		}
@@ -325,12 +273,12 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 	if err != nil {
 		return out, err
 	}
-	notices, err := queryDocuments[workspace.Job](ctx, tx, `SELECT jsonb_build_object('id','notice:'||thing_id::text||':'||trigger_id||':'||due_at::text,'title','事项提醒','trigger','条件与时间','status','done','detail',reason,'createdAt',created_at) FROM workspace_notices WHERE owner_id=$1 AND NOT (delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY created_at DESC LIMIT 100`, string(scope.OwnerID))
+	notices, err := kernel.QueryDocuments[workspace.Job](ctx, tx, `SELECT jsonb_build_object('id','notice:'||thing_id::text||':'||trigger_id||':'||due_at::text,'title','事项提醒','trigger','条件与时间','status','done','detail',reason,'createdAt',created_at) FROM workspace_notices WHERE owner_id=$1 AND NOT (delivered @> '{"_suppressionOnly":true}'::jsonb) ORDER BY created_at DESC LIMIT 100`, string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
 	out.Jobs = append(out.Jobs, notices...)
-	reviews, err := queryDocuments[workspace.Job](ctx, tx, `SELECT jsonb_build_object('id','review:'||due_at::text,'title','每日整理','trigger','定时检查','status','done','detail','有 '||pending_count::text||' 条拿不准的等你确认','createdAt',created_at) FROM workspace_reviews WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 30`, string(scope.OwnerID))
+	reviews, err := kernel.QueryDocuments[workspace.Job](ctx, tx, `SELECT jsonb_build_object('id','review:'||due_at::text,'title','每日整理','trigger','定时检查','status','done','detail','有 '||pending_count::text||' 条拿不准的等你确认','createdAt',created_at) FROM workspace_reviews WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 30`, string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
@@ -359,15 +307,15 @@ func (s *Store) snapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (
 // searches memory first; embed gives that search the vector of its query.
 func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspace.Command, embed retrieval.QueryEmbed) (workspace.State, error) {
 	var out workspace.State
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !memory.ID(in.RequestID).Valid() || in.ExpectedRevision < 0 {
 		return out, memory.ErrInvalid
 	}
-	hash := sha256.Sum256(asJSON(in))
-	if oneOf(in.Type, "requestRun", "delegateTask") {
-		if requireText(in.Prompt) != nil || in.Type == "delegateTask" && !memory.ID(in.ID).Valid() || in.Type == "requestRun" && !memory.ID(in.ThingID).Valid() {
+	hash := sha256.Sum256(kernel.JSON(in))
+	if kernel.OneOf(in.Type, "requestRun", "delegateTask") {
+		if kernel.RequireText(in.Prompt) != nil || in.Type == "delegateTask" && !memory.ID(in.ID).Valid() || in.Type == "requestRun" && !memory.ID(in.ThingID).Valid() {
 			return out, memory.ErrInvalid
 		}
 		// Avoid a second embedding/budget reservation for a completed retry.
@@ -420,7 +368,7 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 		// Only toggles and bulk operations depend on the observed workspace
 		// state. Unrelated worker commits must not block other commands;
 		// their request IDs and command-specific guards still apply.
-		if (oneOf(in.Type, "toggleCheck", "toggleTrigger", "toggleContextMemory") || strings.HasPrefix(in.Type, "bulk")) && revision != in.ExpectedRevision {
+		if (kernel.OneOf(in.Type, "toggleCheck", "toggleTrigger", "toggleContextMemory") || strings.HasPrefix(in.Type, "bulk")) && revision != in.ExpectedRevision {
 			return memory.ErrConflict
 		}
 		recordAction := undoableCommand(in.Type)
@@ -458,7 +406,7 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 	return out, err
 }
 func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confirmedOnly bool) ([]byte, error) {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return nil, err
 	}
 	var data []byte
@@ -471,7 +419,7 @@ func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confir
 			return err
 		}
 		if !training {
-			sources, err := queryDocuments[json.RawMessage](ctx, tx, `SELECT jsonb_build_object('id',s.id,'connector',s.connector,'external_id',s.external_id,'version',v.version,'external_version',v.external_version,'title',v.title,'text',v.body,'media_type',v.media_type,'expressed_at',rv.expressed_at,'recorded_at',rv.recorded_at)
+			sources, err := kernel.QueryDocuments[json.RawMessage](ctx, tx, `SELECT jsonb_build_object('id',s.id,'connector',s.connector,'external_id',s.external_id,'version',v.version,'external_version',v.external_version,'title',v.title,'text',v.body,'media_type',v.media_type,'expressed_at',rv.expressed_at,'recorded_at',rv.recorded_at)
 			FROM sources s JOIN source_versions v ON (v.owner_id,v.source_id)=(s.owner_id,s.id) JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(v.owner_id,v.source_id,v.version) WHERE s.owner_id=$1 ORDER BY s.id,v.version`, string(scope.OwnerID))
 			if err != nil {
 				return err
@@ -479,13 +427,13 @@ func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confir
 			canonical := map[string][]json.RawMessage{}
 			// Names are a fixed server allowlist, never caller-supplied SQL.
 			for _, table := range []string{"memory_records", "record_versions", "sources", "source_versions", "entities", "entity_versions", "aliases", "episodes", "episode_members", "claims", "claim_revisions", "evidence", "relations", "activity", "record_grants", "claim_source_keys", "claim_key_redirects", "claim_reimport_blocks", "reimport_blocks", "record_reimport_blocks", "source_contexts", "episode_keys", "archive_entries", "claim_mentions", "source_extractions", "import_batches", "model_usage", "execution_timings"} {
-				rows, err := queryDocuments[json.RawMessage](ctx, tx, "SELECT to_jsonb(t) FROM "+table+" t WHERE owner_id=$1", string(scope.OwnerID))
+				rows, err := kernel.QueryDocuments[json.RawMessage](ctx, tx, "SELECT to_jsonb(t) FROM "+table+" t WHERE owner_id=$1", string(scope.OwnerID))
 				if err != nil {
 					return err
 				}
 				canonical[table] = rows
 			}
-			data = asJSON(map[string]any{"format": "pcas-export-1", "createdAt": stamp(), "state": state, "sourceVersions": sources, "canonical": canonical, "attachments": "Binary originals must be backed up from the memory-files volume."})
+			data = kernel.JSON(map[string]any{"format": "pcas-export-1", "createdAt": kernel.Stamp(), "state": state, "sourceVersions": sources, "canonical": canonical, "attachments": "Binary originals must be backed up from the memory-files volume."})
 			return nil
 		}
 		manifest := []map[string]any{}
@@ -499,7 +447,7 @@ func (s *Store) Export(ctx context.Context, scope memory.Scope, training, confir
 			}
 			manifest = append(manifest, map[string]any{"id": sample.ID, "version": sample.Version, "origin": sample.Origin})
 		}
-		_, err = tx.Exec(ctx, "INSERT INTO memory_export_manifests(owner_id,id,sample_versions) VALUES($1,$2,$3)", string(scope.OwnerID), string(memory.NewID()), asJSON(manifest))
+		_, err = tx.Exec(ctx, "INSERT INTO memory_export_manifests(owner_id,id,sample_versions) VALUES($1,$2,$3)", string(scope.OwnerID), string(memory.NewID()), kernel.JSON(manifest))
 		data = buf.Bytes()
 		return err
 	})
@@ -510,7 +458,7 @@ func getItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (wor
 	if !memory.ID(id).Valid() {
 		return workspace.Item{}, memory.ErrInvalid
 	}
-	return queryDocument[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
+	return kernel.QueryDocument[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 }
 func saveItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item) error {
 	if err := maintainTaskPlanTx(ctx, tx, scope, &item); err != nil {
@@ -519,13 +467,13 @@ func saveItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace
 	if err := syncArtifactEditsTx(ctx, tx, scope, item); err != nil {
 		return err
 	}
-	if !memory.ID(item.ID).Valid() || requireText(item.Title) != nil || len(item.Title) > 2000 {
+	if !memory.ID(item.ID).Valid() || kernel.RequireText(item.Title) != nil || len(item.Title) > 2000 {
 		return memory.ErrInvalid
 	}
-	if !oneOf(item.Kind, "task", "idea", "project") {
+	if !kernel.OneOf(item.Kind, "task", "idea", "project") {
 		return memory.ErrInvalid
 	}
-	if item.Kind == "task" && !oneOf(item.Status, "todo", "doing", "waiting", "done", "cancelled") || item.Kind == "idea" && !oneOf(item.Status, "active", "shelved", "awakened", "promoted", "dropped") || item.Kind == "project" && !oneOf(item.Status, "active", "paused", "done") {
+	if item.Kind == "task" && !kernel.OneOf(item.Status, "todo", "doing", "waiting", "done", "cancelled") || item.Kind == "idea" && !kernel.OneOf(item.Status, "active", "shelved", "awakened", "promoted", "dropped") || item.Kind == "project" && !kernel.OneOf(item.Status, "active", "paused", "done") {
 		return memory.ErrInvalid
 	}
 	if item.ProjectID != "" {
@@ -554,7 +502,7 @@ func saveItem(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace
 		}
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO work_items(owner_id,id,kind,title,status,project_id,due_at,scheduled_at,version,document,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-		ON CONFLICT(owner_id,id) DO UPDATE SET title=excluded.title,status=excluded.status,project_id=excluded.project_id,due_at=excluded.due_at,scheduled_at=excluded.scheduled_at,version=excluded.version,document=excluded.document,updated_at=excluded.updated_at`, string(scope.OwnerID), item.ID, item.Kind, item.Title, item.Status, nullString(item.ProjectID), nullString(item.Due), nullString(item.Scheduled), item.Version, asJSON(item), item.CreatedAt, item.UpdatedAt)
+		ON CONFLICT(owner_id,id) DO UPDATE SET title=excluded.title,status=excluded.status,project_id=excluded.project_id,due_at=excluded.due_at,scheduled_at=excluded.scheduled_at,version=excluded.version,document=excluded.document,updated_at=excluded.updated_at`, string(scope.OwnerID), item.ID, item.Kind, item.Title, item.Status, kernel.NullString(item.ProjectID), kernel.NullString(item.Due), kernel.NullString(item.Scheduled), item.Version, kernel.JSON(item), item.CreatedAt, item.UpdatedAt)
 	return err
 }
 func uuidOrNew(id string) (string, error) {
@@ -616,7 +564,7 @@ func activityTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, timezone str
 	// Automatic creation is presented once through the item and its creation
 	// actionId. A topic linked to an existing project has no new item receipt,
 	// so retain its activity while excluding all automatic creation activities.
-	out, err := queryDocuments[workspace.Activity](ctx, tx, `SELECT jsonb_build_object('id',a.id::text,'at',a.created_at,'text',a.summary,'to','/t/'||l.project_id::text)
+	out, err := kernel.QueryDocuments[workspace.Activity](ctx, tx, `SELECT jsonb_build_object('id',a.id::text,'at',a.created_at,'text',a.summary,'to','/t/'||l.project_id::text)
  FROM action_log a JOIN topic_project_links l ON(l.owner_id,l.action_id)=(a.owner_id,a.id)
  WHERE a.owner_id=$1 AND a.source='background_topic' AND NOT l.created_project
  AND a.undone_at IS NULL AND a.expired_at IS NULL AND a.created_at>=now()-interval '30 days'
@@ -743,7 +691,7 @@ func initializeAgentMemoriesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 // SnapshotETag reads only counters; matching polling requests never hydrate the
 // memory list. The token includes job/notices freshness as well as commands.
 func (s *Store) SnapshotETag(ctx context.Context, scope memory.Scope) (string, error) {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return "", err
 	}
 	var revision, library, snapshot int64

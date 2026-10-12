@@ -4,13 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -240,7 +242,7 @@ func TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval(t *testing.T)
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "acceptCandidate", ID: st.Candidates[0].ID, Kind: "memory", MemoryKind: "fact", Text: "Private launch code 482910", ProjectID: project})
 			m := st.Memories[0]
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: item.ID, AgentID: "manual", Kind: "draft", Prompt: "Use private launch code 482910"})
-			if !oneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
+			if !kernel.OneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
 				t.Fatal("fixture did not include private memory")
 			}
 			privateRun := st.Runs[0].ID
@@ -253,7 +255,7 @@ func TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval(t *testing.T)
 			case "move-project":
 				other := string(memory.NewID())
 				workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", ID: other, Name: "Other project"})
-				workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: item.ID, Patch: asJSON(map[string]any{"projectId": other})})
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: item.ID, Patch: kernel.JSON(map[string]any{"projectId": other})})
 			case "revoke":
 				workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: m.ID, AgentIDs: []string{}})
 			}
@@ -269,7 +271,7 @@ func TestContinuationHonorsCurrentItemScopeBeforeSemanticRetrieval(t *testing.T)
 			if embeddingInput == "" || strings.Contains(embeddingInput, "482910") || !strings.Contains(embeddingInput, "Ordinary permitted plan") {
 				t.Fatalf("semantic query lost permitted history or leaked denied result: %s", embeddingInput)
 			}
-			if strings.Contains(st.Runs[0].Brief, "482910") || !strings.Contains(st.Runs[0].Brief, "Ordinary permitted plan") || oneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
+			if strings.Contains(st.Runs[0].Brief, "482910") || !strings.Contains(st.Runs[0].Brief, "Ordinary permitted plan") || kernel.OneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
 				t.Fatalf("continuation bypassed current scope or lost ordinary context: %+v", st.Runs[0])
 			}
 		})
@@ -286,7 +288,7 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 			claimMarker := "Scope claim marker C-8420"
 			answerMarker := "Scope old answer marker A-9531"
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(map[string]any{"reply": answerMarker, "used": []string{"M1"}, "actions": []any{}}))}}}})
+				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(kernel.JSON(map[string]any{"reply": answerMarker, "used": []string{"M1"}, "actions": []any{}}))}}}})
 			}))
 			defer server.Close()
 			s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Providers: []ai.Provider{{ID: "model", Name: "Model", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free"}}}})
@@ -318,7 +320,7 @@ func TestDeskHistoryCannotBypassDestinationItemScope(t *testing.T) {
 			st = workspaceCommand(t, s, scope, command)
 			brief := st.Runs[0].Brief
 			memorySection, rawSection, found := strings.Cut(brief, "\n相关原话：")
-			if !found || strings.Contains(brief, answerMarker) || !strings.Contains(brief, questionMarker) || !strings.Contains(brief, "（先前回答的依据已更新，请按现在的资料回答）") || strings.Contains(memorySection, claimMarker) || oneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
+			if !found || strings.Contains(brief, answerMarker) || !strings.Contains(brief, questionMarker) || !strings.Contains(brief, "（先前回答的依据已更新，请按现在的资料回答）") || strings.Contains(memorySection, claimMarker) || kernel.OneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
 				t.Fatalf("desk history bypassed destination scope or lost the user's question: %+v", st.Runs[0])
 			}
 			if strings.Contains(rawSection, claimMarker) != (change != "exclude") {
@@ -348,13 +350,13 @@ func TestQueuedRunStopsWhenItemScopeChanges(t *testing.T) {
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Queued work", ProjectID: project})
 			id := st.Tasks[0].ID
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "model", Kind: "draft", Prompt: "Use private reference 482914"})
-			if !oneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
+			if !kernel.OneOf(m.ID, st.Runs[0].ContextMemoryIDs...) {
 				t.Fatal("fixture lacks private dependency")
 			}
 			if change == "exclude" {
 				workspaceCommand(t, s, scope, workspace.Command{Type: "toggleContextMemory", ThingID: id, MemoryID: m.ID})
 			} else {
-				workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(map[string]any{"projectId": ""})})
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: kernel.JSON(map[string]any{"projectId": ""})})
 			}
 			if err := s.runAgentOnce(context.Background()); err != nil {
 				t.Fatal(err)

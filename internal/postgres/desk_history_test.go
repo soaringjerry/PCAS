@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -17,7 +18,7 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	ctx := context.Background()
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	output := secretaryOutput{Actions: []secretaryAction{{
 		Op: "create_task", Title: "给张三回邮件", Due: stringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04")),
 		Project: stringPointer("new:A"), Notes: stringPointer("核对附件"),
@@ -92,7 +93,7 @@ func TestSecretaryHistoryOneEntryPerAction(t *testing.T) {
 		t.Fatal("task absent from action log")
 	}
 	assertLog(taskReceipt, nil, 1) // Project has its own action and receipt.
-	output.Actions = []secretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"due": asJSON(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Format("2006-01-02T15:04"))}}}
+	output.Actions = []secretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"due": kernel.JSON(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Format("2006-01-02T15:04"))}}}
 	req = turnRequest("改到周一十点")
 	req.ThingID = &task.ID
 	updated := mustTurn(t, s, scope, req)
@@ -133,9 +134,9 @@ func TestSecretaryHistoryBatchesOnlyWithinOneAction(t *testing.T) {
 		kind   string
 	}{
 		{"plain task and steps", secretaryAction{Op: "create_task", Title: "任务"}, secretaryAction{Op: "add_steps", Ref: "THIS", Steps: []string{"核对", "准备", "发送"}}, "task"},
-		{"reminder only", secretaryAction{Op: "create_task", Title: "提醒", Due: stringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04"))}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"remind": asJSON("-1h")}}, "task"},
-		{"idea with condition", secretaryAction{Op: "create_idea", Title: "想法", Condition: stringPointer("下周再看"), ConditionDue: stringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 23, 59).Format("2006-01-02"))}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"title": asJSON("新想法"), "notesAppend": asJSON("补充")}}, "idea"},
-		{"project", secretaryAction{Op: "create_project", Name: "项目"}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"title": asJSON("新项目"), "notesAppend": asJSON("目标")}}, "project"},
+		{"reminder only", secretaryAction{Op: "create_task", Title: "提醒", Due: stringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04"))}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"remind": kernel.JSON("-1h")}}, "task"},
+		{"idea with condition", secretaryAction{Op: "create_idea", Title: "想法", Condition: stringPointer("下周再看"), ConditionDue: stringPointer(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 23, 59).Format("2006-01-02"))}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"title": kernel.JSON("新想法"), "notesAppend": kernel.JSON("补充")}}, "idea"},
+		{"project", secretaryAction{Op: "create_project", Name: "项目"}, secretaryAction{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"title": kernel.JSON("新项目"), "notesAppend": kernel.JSON("目标")}}, "project"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := testStore(t)
@@ -156,7 +157,7 @@ func TestSecretaryHistoryBatchesOnlyWithinOneAction(t *testing.T) {
 				t.Fatal("duplicate creation history", item)
 			}
 			// Two independent actions in one turn must remain two revisions.
-			output.Actions = []secretaryAction{tc.update, {Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"notesAppend": asJSON("另一动作")}}}
+			output.Actions = []secretaryAction{tc.update, {Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"notesAppend": kernel.JSON("另一动作")}}}
 			req := turnRequest("修改，再补一条说明")
 			req.ThingID = &item.ID
 			updated := mustTurn(t, s, scope, req)

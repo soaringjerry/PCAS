@@ -6,11 +6,12 @@ import (
 	"fmt"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 // Keep old vectors for rollback. Recall compares only the selected model.
 func (s *Store) QueueEmbeddingBackfill(ctx context.Context, scope memory.Scope) (int64, error) {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return 0, err
 	}
 	if s.models == nil || !s.models.Available(s.models.EmbeddingID()) {

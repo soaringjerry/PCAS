@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -45,7 +46,7 @@ func b3Exec(t *testing.T, s *Store, sql string, args ...any) {
 }
 func b3Zone(t *testing.T, s *Store, scope memory.Scope, zone string) time.Time {
 	t.Helper()
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": zone})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": zone})})
 	return testsupport.DateFromToday(t, zone, 0, 12, 0)
 }
 func b3Year(now time.Time, offset int, month time.Month, day int) time.Time {
@@ -134,7 +135,7 @@ func b3Claim(t *testing.T, s *Store, scope memory.Scope, spec b3ClaimSpec) memor
 	exec(`INSERT INTO memory_records(owner_id,id,kind,version) VALUES($1,$2,'claim',1)`, scope.OwnerID, id)
 	exec(`INSERT INTO record_versions(owner_id,record_id,version,expressed_at) VALUES($1,$2,1,$3)`, scope.OwnerID, id, spec.Said)
 	exec(`INSERT INTO claims(owner_id,id) VALUES($1,$2)`, scope.OwnerID, id)
-	exec(`INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,scope,nature,acquisition,confirmation,change_type,event_from,event_to,event_precision) VALUES($1,$2,1,$3,'验收事项',$4::jsonb,$5::jsonb,$6,$7,'adopted','initial',$8,$9,$10)`, scope.OwnerID, id, spec.Subject, string(asJSON(spec.Text)), string(asJSON(claimScope)), spec.Nature, spec.Acquisition, spec.EventFrom, spec.EventTo, precision)
+	exec(`INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,scope,nature,acquisition,confirmation,change_type,event_from,event_to,event_precision) VALUES($1,$2,1,$3,'验收事项',$4::jsonb,$5::jsonb,$6,$7,'adopted','initial',$8,$9,$10)`, scope.OwnerID, id, spec.Subject, string(kernel.JSON(spec.Text)), string(kernel.JSON(claimScope)), spec.Nature, spec.Acquisition, spec.EventFrom, spec.EventTo, precision)
 	exec(`INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3)`, scope.OwnerID, id, scope.PrincipalID)
 	exec(`INSERT INTO activity(owner_id,record_id,last_effective_use_at) VALUES($1,$2,now())`, scope.OwnerID, id)
 	if spec.Source.ID != "" {
@@ -231,7 +232,7 @@ func b3Timeline(t *testing.T, out workspace.DeskTurnResponse) []map[string]any {
 	for _, card := range out.Turn.Cards {
 		if card.Kind == "timeline" {
 			var items []map[string]any
-			if err := json.Unmarshal(asJSON(card.Items), &items); err != nil {
+			if err := json.Unmarshal(kernel.JSON(card.Items), &items); err != nil {
 				t.Fatal(err)
 			}
 			return items
@@ -246,7 +247,7 @@ func b3TimelineText(t *testing.T, out workspace.DeskTurnResponse, text string) m
 			return item
 		}
 	}
-	t.Fatalf("timeline lacks %q: %s", text, asJSON(out.Turn.Cards))
+	t.Fatalf("timeline lacks %q: %s", text, kernel.JSON(out.Turn.Cards))
 	return nil
 }
 func b3Used(refs ...memory.Ref) string {
@@ -254,7 +255,7 @@ func b3Used(refs ...memory.Ref) string {
 	for i := range refs {
 		used = append(used, fmt.Sprintf("M%d", i+1))
 	}
-	return string(asJSON(map[string]any{"reply": "验收时间轴固定回答", "used": used, "actions": []any{}}))
+	return string(kernel.JSON(map[string]any{"reply": "验收时间轴固定回答", "used": used, "actions": []any{}}))
 }
 func b3MustRef(t *testing.T, actual any, ref memory.Ref) {
 	t.Helper()

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -17,7 +18,7 @@ var _ workspace.LibraryReader = (*Store)(nil)
 
 func (s *Store) ReadHandover(ctx context.Context, scope memory.Scope) (workspace.Handover, error) {
 	out := workspace.Handover{}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.HandoverTx(ctx, tx, scope); return err })
@@ -72,7 +73,7 @@ func (s *Store) libraryDeadlinesTx(ctx context.Context, tx pgx.Tx, scope memory.
 
 func (s *Store) ListDeadlines(ctx context.Context, scope memory.Scope, q workspace.DeadlineQuery) (workspace.DeadlineList, error) {
 	out := workspace.DeadlineList{Items: []workspace.LibraryDeadline{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.libraryDeadlinesTx(ctx, tx, scope, q); return err })
@@ -101,7 +102,7 @@ func (s *Store) assistantRequirementsTx(ctx context.Context, tx pgx.Tx, scope me
 
 func (s *Store) ListAssistantRequirements(ctx context.Context, scope memory.Scope) (workspace.AssistantRequirementList, error) {
 	out := workspace.AssistantRequirementList{Items: []workspace.AssistantRequirement{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.assistantRequirementsTx(ctx, tx, scope); return err })
@@ -112,7 +113,7 @@ func validLibraryKey(key string) bool {
 	if strings.HasPrefix(key, "entity:") {
 		return memory.ID(strings.TrimPrefix(key, "entity:")).Valid()
 	}
-	return oneOf(key, "self:identity", "self:taste", "self:rule", "self:goal")
+	return kernel.OneOf(key, "self:identity", "self:taste", "self:rule", "self:goal")
 }
 
 type groupMemoryCursor struct {
@@ -122,7 +123,7 @@ type groupMemoryCursor struct {
 
 func (s *Store) ListGroupMemories(ctx context.Context, scope memory.Scope, key string, q workspace.GroupMemoryQuery) (workspace.MemoryPage, error) {
 	out := workspace.MemoryPage{Items: []workspace.Memory{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !validLibraryKey(key) || q.Limit < 0 || q.Limit > 100 {
@@ -211,7 +212,7 @@ func (s *Store) memoryGroupsTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 
 func (s *Store) ListMemoryGroups(ctx context.Context, scope memory.Scope) (workspace.MemoryGroupList, error) {
 	out := workspace.MemoryGroupList{Items: []workspace.LibraryMemoryGroup{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.memoryGroupsTx(ctx, tx, scope); return err })

@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
-	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/workspace"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func documentVersionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string, version int) (workspace.DocumentVersion, error) {
@@ -21,7 +23,7 @@ func documentVersionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id st
 }
 func (s *Store) ReadDocumentVersion(ctx context.Context, scope memory.Scope, id string, version int) (workspace.DocumentVersion, error) {
 	var out workspace.DocumentVersion
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !memory.ID(id).Valid() || version < 1 {
@@ -36,7 +38,7 @@ func (s *Store) ReadDocumentVersion(ctx context.Context, scope memory.Scope, id 
 }
 func (s *Store) ListDocumentVersions(ctx context.Context, scope memory.Scope, id string) (workspace.DocumentVersionList, error) {
 	out := workspace.DocumentVersionList{Items: []workspace.DocumentVersionSummary{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !memory.ID(id).Valid() {
@@ -68,7 +70,7 @@ func (s *Store) ListDocumentVersions(ctx context.Context, scope memory.Scope, id
 }
 func (s *Store) ReadDocumentDiff(ctx context.Context, scope memory.Scope, id string, from, to int) (workspace.DocumentDiff, error) {
 	out := workspace.DocumentDiff{DocumentID: id, FromVersion: from, ToVersion: to, Changes: []workspace.ParagraphChange{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !memory.ID(id).Valid() || from < 0 || to < 0 || (from == 0) != (to == 0) {

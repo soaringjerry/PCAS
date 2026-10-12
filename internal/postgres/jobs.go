@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -100,17 +101,17 @@ func (s *Store) Retry(ctx context.Context, job worker.Job, code string) error {
 	if job.Attempts >= maxAttempts && !persistentBackgroundStage(job.Stage) {
 		state = "failed"
 	}
-	return s.finishAttempt(ctx, job, state, code, retryDelay(job.Attempts))
+	return s.finishAttempt(ctx, job, state, code, kernel.RetryDelay(job.Attempts))
 }
 
 func (s *Store) finishAttempt(ctx context.Context, job worker.Job, state, code string, delay time.Duration) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if strings.HasPrefix(job.Stage, "source.extract") {
-			if err := extractionOwnerLock(ctx, tx, job.OwnerID); err != nil {
+			if err := kernel.OwnerLock(ctx, tx, job.OwnerID); err != nil {
 				return err
 			}
 		}
-		if err := lockJob(ctx, tx, job); err != nil {
+		if err := kernel.LockJob(ctx, tx, job); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `UPDATE memory_jobs SET state=$3,error_code=$4,available_at=now()+$5*interval '1 second',lease_until=NULL,lease_token=NULL,updated_at=now()
@@ -123,11 +124,6 @@ func (s *Store) finishAttempt(ctx context.Context, job worker.Job, state, code s
 		}
 		return nil
 	})
-}
-
-func retryDelay(attempt int) time.Duration {
-	delays := [...]time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, time.Hour}
-	return delays[max(0, min(attempt-1, len(delays)-1))]
 }
 
 func (s *Store) Defer(ctx context.Context, job worker.Job, code string, until time.Time, noAttempt bool) error {
@@ -183,7 +179,7 @@ func (s *Store) expireExhaustedJobs(ctx context.Context) error {
 	for _, j := range jobs {
 		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			if strings.HasPrefix(j.Stage, "source.extract") {
-				if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
+				if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 					return err
 				}
 			}
@@ -254,7 +250,7 @@ func (s *Store) ProcessChunks(ctx context.Context, job worker.Job) error {
 			}
 		}
 		for _, stage := range []string{"source.extract", "source.embed", "source.tokenize"} {
-			if err := enqueue(ctx, tx, job.OwnerID, job.Record.ID, job.Record.Version, stage); err != nil {
+			if err := kernel.Enqueue(ctx, tx, job.OwnerID, job.Record.ID, job.Record.Version, stage); err != nil {
 				return err
 			}
 		}

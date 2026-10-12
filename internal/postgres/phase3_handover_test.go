@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -56,7 +57,7 @@ func TestPhase3H2InvalidEvidenceRejectedCountedWithoutLosingValidSentences(t *te
 		var wire map[string]any
 		_ = json.Unmarshal([]byte(out), &wire)
 		wire["conclusion"] = append(wire["conclusion"].([]any), map[string]any{"text": "这句虚构断言没有依据。", "evidence": []any{}}, map[string]any{"text": "这句引用不存在的虚构对象。", "evidence": []any{map[string]any{"kind": "memory", "id": string(memory.NewID()), "version": 1}}})
-		return string(asJSON(wire))
+		return string(kernel.JSON(wire))
 	}
 	m.mu.Unlock()
 	phase3ProcessOne(t, f, "project_handover", time.Now())
@@ -250,7 +251,7 @@ func TestPhase3H2G1SentenceOverflowHasObservableDestination(t *testing.T) {
 			many[i] = first
 		}
 		wire["conclusion"] = many
-		return string(asJSON(wire))
+		return string(kernel.JSON(wire))
 	}
 	phase3ProcessOne(t, f, "project_handover", time.Now())
 	var got phase3Handover

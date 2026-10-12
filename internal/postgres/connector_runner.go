@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 type syncLease struct {
@@ -171,7 +172,7 @@ func (s *Store) syncFolder(ctx context.Context, l syncLease) error {
 			continue
 		}
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
-		if !oneOf(ext, ".txt", ".md", ".json", ".jsonl", ".zip") {
+		if !kernel.OneOf(ext, ".txt", ".md", ".json", ".jsonl", ".zip") {
 			continue
 		}
 		file, err := folder.Open(entry.Name())
@@ -251,7 +252,7 @@ func (s *Store) finishSync(ctx context.Context, l syncLease, b connectors.Batch,
 		if b.HasMore {
 			etag = ""
 		}
-		_, err = tx.Exec(ctx, `UPDATE connector_configs SET cursor=$3,etag=$4,status='idle',error_code='',gaps=$5,imported=imported+$6,last_sync=now(),next_sync=now()+CASE WHEN $7 THEN 0 ELSE interval_seconds END*interval '1 second',lease_token=NULL,lease_until=NULL WHERE id=$1 AND lease_token=$2`, string(l.Connection.ID), string(l.Token), cursor, etag, asJSON(gaps), imported, b.HasMore)
+		_, err = tx.Exec(ctx, `UPDATE connector_configs SET cursor=$3,etag=$4,status='idle',error_code='',gaps=$5,imported=imported+$6,last_sync=now(),next_sync=now()+CASE WHEN $7 THEN 0 ELSE interval_seconds END*interval '1 second',lease_token=NULL,lease_until=NULL WHERE id=$1 AND lease_token=$2`, string(l.Connection.ID), string(l.Token), cursor, etag, kernel.JSON(gaps), imported, b.HasMore)
 		return err
 	})
 }

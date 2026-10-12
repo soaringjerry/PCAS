@@ -2,8 +2,10 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -12,7 +14,7 @@ import (
 
 // Adjacent context remains bounded, keeps roles, and cannot supply extraction quotes.
 func (s *Store) adjacentContext(ctx context.Context, scope memory.Scope, source memory.SourceResult) ([]map[string]any, error) {
-	if oneOf(source.Source.Connector, "desk", "desk-incomplete") {
+	if kernel.OneOf(source.Source.Connector, "desk", "desk-incomplete") {
 		return s.deskExtractionContext(ctx, scope, source.Source.ExternalID)
 	}
 	out := []map[string]any{}

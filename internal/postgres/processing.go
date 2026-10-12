@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strconv"
 	"strings"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -15,35 +17,15 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func lockJob(ctx context.Context, tx pgx.Tx, j worker.Job) error {
-	var valid bool
-	// The same statement names this job as the cause of the work that the
-	// transaction queues. The queue records the root and the depth from it.
-	err := tx.QueryRow(ctx, `SELECT set_config('pcas.cause_job',id::text,true) IS NOT NULL FROM memory_jobs WHERE id=$1 AND owner_id=$2 AND record_id=$3 AND record_version=$4 AND lease_token=$5 AND state='leased' AND lease_until>clock_timestamp() FOR UPDATE`, string(j.ID), string(j.OwnerID), string(j.Record.ID), j.Record.Version, string(j.LeaseToken)).Scan(&valid)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return worker.ErrLeaseLost
-	}
-	return err
-}
-func acknowledge(ctx context.Context, tx pgx.Tx, j worker.Job) error {
-	tag, err := tx.Exec(ctx, "UPDATE memory_jobs SET state='done',lease_until=NULL,lease_token=NULL,error_code='',updated_at=now() WHERE id=$1 AND lease_token=$2 AND state='leased' AND lease_until>clock_timestamp()", string(j.ID), string(j.LeaseToken))
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() != 1 {
-		return worker.ErrLeaseLost
-	}
-	return nil
-}
 func (s *Store) ProcessIndex(ctx context.Context, j worker.Job) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		var text string
 		err := tx.QueryRow(ctx, "SELECT body FROM memory_text WHERE owner_id=$1 AND id=$2 AND version=$3", string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&text)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return acknowledge(ctx, tx, j)
+			return kernel.Acknowledge(ctx, tx, j)
 		}
 		if err != nil {
 			return err
@@ -77,15 +59,15 @@ func (s *Store) ProcessIndex(ctx context.Context, j worker.Job) error {
 				}
 			}
 		}
-		if err := enqueue(ctx, tx, j.OwnerID, j.Record.ID, j.Record.Version, "memory.summary"); err != nil {
+		if err := kernel.Enqueue(ctx, tx, j.OwnerID, j.Record.ID, j.Record.Version, "memory.summary"); err != nil {
 			return err
 		}
 		if j.Stage == "memory.index" {
-			if err := enqueue(ctx, tx, j.OwnerID, j.Record.ID, j.Record.Version, "memory.embed"); err != nil {
+			if err := kernel.Enqueue(ctx, tx, j.OwnerID, j.Record.ID, j.Record.Version, "memory.embed"); err != nil {
 				return err
 			}
 		}
-		return acknowledge(ctx, tx, j)
+		return kernel.Acknowledge(ctx, tx, j)
 	})
 }
 
@@ -98,10 +80,10 @@ func (a indexStore) Missing(ctx context.Context, j worker.Job, model string) ([]
 	s := a.store
 	finish := func() ([]memory.Ref, []string, bool, error) {
 		return nil, nil, false, pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-			if err := lockJob(ctx, tx, j); err != nil {
+			if err := kernel.LockJob(ctx, tx, j); err != nil {
 				return err
 			}
-			return acknowledge(ctx, tx, j)
+			return kernel.Acknowledge(ctx, tx, j)
 		})
 	}
 	var text string
@@ -185,24 +167,24 @@ func (a indexStore) Missing(ctx context.Context, j worker.Job, model string) ([]
 func (a indexStore) Save(ctx context.Context, j worker.Job, refs []memory.Ref, vectors []memory.Embedding) error {
 	s := a.store
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		var current int
 		err := tx.QueryRow(ctx, "SELECT version FROM memory_records WHERE owner_id=$1 AND id=$2 AND state='active' FOR SHARE", string(j.OwnerID), string(j.Record.ID)).Scan(&current)
 		if errors.Is(err, pgx.ErrNoRows) || current != j.Record.Version {
-			return acknowledge(ctx, tx, j)
+			return kernel.Acknowledge(ctx, tx, j)
 		}
 		if err != nil {
 			return err
 		}
 		for i, ref := range refs {
 			v := vectors[i]
-			if _, err := tx.Exec(ctx, "INSERT INTO embeddings(owner_id,record_id,record_version,model,dimensions,embedding) VALUES($1,$2,$3,$4,$5,$6::vector) ON CONFLICT(owner_id,record_id,record_version,model) DO UPDATE SET embedding=excluded.embedding,dimensions=excluded.dimensions", string(j.OwnerID), string(ref.ID), ref.Version, v.Model, len(v.Values), string(asJSON(v.Values))); err != nil {
+			if _, err := tx.Exec(ctx, "INSERT INTO embeddings(owner_id,record_id,record_version,model,dimensions,embedding) VALUES($1,$2,$3,$4,$5,$6::vector) ON CONFLICT(owner_id,record_id,record_version,model) DO UPDATE SET embedding=excluded.embedding,dimensions=excluded.dimensions", string(j.OwnerID), string(ref.ID), ref.Version, v.Model, len(v.Values), string(kernel.JSON(v.Values))); err != nil {
 				return err
 			}
 		}
-		return acknowledge(ctx, tx, j)
+		return kernel.Acknowledge(ctx, tx, j)
 	})
 }
 
@@ -242,7 +224,7 @@ func (a extractionStore) Source(ctx context.Context, j worker.Job) (memory.Sourc
 func (a extractionStore) Current(ctx context.Context, j worker.Job) (bool, error) {
 	var current bool
 	err := pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		var err error
@@ -250,7 +232,7 @@ func (a extractionStore) Current(ctx context.Context, j worker.Job) (bool, error
 		if err != nil || current {
 			return err
 		}
-		return acknowledge(ctx, tx, j)
+		return kernel.Acknowledge(ctx, tx, j)
 	})
 	return current, err
 }
@@ -260,10 +242,10 @@ func (a extractionStore) Current(ctx context.Context, j worker.Job) (bool, error
 // longer current.
 func (a extractionStore) extractionTx(ctx context.Context, j worker.Job, write func(pgx.Tx) error) error {
 	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
+		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		current, err := currentExtractionSource(ctx, tx, j)
@@ -271,7 +253,7 @@ func (a extractionStore) extractionTx(ctx context.Context, j worker.Job, write f
 			return err
 		}
 		if !current {
-			return acknowledge(ctx, tx, j)
+			return kernel.Acknowledge(ctx, tx, j)
 		}
 		return write(tx)
 	})
@@ -292,7 +274,7 @@ func (a extractionStore) Conversation(ctx context.Context, j worker.Job, convers
 func (a extractionStore) SplitWindows(ctx context.Context, j worker.Job, starts []int, imported bool) error {
 	return a.extractionTx(ctx, j, func(tx pgx.Tx) error {
 		for _, start := range starts {
-			if err := enqueue(ctx, tx, j.OwnerID, j.Record.ID, j.Record.Version, "source.extract:"+strconv.Itoa(start)); err != nil {
+			if err := kernel.Enqueue(ctx, tx, j.OwnerID, j.Record.ID, j.Record.Version, "source.extract:"+strconv.Itoa(start)); err != nil {
 				return err
 			}
 		}
@@ -343,7 +325,7 @@ func (a extractionStore) Input(ctx context.Context, j worker.Job, source memory.
 			return err
 		}
 		var err error
-		settings, err = queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID))
+		settings, err = kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID))
 		return err
 	}); err != nil {
 		return in, err
@@ -377,7 +359,7 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
 		}
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		current, err := currentExtractionSource(ctx, tx, j)
@@ -385,7 +367,7 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 			return err
 		}
 		if !current {
-			return acknowledge(ctx, tx, j)
+			return kernel.Acknowledge(ctx, tx, j)
 		}
 		facts := extraction.Facts{Source: source, MentionText: result.MentionText, Location: result.Location}
 		// Recheck under the same owner lock used by undo, after generation: an
@@ -402,7 +384,7 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 				}
 			}
 		}
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID))
+		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID))
 		if err != nil {
 			return err
 		}
@@ -434,7 +416,7 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 			if duplicate && item.Kind != "memory" {
 				continue
 			}
-			v := workspace.Candidate{ID: string(memory.NewID()), Kind: item.Kind, Text: item.Text, MemoryKind: item.Nature, Confidence: item.Confidence, Source: workspace.SourceRef{SourceID: string(j.Record.ID), Version: j.Record.Version, Label: source.Source.Title, Excerpt: item.Quote, At: stamp()}, State: "pending", CreatedAt: stamp()}
+			v := workspace.Candidate{ID: string(memory.NewID()), Kind: item.Kind, Text: item.Text, MemoryKind: item.Nature, Confidence: item.Confidence, Source: workspace.SourceRef{SourceID: string(j.Record.ID), Version: j.Record.Version, Label: source.Source.Title, Excerpt: item.Quote, At: kernel.Stamp()}, State: "pending", CreatedAt: kernel.Stamp()}
 			if decision.Action == extraction.Remember {
 				in := statement{ProjectID: result.Project, Text: item.Text, Nature: item.Nature, Subject: decision.Subject, SubjectType: decision.SubjectType, Predicate: item.Predicate, Confirmation: decision.Confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: j.Record, Structured: true, ExpressedAt: extraction.ExpressedAt(source),
 					EventFrom: decision.EventFrom, EventTo: decision.EventTo, EventPrecision: decision.EventPrecision, Mentions: decision.Mentions}
@@ -484,7 +466,7 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 // job fence so a metered retry cannot be mistaken for an ambiguous paid call.
 func (s *Store) releaseUnavailableReservation(ctx context.Context, j worker.Job, reservationID string) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, "DELETE FROM background_usage WHERE owner_id=$1 AND job_id=$2 AND id=$3", string(j.OwnerID), string(j.ID), reservationID)
@@ -492,13 +474,8 @@ func (s *Store) releaseUnavailableReservation(ctx context.Context, j worker.Job,
 	})
 }
 
-func extractionOwnerLock(ctx context.Context, tx pgx.Tx, owner memory.ID) error {
-	_, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(owner))
-	return err
-}
-
 func completeExtractionTx(ctx context.Context, tx pgx.Tx, j worker.Job, state string) error {
-	if err := acknowledge(ctx, tx, j); err != nil {
+	if err := kernel.Acknowledge(ctx, tx, j); err != nil {
 		return err
 	}
 	return extractionStateTx(ctx, tx, j, state)
@@ -553,10 +530,10 @@ func extractionStateTx(ctx context.Context, tx pgx.Tx, j worker.Job, state strin
 
 func (s *Store) extractionFailed(ctx context.Context, j worker.Job) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
+		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		return extractionStateTx(ctx, tx, j, "failed")

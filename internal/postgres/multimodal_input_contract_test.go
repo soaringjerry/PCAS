@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"log/slog"
 	"math/rand"
@@ -20,6 +19,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/blob"
@@ -197,7 +199,7 @@ func TestImageFailuresRetainOriginalAndUseCaption(t *testing.T) {
 			}
 			if mode == "budget" {
 				s.models.Config.Providers[0].InputPerMillion = 1000
-				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": 0.001})})
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": 0.001})})
 			}
 			req := turnRequest("帮我记一下")
 			req.Attachments = []memory.Ref{ref}
@@ -301,7 +303,7 @@ func TestRandomizedReverseUndoRestoresContents(t *testing.T) {
 			t.Fatalf("reverse operation %d: %v", i, err)
 		}
 	}
-	if string(asJSON(final.Tasks)) != string(asJSON(initial.Tasks)) || string(asJSON(final.Projects)) != string(asJSON(initial.Projects)) || string(asJSON(final.Ideas)) != string(asJSON(initial.Ideas)) {
+	if string(kernel.JSON(final.Tasks)) != string(kernel.JSON(initial.Tasks)) || string(kernel.JSON(final.Projects)) != string(kernel.JSON(initial.Projects)) || string(kernel.JSON(final.Ideas)) != string(kernel.JSON(initial.Ideas)) {
 		t.Fatal("reverse undo did not restore workspace contents", final)
 	}
 	var remaining int
@@ -319,7 +321,7 @@ func TestImageTextCannotGroundUserMemory(t *testing.T) {
 	req.Attachments = []memory.Ref{ref}
 	mustTurn(t, s, scope, req)
 	source := b1TurnSource(t, s, scope, req.RequestID)
-	f.extraction = string(asJSON(map[string]any{"items": []any{
+	f.extraction = string(kernel.JSON(map[string]any{"items": []any{
 		map[string]any{"kind": "memory", "text": "要交物业费 800 元", "nature": "fact", "subject": "我", "predicate": "缴费", "quote": m1Notice, "confidence": 0.99, "acquisition": "direct", "qualification": "asserted"},
 		map[string]any{"kind": "memory", "text": "我喜欢喝茶", "nature": "preference", "subject": "我", "predicate": "偏好", "quote": "我喜欢喝茶", "confidence": 0.99, "acquisition": "direct", "qualification": "asserted"},
 	}}))
@@ -369,7 +371,7 @@ func TestExistingUploadAndDeskHTTP(t *testing.T) {
 	}
 	req := turnRequest("帮我记一下")
 	req.Attachments = []memory.Ref{upload.Ref}
-	resp, err = http.Post(server.URL+"/v1/desk/turn", "application/json", bytes.NewReader(asJSON(req)))
+	resp, err = http.Post(server.URL+"/v1/desk/turn", "application/json", bytes.NewReader(kernel.JSON(req)))
 	if err != nil {
 		t.Fatal(err)
 	}

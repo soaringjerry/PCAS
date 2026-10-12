@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 // Work that a handler queues under its lease keeps the root of the handler's
@@ -37,10 +38,10 @@ func TestQueuedWorkKeepsItsRootAndDepthAndIsRecordedOnce(t *testing.T) {
 	}
 	// A handler queues follow-on work under its lease.
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, *j); err != nil {
+		if err := kernel.LockJob(ctx, tx, *j); err != nil {
 			return err
 		}
-		return enqueue(ctx, tx, j.OwnerID, source.ID, source.Version, "fictitious.child")
+		return kernel.Enqueue(ctx, tx, j.OwnerID, source.ID, source.Version, "fictitious.child")
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +59,7 @@ func TestQueuedWorkKeepsItsRootAndDepthAndIsRecordedOnce(t *testing.T) {
 	}
 	// Repeated delivery changes the existing job and adds no event.
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		return enqueue(ctx, tx, j.OwnerID, source.ID, source.Version, "fictitious.child")
+		return kernel.Enqueue(ctx, tx, j.OwnerID, source.ID, source.Version, "fictitious.child")
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +69,7 @@ func TestQueuedWorkKeepsItsRootAndDepthAndIsRecordedOnce(t *testing.T) {
 	// A rollback leaves neither the work nor its event.
 	rolledBack := errors.New("fictitious rollback")
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := enqueue(ctx, tx, j.OwnerID, source.ID, source.Version, "fictitious.rolled-back"); err != nil {
+		if err := kernel.Enqueue(ctx, tx, j.OwnerID, source.ID, source.Version, "fictitious.rolled-back"); err != nil {
 			return err
 		}
 		return rolledBack

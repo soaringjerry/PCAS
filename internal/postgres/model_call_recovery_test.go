@@ -3,10 +3,12 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"sync/atomic"
 	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
@@ -101,7 +103,7 @@ func TestActiveLeaseCannotStartAnotherInvocation(t *testing.T) {
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { calls.Add(1); secretaryModelReply(w, "unused") })
 	organizeTestMemory(t, s, scope, "Fictitious unfinished report.")
 	j := organizeTestJob(t, s, scope)
-	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: j.ID, RootExecutionID: j.ID, Function: "organize", Stage: j.Stage, Instructions: prompts.Must("organize"), Prompt: asJSON(map[string]string{"test": "fictitious"}), Policy: j}
+	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: j.ID, RootExecutionID: j.ID, Function: "organize", Stage: j.Stage, Instructions: prompts.Must("organize"), Prompt: kernel.JSON(map[string]string{"test": "fictitious"}), Policy: j}
 	provider, _ := s.models.Get(s.models.ExtractionID())
 	adapter := backgroundCalls{store: s}
 	ctx := context.Background()

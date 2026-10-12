@@ -3,10 +3,12 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
-	"strings"
 )
 
 type secretaryDocumentsKey struct{}
@@ -16,7 +18,7 @@ func (s *Store) secretaryDocumentsTx(ctx context.Context, tx pgx.Tx, scope memor
 	if err != nil || !installed {
 		return "", err
 	}
-	docs, err := queryDocuments[workspace.Doc](ctx, tx, `SELECT d.document FROM work_documents d JOIN work_items w ON(w.owner_id,w.id)=(d.owner_id,d.thing_id)
+	docs, err := kernel.QueryDocuments[workspace.Doc](ctx, tx, `SELECT d.document FROM work_documents d JOIN work_items w ON(w.owner_id,w.id)=(d.owner_id,d.thing_id)
  WHERE d.owner_id=$1 AND ($2::uuid IS NULL OR w.id=$2 OR w.project_id=$2 OR w.project_id=(SELECT CASE WHEN kind='project' THEN id ELSE project_id END FROM work_items WHERE owner_id=$1 AND id=$2)) ORDER BY d.document->>'updatedAt' DESC,d.id`, string(scope.OwnerID), req.ThingID)
 	if err != nil {
 		return "", err
@@ -35,7 +37,7 @@ func (s *Store) secretaryDocumentsTx(ctx context.Context, tx pgx.Tx, scope memor
 		}
 		c.Aliases[alias] = item
 		c.TargetItems[item.ID] = item
-		versions, err := queryDocuments[int](ctx, tx, `SELECT to_jsonb(version) FROM document_versions WHERE owner_id=$1 AND document_id=$2 ORDER BY version DESC`, string(scope.OwnerID), doc.ID)
+		versions, err := kernel.QueryDocuments[int](ctx, tx, `SELECT to_jsonb(version) FROM document_versions WHERE owner_id=$1 AND document_id=$2 ORDER BY version DESC`, string(scope.OwnerID), doc.ID)
 		if err != nil {
 			return "", err
 		}

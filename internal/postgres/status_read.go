@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -193,7 +194,7 @@ func (s *Store) DeadlinesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 
 func (s *Store) About(ctx context.Context, scope memory.Scope, key string) (workspace.About, error) {
 	out := workspace.About{Cards: []workspace.StatusCard{}, Deadlines: []workspace.Deadline{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {

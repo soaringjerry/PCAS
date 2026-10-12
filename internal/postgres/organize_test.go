@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"os"
 	"reflect"
@@ -14,6 +13,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -201,7 +203,7 @@ func organizeTestReply(t *testing.T, w http.ResponseWriter, r *http.Request, cat
 	for _, m := range prompt.Memories {
 		items = append(items, map[string]any{"n": m.N, "category": category, "durable": true, "deadlines": []any{}, "unrestricted": true, "scope": "", "topics": []string{"季度汇报"}, "area": "工作"})
 	}
-	text := string(asJSON(map[string]any{"items": items, "new": []any{map[string]any{"type": "topic", "name": "季度汇报", "desc": "虚构季度汇报"}}}))
+	text := string(kernel.JSON(map[string]any{"items": items, "new": []any{map[string]any{"type": "topic", "name": "季度汇报", "desc": "虚构季度汇报"}}}))
 	_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": text}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 100}})
 }
 
@@ -296,7 +298,7 @@ func TestOrganizeBadOutputAndExhaustion(t *testing.T) {
 		}
 	}
 	var usages int
-	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='organize' AND memory_refs=$2::jsonb", string(scope.OwnerID), asJSON([]memory.Ref{ref})).Scan(&usages); err != nil || usages != 4 {
+	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM model_usage WHERE owner_id=$1 AND purpose='organize' AND memory_refs=$2::jsonb", string(scope.OwnerID), kernel.JSON([]memory.Ref{ref})).Scan(&usages); err != nil || usages != 4 {
 		t.Fatal(usages, err)
 	}
 	queued, err := s.ScheduleOrganize(ctx, time.Now())
@@ -597,7 +599,7 @@ func TestOrganizeModelDeclaredGroupsHaveNoLexicalOrThreeGroupLimit(t *testing.T)
 		t.Fatal(names, err)
 	}
 	for _, name := range []string{"季度汇报", "盆栽观察", "书店走访", "蓝杯计划", "阅读记录", "效率提升"} {
-		if !oneOf(name, names...) {
+		if !kernel.OneOf(name, names...) {
 			t.Fatal(names)
 		}
 	}

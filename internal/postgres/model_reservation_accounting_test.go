@@ -2,13 +2,15 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
-	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/workspace"
 	"math"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func secretaryCancellationHold(t *testing.T, s *Store, scope memory.Scope, requestID string) (float64, float64) {
@@ -52,7 +54,7 @@ func TestSecretarySettlesOnlyItsReservation(t *testing.T) {
 			if mode == "failure" {
 				f.set("", 500)
 			}
-			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": 10})})
+			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": 10})})
 			// Another reservation must survive settlement of this call unchanged.
 			if _, err := s.pool.Exec(context.Background(), "INSERT INTO background_usage(owner_id,reserved_cost) VALUES($1,0.03)", string(scope.OwnerID)); err != nil {
 				t.Fatal(err)
@@ -136,7 +138,7 @@ func TestSecretarySettlesOnlyItsReservation(t *testing.T) {
 				// budget if the first invocation's full reservation were retained.
 				nextBudget := want + firstReservation + (firstReservation-actual)/2
 				t.Logf("pending first reservation=%g settled=%g next budget=%g", firstReservation, actual, nextBudget)
-				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": nextBudget})})
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": nextBudget})})
 				before := len(f.all())
 				mustTurn(t, s, scope, turnRequest("R1 next question"))
 				if len(f.all()) != before+1 {
@@ -251,7 +253,7 @@ func TestConcurrentSecretaryReservationsAreIndependent(t *testing.T) {
 	s, scope := testStore(t), owner()
 	f := b4Model(t, s)
 	f.set(`{"reply":"R1 returned reply","actions":[]}`, 200)
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": 10})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": 10})})
 	gate := b4HoldModel(t, f)
 	defer gate.unblock()
 	ctx, cancel := context.WithCancel(context.Background())

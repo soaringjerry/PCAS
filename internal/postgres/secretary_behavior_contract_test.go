@@ -17,6 +17,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -34,7 +35,7 @@ func stabilizationSecretaryTasks(t *testing.T, s *Store, scope memory.Scope, wan
 func TestSecretaryConcurrentConversationSeesPreviousObject(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "UTC"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "UTC"})})
 	conversation := string(memory.NewID())
 	firstEntered, releaseFirst, secondInvoked, secondEntered := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
 	var releaseOnce sync.Once
@@ -285,12 +286,12 @@ func TestSecretaryFailureCategoriesKeepOriginalAndPrivateLogs(t *testing.T) {
 			if mode == "budget" {
 				provider.CostMode = ""
 				provider.InputPerMillion = 1
-				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": 0})})
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": 0})})
 			}
 			s.SetModels(&ai.Registry{HTTP: client, Config: ai.Configuration{Providers: []ai.Provider{provider}}})
 			req := turnRequest("原话-private-T3")
 			out := mustTurn(t, s, scope, req)
-			if rendered := string(asJSON(out.Turn)); strings.Contains(rendered, "key-secret-T3") || strings.Contains(rendered, "model-secret-T3") {
+			if rendered := string(kernel.JSON(out.Turn)); strings.Contains(rendered, "key-secret-T3") || strings.Contains(rendered, "model-secret-T3") {
 				t.Fatal("model credential or raw provider error entered response")
 			}
 			stage, errorType, connector := "model", "model_error", "capture"
@@ -380,7 +381,7 @@ func TestSecretaryLongReplyPreservesBodyAndActions(t *testing.T) {
 		t.Fatal("unbounded or state-bearing cache", err)
 	}
 	replay := mustTurn(t, s, scope, req)
-	if string(asJSON(replay.Turn)) != string(asJSON(out.Turn)) {
+	if string(kernel.JSON(replay.Turn)) != string(kernel.JSON(out.Turn)) {
 		t.Fatal("truncated reply or action receipt changed on replay")
 	}
 	stabilizationSecretaryTasks(t, s, scope, 1)

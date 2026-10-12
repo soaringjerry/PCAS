@@ -5,6 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 type useEvidenceBatchKey struct{}
@@ -29,7 +30,7 @@ func useEvidenceAnchorsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, cl
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version)
  JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(r.owner_id,r.id,r.version)
  WHERE e.owner_id=$1 AND e.target_id=c.id AND e.target_version=c.version AND r.state='active' AND rv.state='active' AND sc.conversation_key<>'' AND sc.branch<>'historical'
- ORDER BY e.id LIMIT 1) a`, string(scope.OwnerID), asJSON(refs))
+ ORDER BY e.id LIMIT 1) a`, string(scope.OwnerID), kernel.JSON(refs))
 	if err != nil {
 		return nil, err
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
@@ -76,11 +77,11 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 			if err := invalidateObsoleteNoticesTx(ctx, tx, "n.owner_id=$1", string(id)); err != nil {
 				return err
 			}
-			settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(id))
+			settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(id))
 			if err != nil {
 				return err
 			}
-			items, err := queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND status NOT IN ('done','cancelled','dropped','promoted')", string(id))
+			items, err := kernel.QueryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND status NOT IN ('done','cancelled','dropped','promoted')", string(id))
 			if err != nil {
 				return err
 			}
@@ -118,7 +119,7 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 							continue
 						}
 						if trigger.ID == effort.StartTrigger {
-							if !item.RemindersOn || !oneOf(item.Status, "todo", "waiting") {
+							if !item.RemindersOn || !kernel.OneOf(item.Status, "todo", "waiting") {
 								continue
 							}
 							var once bool
@@ -163,8 +164,8 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 					item.Status = "awakened"
 					item.Wake = &workspace.Wake{At: now.UTC().Format(time.RFC3339), Reason: condition.Description, ConditionID: condition.ID}
 					item.Version++
-					item.UpdatedAt = stamp()
-					item.Evolution = append(item.Evolution, workspace.Revision{At: stamp(), By: "system", Summary: "唤醒：" + condition.Description})
+					item.UpdatedAt = kernel.Stamp()
+					item.Evolution = append(item.Evolution, workspace.Revision{At: kernel.Stamp(), By: "system", Summary: "唤醒：" + condition.Description})
 					if err := saveItem(ctx, tx, scope, item); err != nil {
 						return err
 					}
@@ -183,7 +184,7 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 // business content (which would invalidate earlier actions' content hashes).
 // Reusing the existing occurrence key preserves restart and deletion behavior.
 func suppressRestoredRemindersTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, current, restored workspace.Item, now time.Time) error {
-	if current.Kind != "task" || current.Status != "done" || !oneOf(restored.Status, "todo", "doing", "waiting") {
+	if current.Kind != "task" || current.Status != "done" || !kernel.OneOf(restored.Status, "todo", "doing", "waiting") {
 		return nil
 	}
 	for _, trigger := range restored.Triggers {

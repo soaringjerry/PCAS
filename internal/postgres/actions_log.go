@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
-	"time"
 )
 
 type actionLogKey struct{}
@@ -64,7 +66,7 @@ func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	if len(entries) == 0 {
 		return nil
 	}
-	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), log.id, log.source, nullString(log.turnID), log.summary, changes)
+	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), log.id, log.source, kernel.NullString(log.turnID), log.summary, changes)
 	if err != nil {
 		return err
 	}
@@ -78,10 +80,10 @@ func flushActionLog(ctx context.Context, tx pgx.Tx, scope memory.Scope) error {
 	return recordSmokeActionTx(ctx, tx, scope, log.id, entries)
 }
 func undoableCommand(t string) bool {
-	if oneOf(t, "restoreMemory", "completeDeadline") {
+	if kernel.OneOf(t, "restoreMemory", "completeDeadline") {
 		return true
 	}
-	return oneOf(t, "addTask", "addIdea", "addProject", "updateTask", "updateProject", "setTaskStatus", "renameThing", "setNotes", "moveThing", "deferTask", "addCheck", "toggleCheck", "removeCheck", "ideaPromote", "ideaSnooze", "ideaShelve", "ideaDrop", "ideaContinue", "addCondition", "removeCondition", "adoptRun", "discardRun", "createDoc", "updateDoc", "deleteDoc", "bulkStatus", "bulkDefer", "bulkMove")
+	return kernel.OneOf(t, "addTask", "addIdea", "addProject", "updateTask", "updateProject", "setTaskStatus", "renameThing", "setNotes", "moveThing", "deferTask", "addCheck", "toggleCheck", "removeCheck", "ideaPromote", "ideaSnooze", "ideaShelve", "ideaDrop", "ideaContinue", "addCondition", "removeCondition", "adoptRun", "discardRun", "createDoc", "updateDoc", "deleteDoc", "bulkStatus", "bulkDefer", "bulkMove")
 }
 func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) string {
 	if c.Type == "completeDeadline" {
@@ -106,7 +108,7 @@ func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c worksp
 		}
 	}
 	prefix := "修改："
-	if oneOf(c.Type, "addTask", "addIdea", "addProject") {
+	if kernel.OneOf(c.Type, "addTask", "addIdea", "addProject") {
 		prefix = "新建："
 	}
 	if c.Type == "setTaskStatus" && c.Status == "done" {
@@ -188,7 +190,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 			continue
 		}
-		if !oneOf(c.Table, "work_items", "work_documents", "agent_runs", "training_samples") {
+		if !kernel.OneOf(c.Table, "work_items", "work_documents", "agent_runs", "training_samples") {
 			return memory.ErrInvalid
 		}
 		if c.Table == "agent_runs" && string(c.Before) == "null" {
@@ -271,14 +273,14 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 					if project.Kind != "project" || project.Creation == nil || project.Creation.By != "secretary" {
 						return workspace.ErrChangedSince
 					}
-					items, e := queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND project_id=$2 ORDER BY id FOR UPDATE", string(scope.OwnerID), c.ID)
+					items, e := kernel.QueryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND project_id=$2 ORDER BY id FOR UPDATE", string(scope.OwnerID), c.ID)
 					if e != nil {
 						return e
 					}
 					for _, item := range items {
 						item.ProjectID = ""
 						item.Version++
-						item.UpdatedAt = stamp()
+						item.UpdatedAt = kernel.Stamp()
 						if e = s.saveAction(ctx, tx, scope, item, "撤销项目，事项回到无项目"); e != nil {
 							return e
 						}
@@ -305,7 +307,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 					return err
 				}
 				item.Version = current.Version + 1
-				item.UpdatedAt = stamp()
+				item.UpdatedAt = kernel.Stamp()
 				err = s.saveAction(ctx, tx, scope, item, "撤销："+summary)
 			case "work_documents":
 				var doc workspace.Doc
@@ -344,7 +346,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 // it was the only evidence for out of the current view; the deputy result
 // itself stays and can be adopted again under a new action.
 func (s *Store) deleteUndoneAdoptionSourcesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, actionID string) error {
-	sources, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(source_id::text) FROM project_adoption_sources WHERE owner_id=$1 AND action_id=$2", string(scope.OwnerID), actionID)
+	sources, err := kernel.QueryDocuments[string](ctx, tx, "SELECT to_jsonb(source_id::text) FROM project_adoption_sources WHERE owner_id=$1 AND action_id=$2", string(scope.OwnerID), actionID)
 	if err != nil || len(sources) == 0 {
 		return err
 	}
@@ -528,7 +530,7 @@ func historicalActionPositions(ctx context.Context, tx pgx.Tx, scope memory.Scop
 
 func (s *Store) Undo(ctx context.Context, scope memory.Scope, actionID string) (workspace.State, error) {
 	var out workspace.State
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {

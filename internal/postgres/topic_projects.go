@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/topicproject"
@@ -56,7 +57,7 @@ type topicProjectShared struct {
 }
 
 func topicProjectSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (*topicProjectShared, error) {
-	projects, err := queryDocuments[topicProjectSummary](ctx, tx, `SELECT jsonb_build_object('id',id::text,'name',title,'goal',coalesce(nullif(document->>'goal',''),document->'creation'->'source'->>'excerpt',''),'status',status) FROM work_items WHERE owner_id=$1 AND kind='project' ORDER BY id`, string(owner))
+	projects, err := kernel.QueryDocuments[topicProjectSummary](ctx, tx, `SELECT jsonb_build_object('id',id::text,'name',title,'goal',coalesce(nullif(document->>'goal',''),document->'creation'->'source'->>'excerpt',''),'status',status) FROM work_items WHERE owner_id=$1 AND kind='project' ORDER BY id`, string(owner))
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +87,7 @@ func topicProjectInputSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	if err != nil {
 		return out, nil, err
 	}
-	settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(owner))
+	settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(owner))
 	if err != nil {
 		return out, nil, err
 	}
@@ -167,7 +168,7 @@ func topicProjectInputSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	for _, m := range all {
 		add(m)
 	}
-	base := sha256.Sum256(asJSON([]any{out.Topic, manifest, out.Memories, out.Timezone}))
+	base := sha256.Sum256(kernel.JSON([]any{out.Topic, manifest, out.Memories, out.Timezone}))
 	out.EvidenceHash = fmt.Sprintf("%x", base)
 	if shared == nil {
 		if shared, err = topicProjectSharedTx(ctx, tx, owner); err != nil {
@@ -177,7 +178,7 @@ func topicProjectInputSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	projects := shared.projects
 	out.ClippedCharacters += shared.clipped
 	out.Projects = projects
-	sum := sha256.Sum256(asJSON([]any{out.Topic, manifest, out.Memories, projects, out.Timezone}))
+	sum := sha256.Sum256(kernel.JSON([]any{out.Topic, manifest, out.Memories, projects, out.Timezone}))
 	out.Hash = fmt.Sprintf("%x", sum)
 	// When each was said is for the model to tell what is over; it is left out
 	// of both hashes, so a group already answered for is not asked about again.
@@ -188,7 +189,7 @@ func topicProjectInputSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	return out, refs, nil
 }
 func enqueueTopicProjectsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time) (int, error) {
-	topics, err := queryDocuments[string](ctx, tx, `WITH eligible AS MATERIALIZED(SELECT m.key FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version) WHERE m.owner_id=$1 AND m.kind IN('topic','project') GROUP BY m.key HAVING count(*)>=10 AND (bool_or(m.kind='project') OR bool_or(c.category='goal') AND bool_or(EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)))))
+	topics, err := kernel.QueryDocuments[string](ctx, tx, `WITH eligible AS MATERIALIZED(SELECT m.key FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version) WHERE m.owner_id=$1 AND m.kind IN('topic','project') GROUP BY m.key HAVING count(*)>=10 AND (bool_or(m.kind='project') OR bool_or(c.category='goal') AND bool_or(EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)))))
  SELECT to_jsonb(r.id::text) FROM eligible g JOIN memory_records r ON r.owner_id=$1 AND 'entity:'||r.id::text=g.key JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version) WHERE r.state='active' AND ev.entity_type IN('topic','project') AND coalesce(ev.disambiguation->>'work_item_id','')='' ORDER BY r.id`, string(owner))
 	if err != nil {
 		return 0, err
@@ -272,13 +273,13 @@ func (a topicProjectStore) Input(ctx context.Context, owner memory.ID, topic str
 
 func (a topicProjectStore) Drop(ctx context.Context, j worker.Job) error {
 	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		if err := discardPaidResultTx(ctx, tx, j); err != nil {
 			return err
 		}
-		return acknowledge(ctx, tx, j)
+		return kernel.Acknowledge(ctx, tx, j)
 	})
 }
 
@@ -287,12 +288,12 @@ func (a topicProjectStore) DiscardResult(ctx context.Context, j worker.Job) erro
 }
 
 func (a topicProjectStore) RetryLater(j worker.Job, code string) error {
-	return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts))}
+	return &worker.JobError{Code: code, Until: time.Now().Add(kernel.RetryDelay(j.Attempts))}
 }
 
 func (a topicProjectStore) Apply(ctx context.Context, j worker.Job, fn func(topicproject.Unit) error) error {
 	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		return fn(topicProjectUnit{ctx: ctx, tx: tx, job: j, scope: memory.Scope{OwnerID: j.OwnerID, PrincipalID: "owner", IsOwner: true}})
@@ -317,7 +318,7 @@ func (u topicProjectUnit) Input(topic string) (topicproject.Input, bool, error) 
 }
 
 func (u topicProjectUnit) RecordCheck(topic string, input topicproject.Input, page int, output topicproject.Output) error {
-	_, err := u.tx.Exec(u.ctx, `INSERT INTO topic_project_checks(owner_id,topic_id,input_hash,page,output,evidence_hash) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, u.owner(), topic, input.Hash, page, asJSON(output), input.EvidenceHash)
+	_, err := u.tx.Exec(u.ctx, `INSERT INTO topic_project_checks(owner_id,topic_id,input_hash,page,output,evidence_hash) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, u.owner(), topic, input.Hash, page, kernel.JSON(output), input.EvidenceHash)
 	return err
 }
 
@@ -363,7 +364,7 @@ func (u topicProjectUnit) LogAction(actionID, summary string) error {
 }
 
 func (u topicProjectUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
-func (u topicProjectUnit) Acknowledge() error   { return acknowledge(u.ctx, u.tx, u.job) }
+func (u topicProjectUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }
 
 func (s *Store) undoTopicProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (bool, error) {
 	if !memory.ID(id).Valid() {

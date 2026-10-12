@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 type supersessionCase struct {
@@ -43,7 +44,7 @@ func p3ComparePrompt() (string, []compareEdge) {
 			expected = append(expected, compareEdge{Old: 2*i + 1, New: 2*i + 2, Kind: "superseded"})
 		}
 	}
-	return string(asJSON(comparisonBatch{Rule: CompareVersion, Group: compareGroup{Key: "topic:fictional", Kind: "topic", Name: "虚构项目记录"}, Memories: memories})), expected
+	return string(kernel.JSON(comparisonBatch{Rule: CompareVersion, Group: compareGroup{Key: "topic:fictional", Kind: "topic", Name: "虚构项目记录"}, Memories: memories})), expected
 }
 
 // Opt-in only; uses the executor's login and invented memories. Before changing

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -103,7 +104,7 @@ func lockSmokeTurnTx(ctx context.Context, tx pgx.Tx, owner string) error {
 
 // Only server-collected changes may choose these SQL table names.
 func smokeTable(table string) bool {
-	return oneOf(table, "work_items", "work_documents", "agent_runs", "training_samples")
+	return kernel.OneOf(table, "work_items", "work_documents", "agent_runs", "training_samples")
 }
 func smokeDocumentHashTx(ctx context.Context, tx pgx.Tx, owner, table, id string) (*string, error) {
 	if !smokeTable(table) {
@@ -162,7 +163,7 @@ func refreshSmokeChangesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c
 // owner locks. It removes only this group's documents, or restores an untouched
 // ordinary document; genuine later edits make the whole operation conflict.
 func (s *Store) CleanupSmoke(ctx context.Context, scope memory.Scope, id string) error {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
 	if !memory.ID(id).Valid() {
@@ -270,7 +271,7 @@ func (s *Store) CleanupSmoke(ctx context.Context, scope memory.Scope, id string)
 					return err
 				}
 				before.Version = current.Version + 1
-				before.UpdatedAt = stamp()
+				before.UpdatedAt = kernel.Stamp()
 				if err := saveItem(ctx, tx, scope, before); err != nil {
 					return err
 				}

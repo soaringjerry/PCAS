@@ -3,11 +3,13 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -26,15 +28,15 @@ func TestSecretaryReceiptsOmitOnlyCurrentThingTitle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": loc.String()})})
+			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": loc.String()})})
 			st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "当前安排"})
 			currentID := st.Tasks[0].ID
 			workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "另一件安排"})
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 				secretaryModelReply(w, secretaryOutput{Actions: []secretaryAction{
 					{Op: "add_steps", Ref: tc.ref, Steps: []string{"核对", "准备", "发送"}},
-					{Op: "update", Ref: tc.ref, Set: map[string]json.RawMessage{"due": asJSON(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Format("2006-01-02T15:04"))}},
-					{Op: "update", Ref: tc.ref, Set: map[string]json.RawMessage{"status": asJSON("done")}},
+					{Op: "update", Ref: tc.ref, Set: map[string]json.RawMessage{"due": kernel.JSON(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Format("2006-01-02T15:04"))}},
+					{Op: "update", Ref: tc.ref, Set: map[string]json.RawMessage{"status": kernel.JSON("done")}},
 				}})
 			})
 			req := turnRequest("加三步，改到周一十点，再完成")

@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
@@ -197,7 +199,7 @@ func (a handoverStore) Exclusive(ctx context.Context) (func(), error) {
 
 func (a handoverStore) Read(ctx context.Context, j worker.Job, fn func(handover.Reader) error) error {
 	return pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		return fn(handoverUnit{ctx: ctx, tx: tx, job: j, store: a.store})
@@ -209,12 +211,12 @@ func (a handoverStore) DiscardResult(ctx context.Context, j worker.Job) error {
 }
 
 func (a handoverStore) RetryLater(j worker.Job, code string) error {
-	return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts)), NoAttempt: false}
+	return &worker.JobError{Code: code, Until: time.Now().Add(kernel.RetryDelay(j.Attempts)), NoAttempt: false}
 }
 
 func (a handoverStore) Apply(ctx context.Context, j worker.Job, fn func(handover.Unit) error) error {
 	return backgroundResultTx(ctx, a.store.pool, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		return fn(handoverUnit{ctx: ctx, tx: tx, job: j, store: a.store})
@@ -239,7 +241,7 @@ func (u handoverUnit) Input() (json.RawMessage, []memory.Ref, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return asJSON(map[string]any{"input": input, "refs": refs, "memories": input.Memories, "requirements": input.Requirements, "deadlines": input.Deadlines}), refs, nil
+	return kernel.JSON(map[string]any{"input": input, "refs": refs, "memories": input.Memories, "requirements": input.Requirements, "deadlines": input.Deadlines}), refs, nil
 }
 
 // If the input changed during generation, the valid text is kept and marked
@@ -252,4 +254,4 @@ func (u handoverUnit) SaveHandover(body, inputHash string) error {
 }
 
 func (u handoverUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
-func (u handoverUnit) Acknowledge() error   { return acknowledge(u.ctx, u.tx, u.job) }
+func (u handoverUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }

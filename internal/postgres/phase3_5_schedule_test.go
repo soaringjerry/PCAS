@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -319,7 +320,7 @@ func TestPhase35A4T3DateOnlyDSTMissingAndRepeatedClock(t *testing.T) {
 		{"", "2026-03-07", "2026-03-09", 3, false, ""},
 	} {
 		rule := map[string]any{"frequency": "daily", "interval": 1, "anchor": "0001-01-01", "weekdays": []int{}, "monthDays": []int{}, "clock": tc.clock, "until": ""}
-		phase26Exec(t, f.phase26LoadedFixture, `UPDATE deadlines SET at=NULL,schedule_rule=$3 WHERE owner_id=$1 AND id=$2`, f.Scope.OwnerID, f.Deadlines[2].ID, asJSON(rule))
+		phase26Exec(t, f.phase26LoadedFixture, `UPDATE deadlines SET at=NULL,schedule_rule=$3 WHERE owner_id=$1 AND id=$2`, f.Scope.OwnerID, f.Deadlines[2].ID, kernel.JSON(rule))
 		out := phase35ScheduleRead(t, h, f.Context, tc.from, tc.to)
 		n := 0
 		times := []time.Time{}
@@ -364,7 +365,7 @@ func TestPhase35A4T3MonthlyMissingDatesAndBiweeklyAnchor(t *testing.T) {
 		{map[string]any{"frequency": "monthly", "interval": 1, "anchor": "0001-01-01", "weekdays": []int{}, "monthDays": []int{-1}, "clock": "09:00", "until": ""}, "2026-02-01", "2026-03-31", []string{"2026-02-28", "2026-03-31"}},
 		{map[string]any{"frequency": "weekly", "interval": 2, "anchor": "2026-09-22", "weekdays": []int{2}, "monthDays": []int{}, "clock": "09:00", "until": "2026-10-20"}, "2026-10-01", "2026-10-31", []string{"2026-10-06", "2026-10-20"}},
 	} {
-		phase26Exec(t, f.phase26LoadedFixture, `UPDATE deadlines SET at=NULL,schedule_rule=$3 WHERE owner_id=$1 AND id=$2`, f.Scope.OwnerID, f.Deadlines[2].ID, asJSON(tc.rule))
+		phase26Exec(t, f.phase26LoadedFixture, `UPDATE deadlines SET at=NULL,schedule_rule=$3 WHERE owner_id=$1 AND id=$2`, f.Scope.OwnerID, f.Deadlines[2].ID, kernel.JSON(tc.rule))
 		out := phase35ScheduleRead(t, h, f.Context, tc.from, tc.to)
 		dates := []string{}
 		for _, day := range out.Days {

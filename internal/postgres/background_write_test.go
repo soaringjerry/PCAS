@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -53,7 +55,7 @@ func TestBackgroundModelCallsLeaveOwnerUnlocked(t *testing.T) {
 			}
 			requestCtx, finish := context.WithTimeout(ctx, 500*time.Millisecond)
 			_, snapErr := s.Snapshot(requestCtx, scope)
-			_, commandErr := s.Execute(requestCtx, scope, workspace.Command{Type: "updateSettings", RequestID: string(memory.NewID()), Patch: asJSON(map[string]string{"city": "虚构城"})})
+			_, commandErr := s.Execute(requestCtx, scope, workspace.Command{Type: "updateSettings", RequestID: string(memory.NewID()), Patch: kernel.JSON(map[string]string{"city": "虚构城"})})
 			finish()
 			close(release)
 			if snapErr != nil || commandErr != nil {
@@ -93,7 +95,7 @@ func TestBackgroundContendedHandoverYieldsOwnerPromptly(t *testing.T) {
 	}
 	requestCtx, finish := context.WithTimeout(ctx, 500*time.Millisecond)
 	_, snapErr := s.Snapshot(requestCtx, scope)
-	_, commandErr := s.Execute(requestCtx, scope, workspace.Command{Type: "updateSettings", RequestID: string(memory.NewID()), Patch: asJSON(map[string]string{"city": "虚构城"})})
+	_, commandErr := s.Execute(requestCtx, scope, workspace.Command{Type: "updateSettings", RequestID: string(memory.NewID()), Patch: kernel.JSON(map[string]string{"city": "虚构城"})})
 	finish()
 	err = <-done
 	failure, ok := err.(*worker.JobError)

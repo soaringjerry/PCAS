@@ -3,11 +3,6 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/blob"
-	"github.com/soaringjerry/PCAS/internal/connectors"
-	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/workspace"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,6 +11,13 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/blob"
+	"github.com/soaringjerry/PCAS/internal/connectors"
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func TestConnectorReplayAndSummary(t *testing.T) {
@@ -307,7 +309,7 @@ func TestDecayRecallAndSnoozeStayIndependent(t *testing.T) {
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "ideaShelve", ID: id, Condition: "书店开门"})
 	item := st.Ideas[0]
 	item.Status = "awakened"
-	item.Wake = &workspace.Wake{At: stamp(), Reason: "测试到期提醒"}
+	item.Wake = &workspace.Wake{At: kernel.Stamp(), Reason: "测试到期提醒"}
 	if err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return saveItem(ctx, tx, scope, item) }); err != nil {
 		t.Fatal(err)
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -136,7 +137,7 @@ func TestP3DurationSummaryExactAndHistoricalNull(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
 	ctx := context.Background()
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	// UTC 16:00 belongs to the next local day; include even-sample median.
 	at := time.Date(2026, 1, 1, 16, 0, 0, 0, time.UTC)
 	for i, ms := range []int64{10, 30, 100} {

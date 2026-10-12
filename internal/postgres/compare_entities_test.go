@@ -3,10 +3,12 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -16,7 +18,7 @@ import (
 func compareEntityFixture(t *testing.T, s *Store, scope memory.Scope, name, text string) (memory.Ref, memory.Ref) {
 	t.Helper()
 	entity := memory.Entity{Revision: memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.EntityKind}}, Type: "person", Name: name}
-	claim := memory.Claim{Revision: memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}}, SubjectID: entity.ID, Predicate: "虚构人物", Value: asJSON(text), Nature: "fact", Acquisition: "direct", Confirmation: "candidate"}
+	claim := memory.Claim{Revision: memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}}, SubjectID: entity.ID, Predicate: "虚构人物", Value: kernel.JSON(text), Nature: "fact", Acquisition: "direct", Confirmation: "candidate"}
 	src := b1Source(t, s, scope, "虚构人物资料", text, "manual")
 	if _, err := s.Commit(context.Background(), scope, memory.CommitRequest{RequestID: memory.NewID(), Entities: []memory.Entity{entity}, Claims: []memory.Claim{claim}, Evidence: []memory.Evidence{{Source: src, Target: claim.Ref, Acquisition: "direct", Stance: "supports"}}}); err != nil {
 		t.Fatal(err)

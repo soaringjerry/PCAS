@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 var _ memory.Repository = (*Store)(nil)
@@ -131,19 +132,13 @@ func (s *Store) ingestTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 				}
 			}
 		}
-		if err := enqueue(ctx, tx, scope.OwnerID, memory.ID(id), version, "source.chunk"); err != nil {
+		if err := kernel.Enqueue(ctx, tx, scope.OwnerID, memory.ID(id), version, "source.chunk"); err != nil {
 			return err
 		}
 		result = memory.IngestResult{Ref: memory.Ref{ID: memory.ID(id), Version: version, Kind: memory.SourceKind}}
 		return nil
 	}()
 	return result, err
-}
-
-func enqueue(ctx context.Context, tx pgx.Tx, ownerID, id memory.ID, version int, stage string) error {
-	_, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage) VALUES($1,$2,$3,$4,$5)
-		ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`, string(memory.NewID()), string(ownerID), string(id), version, stage)
-	return err
 }
 
 func (s *Store) GetSource(ctx context.Context, scope memory.Scope, id memory.ID, version int) (memory.SourceResult, error) {

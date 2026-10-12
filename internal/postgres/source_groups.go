@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -94,14 +95,14 @@ FROM (SELECT * FROM imports UNION ALL SELECT * FROM others) g ORDER BY g.at DESC
 // find keeps only the originals whose words or title contain it.
 func (s *Store) SourceGroupItems(ctx context.Context, scope memory.Scope, key, find, cursor string, limit int) (workspace.SourceItems, error) {
 	out := workspace.SourceItems{Items: []workspace.SourceItem{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if limit < 1 || limit > 100 {
 		limit = 50
 	}
 	archive, grouped := strings.CutPrefix(key, "import:")
-	if grouped && !memory.ID(archive).Valid() || !grouped && !oneOf(key, "said", "memory-input", "telegram", "capture") {
+	if grouped && !memory.ID(archive).Valid() || !grouped && !kernel.OneOf(key, "said", "memory-input", "telegram", "capture") {
 		return out, memory.ErrInvalid
 	}
 	find = strings.TrimSpace(find)

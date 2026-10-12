@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -53,10 +54,10 @@ func TestDirectProviderPreservesExistingSubscriptionPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !oneOf("chatgpt-direct", state.Memories[0].VisibleTo...) {
+	if !kernel.OneOf("chatgpt-direct", state.Memories[0].VisibleTo...) {
 		t.Fatal("existing subscription permission lost")
 	}
-	if oneOf("manual", state.Memories[0].VisibleTo...) {
+	if kernel.OneOf("manual", state.Memories[0].VisibleTo...) {
 		t.Fatal("permission broadened to unrelated channel")
 	}
 	for _, a := range state.Agents {
@@ -72,7 +73,7 @@ func TestDirectProviderPreservesExistingSubscriptionPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if oneOf("chatgpt-direct", state.Memories[0].VisibleTo...) {
+	if kernel.OneOf("chatgpt-direct", state.Memories[0].VisibleTo...) {
 		t.Fatal("snapshot undid explicit grant revocation")
 	}
 }
@@ -107,7 +108,7 @@ func TestWorkspaceMemoryLifecycle(t *testing.T) {
 	command(workspace.Command{Type: "addProject", ID: projectID, Name: "PCAS"})
 	command(workspace.Command{Type: "addTask", Title: "接入记忆系统", ProjectID: projectID})
 	taskID := state.Tasks[0].ID
-	command(workspace.Command{Type: "updateTask", ID: taskID, Patch: asJSON(map[string]any{"due": time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)})})
+	command(workspace.Command{Type: "updateTask", ID: taskID, Patch: kernel.JSON(map[string]any{"due": time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)})})
 	command(workspace.Command{Type: "capture", Text: "我一直想去河边那家旧书店"})
 	candidate := state.Candidates[0]
 	command(workspace.Command{Type: "acceptCandidate", ID: candidate.ID, Kind: "memory", MemoryKind: "intention", Text: candidate.Text, ProjectID: projectID})

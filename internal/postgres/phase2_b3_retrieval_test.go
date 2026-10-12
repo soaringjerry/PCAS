@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -165,7 +166,7 @@ func TestPhase2B3_S7_AllExistingFiltersApplyToStructuredHits(t *testing.T) {
 			}
 			st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "过滤事项", ProjectID: project})
 			task := st.Tasks[0].ID
-			workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: asJSON(map[string]any{"memoryKinds": []string{"plan"}, "includeInferred": false})})
+			workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: kernel.JSON(map[string]any{"memoryKinds": []string{"plan"}, "includeInferred": false})})
 			at := b3Year(now, -1, time.December, 1)
 			allow := b3Claim(t, s, scope, b3ClaimSpec{Text: "允许命中标记", Subject: self, Said: &at, Project: project, Mentions: []b3Mention{{place, "place"}}})
 			source := b3Source(t, s, scope, "成都受限证据暗号", at)
@@ -270,7 +271,7 @@ func TestPhase2B3_S9_SecretaryDeputyManualShareStructuredPrefix(t *testing.T) {
 	// Match secretary visibility for this comparison; S2/S7 cover restrictions.
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: string(d.Refs["hidden"].ID), AgentIDs: []string{}})
 	for _, agent := range []string{"model", "manual"} {
-		workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: agent, Patch: asJSON(map[string]any{"memoryKinds": []string{"fact", "preference", "intention", "plan", "decision"}, "includeInferred": false})})
+		workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: agent, Patch: kernel.JSON(map[string]any{"memoryKinds": []string{"fact", "preference", "intention", "plan", "decision"}, "includeInferred": false})})
 		run := b1R2aRun(t, s, scope, f, task, agent, b3Text(t, "query"), "入口验收回答")
 		b3Order(t, run.Brief, b3Text(t, "self_old_a"), b3Text(t, "self_old_b"), b3Text(t, "wang"))
 		for _, key := range []string{"self_old_a", "self_old_b", "wang"} {

@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"log/slog"
 	"math"
@@ -22,6 +21,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/blob"
@@ -96,7 +98,7 @@ func b4API(s *Store, scope memory.Scope, authenticated bool) http.Handler {
 }
 func b4HTTP(t *testing.T, s *Store, scope memory.Scope, method, path string, body any) *httptest.ResponseRecorder {
 	t.Helper()
-	r := httptest.NewRequest(method, path, strings.NewReader(string(asJSON(body))))
+	r := httptest.NewRequest(method, path, strings.NewReader(string(kernel.JSON(body))))
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("Authorization", "Bearer synthetic-b4-auth")
 	w := httptest.NewRecorder()
@@ -175,7 +177,7 @@ func b4Export(conversations []b4Conversation) []byte {
 		first, last := conv.Messages[0].At, conv.Messages[len(conv.Messages)-1].At
 		list = append(list, map[string]any{"id": conv.ID, "conversation_id": conv.ID, "title": conv.Title, "create_time": float64(first.Unix()), "update_time": float64(last.Unix()), "current_node": parent, "mapping": mapping})
 	}
-	return asJSON(list)
+	return kernel.JSON(list)
 }
 func b4Zip(t *testing.T, export []byte, media bool) []byte {
 	t.Helper()

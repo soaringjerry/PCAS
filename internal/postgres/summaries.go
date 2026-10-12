@@ -6,11 +6,13 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/worker"
-	"strings"
 )
 
 func (s *Store) Summarize(ctx context.Context, scope memory.Scope, in memory.SummaryRequest) (memory.SummaryResult, error) {
@@ -126,7 +128,7 @@ func (s *Store) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	}
 	out.Text = text.String()
 	out.Coverage.Complete = len(out.Coverage.Gaps) == 0
-	hash := sha256.Sum256(asJSON(struct {
+	hash := sha256.Sum256(kernel.JSON(struct {
 		Entries  []excerpt
 		Coverage memory.Coverage
 	}{entries, out.Coverage}))
@@ -158,7 +160,7 @@ func (s *Store) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		{"INSERT INTO record_versions(owner_id,record_id,version) VALUES($1,$2,$3)", []any{string(scope.OwnerID), summaryID, version}},
 		{"INSERT INTO derived_views(owner_id,id,version,purpose,body) VALUES($1,$2,$3,'summary',$4)", []any{string(scope.OwnerID), summaryID, version, out.Text}},
 		{"UPDATE memory_records SET version=$3,updated_at=now() WHERE owner_id=$1 AND id=$2", []any{string(scope.OwnerID), summaryID, version}},
-		{`INSERT INTO summary_keys(owner_id,root_id,root_version,principal_id,budget,summary_id,membership_hash,coverage) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(owner_id,root_id,root_version,principal_id,budget) DO UPDATE SET membership_hash=excluded.membership_hash,coverage=excluded.coverage`, []any{string(scope.OwnerID), string(in.ID), out.Root.Version, principal, in.Tokens, summaryID, hash[:], asJSON(out.Coverage)}},
+		{`INSERT INTO summary_keys(owner_id,root_id,root_version,principal_id,budget,summary_id,membership_hash,coverage) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(owner_id,root_id,root_version,principal_id,budget) DO UPDATE SET membership_hash=excluded.membership_hash,coverage=excluded.coverage`, []any{string(scope.OwnerID), string(in.ID), out.Root.Version, principal, in.Tokens, summaryID, hash[:], kernel.JSON(out.Coverage)}},
 	} {
 		if _, err = tx.Exec(ctx, q.sql, q.args...); err != nil {
 			return out, err
@@ -174,18 +176,18 @@ func (s *Store) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 }
 func (s *Store) ProcessSummary(ctx context.Context, j worker.Job) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		_, err := s.summarizeTx(ctx, tx, memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}, memory.SummaryRequest{ID: j.Record.ID, Tokens: 2000})
 		if err != nil && !errors.Is(err, memory.ErrNotFound) {
 			return err
 		}
-		return acknowledge(ctx, tx, j)
+		return kernel.Acknowledge(ctx, tx, j)
 	})
 }
 func (s *Store) ConfigureActivity(ctx context.Context, scope memory.Scope, in memory.ActivitySettings) error {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
 	if !in.Ref.ID.Valid() || in.Ref.Version < 1 || in.HalfLifeDays < 1 || in.HalfLifeDays > 36500 || in.ReinforcementLimit < 1 || in.ReinforcementLimit > 100 {

@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 // A fictitious app-server uses the REAL subscription adapter and never emits
@@ -133,7 +134,7 @@ func TestPhase26A9EstimatedSubscriptionDailyBudgetAndHealth(t *testing.T) {
 	for _, h := range decoded.Stages {
 		// Only the stages this test drove had due work; the phase 3 stages
 		// (project handover, effort) are idle here and so show no deferral.
-		if oneOf(h.Stage, stages...) && h.Deferred < 1 {
+		if kernel.OneOf(h.Stage, stages...) && h.Deferred < 1 {
 			t.Errorf("missing visible daily deferral for %s", h.Stage)
 		}
 	}

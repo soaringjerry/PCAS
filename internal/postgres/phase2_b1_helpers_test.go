@@ -21,6 +21,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/telegram"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -219,7 +220,7 @@ func b1Run(t *testing.T, s *Store, scope memory.Scope, agent, prompt string) wor
 func b1Claim(t *testing.T, s *Store, scope memory.Scope, text, nature, confirmation string, sources ...memory.Ref) memory.Ref {
 	t.Helper()
 	entity := memory.Entity{Revision: memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.EntityKind}}, Name: "用户", Type: "person"}
-	claim := memory.Claim{Revision: memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}}, SubjectID: entity.ID, Predicate: "验收记忆", Value: asJSON(text), Nature: nature, Acquisition: "direct", Confirmation: confirmation}
+	claim := memory.Claim{Revision: memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}}, SubjectID: entity.ID, Predicate: "验收记忆", Value: kernel.JSON(text), Nature: nature, Acquisition: "direct", Confirmation: confirmation}
 	in := memory.CommitRequest{RequestID: memory.NewID(), Entities: []memory.Entity{entity}, Claims: []memory.Claim{claim}}
 	for _, src := range sources {
 		in.Evidence = append(in.Evidence, memory.Evidence{Source: src, Target: claim.Ref, Acquisition: "direct", Stance: "supports"})
@@ -243,7 +244,7 @@ func b1Active(t *testing.T, s *Store, scope memory.Scope, ref memory.Ref, want b
 func b1Map(t *testing.T, value any) map[string]any {
 	t.Helper()
 	var out map[string]any
-	if err := json.Unmarshal(asJSON(value), &out); err != nil {
+	if err := json.Unmarshal(kernel.JSON(value), &out); err != nil {
 		t.Fatal(err)
 	}
 	return out
@@ -261,10 +262,10 @@ func b1Outdated(t *testing.T, turn workspace.SecretaryTurn, want bool) {
 func b1SameJSON(t *testing.T, a, b any) bool {
 	t.Helper()
 	var left, right any
-	if err := json.Unmarshal(asJSON(a), &left); err != nil {
+	if err := json.Unmarshal(kernel.JSON(a), &left); err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(asJSON(b), &right); err != nil {
+	if err := json.Unmarshal(kernel.JSON(b), &right); err != nil {
 		t.Fatal(err)
 	}
 	return reflect.DeepEqual(left, right)
@@ -272,7 +273,7 @@ func b1SameJSON(t *testing.T, a, b any) bool {
 func b1Preserved(t *testing.T, before, after workspace.SecretaryTurn) {
 	t.Helper()
 	if before.Reply != after.Reply || !b1SameJSON(t, before.Cards, after.Cards) || !b1SameJSON(t, before.Receipts, after.Receipts) {
-		t.Errorf("outdated erased or changed user-visible reply/cards/receipts: before=%s after=%s", asJSON(before), asJSON(after))
+		t.Errorf("outdated erased or changed user-visible reply/cards/receipts: before=%s after=%s", kernel.JSON(before), kernel.JSON(after))
 	}
 	b1Outdated(t, after, true)
 }
@@ -283,7 +284,7 @@ func (a b1Auth) Authenticate(*http.Request) (memory.Scope, bool) { return a.scop
 func b1HTTP(t *testing.T, s *Store, scope memory.Scope, method, path string, body any) *httptest.ResponseRecorder {
 	t.Helper()
 	api := httpapi.New(s, s, b1Auth{scope}, func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s})
-	req := httptest.NewRequest(method, path, strings.NewReader(string(asJSON(body))))
+	req := httptest.NewRequest(method, path, strings.NewReader(string(kernel.JSON(body))))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer synthetic-b1-auth")
 	w := httptest.NewRecorder()

@@ -34,7 +34,7 @@ func TestDomainPackagesDoNotDependOnThePostgreSQLAdapter(t *testing.T) {
 			t.Fatal(pattern, err)
 		}
 		for _, dependency := range strings.Fields(string(output)) {
-			if dependency == "github.com/soaringjerry/PCAS/internal/postgres" || strings.HasPrefix(dependency, "github.com/jackc/pgx") {
+			if dependency == "github.com/soaringjerry/PCAS/internal/postgres" || strings.HasPrefix(dependency, "github.com/soaringjerry/PCAS/internal/postgres/") || strings.HasPrefix(dependency, "github.com/jackc/pgx") {
 				t.Errorf("%s depends on %s", pattern, dependency)
 			}
 		}
@@ -45,7 +45,7 @@ func TestDomainPackagesDoNotDependOnThePostgreSQLAdapter(t *testing.T) {
 // model call: the domain package that owns a flow builds the request and
 // calls the gateway, and internal/app builds the gateway. Add each storage
 // package here when the PostgreSQL adapter is split.
-var storagePackages = []string{"../postgres"}
+var storagePackages = []string{"../postgres", "../postgres/kernel"}
 
 // gatewayCalls are the methods of the gateway that submit a model call.
 var gatewayCalls = map[string]bool{"Call": true, "CallEmbedding": true, "CallVision": true, "CallTranscription": true}

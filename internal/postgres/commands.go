@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
 	"github.com/soaringjerry/PCAS/internal/workspace/settings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -44,10 +46,10 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		// One explicit delegation atomically creates the work and queues its run.
 		// Execute's request receipt fences retries; a stable item ID also fences
 		// replays under a new request ID after a lost response/reload.
-		if !memory.ID(c.ID).Valid() || requireText(c.Prompt) != nil {
+		if !memory.ID(c.ID).Valid() || kernel.RequireText(c.Prompt) != nil {
 			return memory.ErrInvalid
 		}
-		agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
+		agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
 		if err != nil || !agent.Enabled || agent.Channel == "manual" || s.models == nil || !s.models.Available(agent.ID) {
 			return memory.ErrUnavailable
 		}
@@ -64,20 +66,20 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		}
 		return s.runCommandTx(ctx, tx, scope, run)
 	case "capture":
-		if err := requireText(c.Text); err != nil {
+		if err := kernel.RequireText(c.Text); err != nil {
 			return err
 		}
 		in, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "capture", ExternalID: c.RequestID, ExternalVersion: "1", Title: "快速记录", Text: c.Text, MediaType: "text/plain"})
 		if err != nil {
 			return err
 		}
-		candidate := workspace.Candidate{ID: string(memory.NewID()), Kind: "unknown", Text: c.Text, Confidence: 0, Source: workspace.SourceRef{SourceID: string(in.ID), Version: in.Version, Label: "快速记录", Excerpt: c.Text, At: stamp()}, State: "pending", CreatedAt: stamp()}
+		candidate := workspace.Candidate{ID: string(memory.NewID()), Kind: "unknown", Text: c.Text, Confidence: 0, Source: workspace.SourceRef{SourceID: string(in.ID), Version: in.Version, Label: "快速记录", Excerpt: c.Text, At: kernel.Stamp()}, State: "pending", CreatedAt: kernel.Stamp()}
 		return saveCandidate(ctx, tx, scope, candidate)
 	case "acceptCandidate", "ignoreCandidate", "restoreCandidate", "mergeCandidate":
 		if !memory.ID(c.ID).Valid() {
 			return memory.ErrInvalid
 		}
-		v, err := queryDocument[workspace.Candidate](ctx, tx, "SELECT document FROM capture_candidates WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
+		v, err := kernel.QueryDocument[workspace.Candidate](ctx, tx, "SELECT document FROM capture_candidates WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
 		if err != nil {
 			return err
 		}
@@ -112,7 +114,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		return s.saveAction(ctx, tx, scope, item, "创建")
 	case "bulkStatus", "bulkDefer", "bulkMove", "bulkAccept", "bulkIgnore":
 		commands, err := itemcommand.Expand(c, func(id string) (workspace.Candidate, error) {
-			return queryDocument[workspace.Candidate](ctx, tx, "SELECT document FROM capture_candidates WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
+			return kernel.QueryDocument[workspace.Candidate](ctx, tx, "SELECT document FROM capture_candidates WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id)
 		})
 		if err != nil {
 			return err
@@ -149,13 +151,13 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			if exists {
 				return memory.ErrConflict
 			}
-			doc.CreatedAt = stamp()
+			doc.CreatedAt = kernel.Stamp()
 		} else {
 			if !memory.ID(c.ID).Valid() {
 				return memory.ErrInvalid
 			}
 			var err error
-			doc, err = queryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
+			doc, err = kernel.QueryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
 			if err != nil {
 				return err
 			}
@@ -170,16 +172,16 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 				return err
 			}
 		}
-		if err := requireText(doc.Title); err != nil {
+		if err := kernel.RequireText(doc.Title); err != nil {
 			return err
 		}
-		doc.UpdatedAt = stamp()
+		doc.UpdatedAt = kernel.Stamp()
 		return saveDoc(ctx, tx, scope, doc)
 	case "updateSettings":
 		if err := settings.CheckZone(c.Patch); err != nil {
 			return err
 		}
-		current, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		current, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if err != nil {
 			return err
 		}
@@ -187,7 +189,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if err != nil {
 			return err
 		}
-		if _, err = tx.Exec(ctx, "UPDATE workspace_owners SET settings=$2 WHERE owner_id=$1", string(scope.OwnerID), asJSON(next)); err != nil {
+		if _, err = tx.Exec(ctx, "UPDATE workspace_owners SET settings=$2 WHERE owner_id=$1", string(scope.OwnerID), kernel.JSON(next)); err != nil {
 			return err
 		}
 		if replan {
@@ -195,7 +197,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		}
 		return nil
 	case "updateAgent":
-		current, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
+		current, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
 		if err != nil {
 			return err
 		}
@@ -209,7 +211,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			}
 			a.MemoryInitialized = true
 		}
-		_, err = tx.Exec(ctx, "UPDATE workspace_agents SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID, asJSON(a))
+		_, err = tx.Exec(ctx, "UPDATE workspace_agents SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID, kernel.JSON(a))
 		return err
 	case "toggleContextMemory":
 		if _, err := getItem(ctx, tx, scope, c.ThingID); err != nil {
@@ -230,7 +232,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		}
 		return err
 	case "setSampleState":
-		if !memory.ID(c.ID).Valid() || !oneOf(c.State, "included", "excluded", "candidate") {
+		if !memory.ID(c.ID).Valid() || !kernel.OneOf(c.State, "included", "excluded", "candidate") {
 			return memory.ErrInvalid
 		}
 		tag, err := tx.Exec(ctx, "UPDATE training_samples SET state=$3 WHERE owner_id=$1 AND id=$2 AND (NOT stale OR $3!='included')", string(scope.OwnerID), c.ID, c.State)
@@ -298,7 +300,7 @@ type itemEffects struct {
 }
 
 func (e itemEffects) Location(ctx context.Context) (*time.Location, error) {
-	settings, err := queryDocument[workspace.Settings](ctx, e.tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(e.scope.OwnerID))
+	settings, err := kernel.QueryDocument[workspace.Settings](ctx, e.tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(e.scope.OwnerID))
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +319,7 @@ func (e itemEffects) PromoteIdea(ctx context.Context, ideaID string, task worksp
 }
 
 func saveCandidate(ctx context.Context, tx pgx.Tx, scope memory.Scope, v workspace.Candidate) error {
-	_, err := tx.Exec(ctx, `INSERT INTO capture_candidates(owner_id,id,source_id,source_version,state,document) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(owner_id,id) DO UPDATE SET state=excluded.state,document=excluded.document`, string(scope.OwnerID), v.ID, v.Source.SourceID, v.Source.Version, v.State, asJSON(v))
+	_, err := tx.Exec(ctx, `INSERT INTO capture_candidates(owner_id,id,source_id,source_version,state,document) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(owner_id,id) DO UPDATE SET state=excluded.state,document=excluded.document`, string(scope.OwnerID), v.ID, v.Source.SourceID, v.Source.Version, v.State, kernel.JSON(v))
 	return err
 }
 func saveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.Doc) error {
@@ -326,10 +328,10 @@ func saveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.D
 		return err
 	}
 	if exists {
-		_, err := tx.Exec(ctx, "UPDATE work_documents SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), doc.ID, asJSON(doc))
+		_, err := tx.Exec(ctx, "UPDATE work_documents SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), doc.ID, kernel.JSON(doc))
 		return err
 	}
-	_, err := tx.Exec(ctx, "INSERT INTO work_documents(owner_id,id,thing_id,document) VALUES($1,$2,$3,$4)", string(scope.OwnerID), doc.ID, doc.ThingID, asJSON(doc))
+	_, err := tx.Exec(ctx, "INSERT INTO work_documents(owner_id,id,thing_id,document) VALUES($1,$2,$3,$4)", string(scope.OwnerID), doc.ID, doc.ThingID, kernel.JSON(doc))
 	return err
 }
 func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, summary string) error {
@@ -337,7 +339,7 @@ func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		history.record(item.ID, summary)
 		return saveItem(ctx, tx, scope, item)
 	}
-	revision := workspace.Revision{At: stamp(), By: actorFromContext(ctx), Summary: summary}
+	revision := workspace.Revision{At: kernel.Stamp(), By: actorFromContext(ctx), Summary: summary}
 	item.History = append(item.History, revision)
 	if item.Kind == "idea" {
 		item.Evolution = append(item.Evolution, revision)
@@ -346,7 +348,7 @@ func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		return saveItem(ctx, tx, scope, item)
 	}
 	// Action records remain authoritative for execution; memory retains a versioned receipt.
-	source, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "actions", ExternalID: item.ID, ExternalVersion: fmt.Sprint(item.Version), Title: item.Title, Text: string(asJSON(item)), MediaType: "text/plain"})
+	source, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "actions", ExternalID: item.ID, ExternalVersion: fmt.Sprint(item.Version), Title: item.Title, Text: string(kernel.JSON(item)), MediaType: "text/plain"})
 	if err != nil {
 		return err
 	}
@@ -366,7 +368,7 @@ func activeClaim(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) 
 	return nil
 }
 func sampleTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, sample workspace.Sample) error {
-	_, err := tx.Exec(ctx, "INSERT INTO training_samples(owner_id,id,run_id,memory_id,state,stale,document) VALUES($1,$2,$3,$4,$5,$6,$7)", string(scope.OwnerID), sample.ID, nullString(sample.Origin.RunID), nullString(sample.Origin.MemoryID), sample.State, sample.Stale, asJSON(sample))
+	_, err := tx.Exec(ctx, "INSERT INTO training_samples(owner_id,id,run_id,memory_id,state,stale,document) VALUES($1,$2,$3,$4,$5,$6,$7)", string(scope.OwnerID), sample.ID, kernel.NullString(sample.Origin.RunID), kernel.NullString(sample.Origin.MemoryID), sample.State, sample.Stale, kernel.JSON(sample))
 	return err
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -276,5 +277,5 @@ func (s *Store) captureIncompleteSecretaryTurn(ctx context.Context, tx pgx.Tx, s
 	if tag.RowsAffected() != 1 {
 		return memory.ErrConflict
 	}
-	return saveCandidate(ctx, tx, scope, workspace.Candidate{ID: string(memory.NewID()), Kind: "unknown", Text: text, Confidence: 0, Source: workspace.SourceRef{SourceID: string(in.ID), Version: in.Version, Label: "未完成的秘书原话", Excerpt: text, At: stamp()}, State: "pending", CreatedAt: stamp()})
+	return saveCandidate(ctx, tx, scope, workspace.Candidate{ID: string(memory.NewID()), Kind: "unknown", Text: text, Confidence: 0, Source: workspace.SourceRef{SourceID: string(in.ID), Version: in.Version, Label: "未完成的秘书原话", Excerpt: text, At: kernel.Stamp()}, State: "pending", CreatedAt: kernel.Stamp()})
 }

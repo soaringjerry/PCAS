@@ -5,12 +5,14 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"math/rand"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/retrieval"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -30,7 +32,7 @@ func p2Bytes(t *testing.T, label string, want, got any) {
 		legacy.Coverage.Omitted, legacy.Coverage.OmittedSources = current.Coverage.Omitted, current.Coverage.OmittedSources
 		want = legacy
 	}
-	a, b := asJSON(want), asJSON(got)
+	a, b := kernel.JSON(want), kernel.JSON(got)
 	if !bytes.Equal(a, b) {
 		t.Fatalf("%s differs byte for byte: old=%s new=%s", label, a, b)
 	}
@@ -86,7 +88,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 				}
 			}
 		}
-		items, err := queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 ORDER BY id", scope.OwnerID)
+		items, err := kernel.QueryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 ORDER BY id", scope.OwnerID)
 		if err != nil {
 			return err
 		}
@@ -428,7 +430,7 @@ func TestP2LargeResultsAreByteIdentical(t *testing.T) {
 		}
 		wanted := []workspace.Memory{}
 		for _, m := range old {
-			if oneOf(m.ID, ids...) {
+			if kernel.OneOf(m.ID, ids...) {
 				wanted = append(wanted, m)
 			}
 		}

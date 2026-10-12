@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"strings"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -16,7 +18,7 @@ import (
 // Input content may change during generation. Access revocation and deletion
 // remain fences; use current versions so unrelated edits do not abort a reply.
 func (s *Store) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c secretaryContext) error {
-	agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.Agent.ID)
+	agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.Agent.ID)
 	if err != nil {
 		return err
 	}
@@ -44,7 +46,7 @@ func (s *Store) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, sc
 		if action.Op == "delegate" && action.Kind == "revise" {
 			doc, ok := c.Documents[pointerValue(action.DocumentID)]
 			if ok {
-				current, e := queryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), doc.ID)
+				current, e := kernel.QueryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), doc.ID)
 				if e != nil || current.Version != doc.Version {
 					return memory.ErrConflict
 				}
@@ -73,7 +75,7 @@ func (s *Store) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, sc
 				sent = original
 			}
 
-			if string(asJSON(current)) != string(asJSON(sent)) {
+			if string(kernel.JSON(current)) != string(kernel.JSON(sent)) {
 				return memory.ErrConflict
 			}
 		}
@@ -130,7 +132,7 @@ func checkQueuedUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 // A run writes its destination item. Other input memories may change while
 // its paid draft is generated; their revision is not an abort condition.
 func checkUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
-	agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
+	agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
 	if err != nil {
 		return err
 	}

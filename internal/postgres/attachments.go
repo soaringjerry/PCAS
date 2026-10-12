@@ -12,18 +12,19 @@ import (
 	"github.com/soaringjerry/PCAS/internal/input/attachment"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
 func (s *Store) IngestAttachment(ctx context.Context, scope memory.Scope, in memory.IngestRequest, r io.Reader) (memory.IngestResult, error) {
 	var result memory.IngestResult
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return result, err
 	}
 	if s.blobs == nil {
 		return result, memory.ErrUnavailable
 	}
-	if !oneOf(in.MediaType, "application/x-pcas-archive", "application/pdf", "image/png", "image/jpeg", "image/webp", "image/tiff", "audio/mpeg", "audio/wav", "audio/mp4", "audio/ogg") || requireText(in.Title) != nil || len(in.Title) > 2000 || in.Connector == "" || in.ExternalID == "" || in.ExternalVersion == "" {
+	if !kernel.OneOf(in.MediaType, "application/x-pcas-archive", "application/pdf", "image/png", "image/jpeg", "image/webp", "image/tiff", "audio/mpeg", "audio/wav", "audio/mp4", "audio/ogg") || kernel.RequireText(in.Title) != nil || len(in.Title) > 2000 || in.Connector == "" || in.ExternalID == "" || in.ExternalVersion == "" {
 		return result, memory.ErrInvalid
 	}
 	key, err := s.blobs.Put(ctx, scope, r)
@@ -58,7 +59,7 @@ func (s *Store) ingestAttachmentTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if _, err = tx.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND stage='source.chunk' AND state='queued'", string(scope.OwnerID), string(result.ID), result.Version); err != nil {
 		return result, err
 	}
-	err = enqueue(ctx, tx, scope.OwnerID, result.ID, result.Version, "source.parse")
+	err = kernel.Enqueue(ctx, tx, scope.OwnerID, result.ID, result.Version, "source.parse")
 	return result, err
 }
 func (s *Store) OpenAttachment(ctx context.Context, scope memory.Scope, id memory.ID, version int) (io.ReadCloser, string, string, error) {
@@ -107,10 +108,10 @@ func (s *Store) ProcessAttachmentWith(ctx context.Context, j worker.Job, read at
 		return &worker.JobError{Code: "file_parse_failed", Retry: true}
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		return acknowledge(ctx, tx, j)
+		return kernel.Acknowledge(ctx, tx, j)
 	})
 }
 
@@ -153,7 +154,7 @@ func (s *Store) readAttachmentWith(ctx context.Context, scope memory.Scope, ref 
 			return err
 		}
 		if job != nil {
-			if err := lockJob(ctx, tx, *job); err != nil {
+			if err := kernel.LockJob(ctx, tx, *job); err != nil {
 				return err
 			}
 		}
@@ -173,7 +174,7 @@ func (s *Store) readAttachmentWith(ctx context.Context, scope memory.Scope, ref 
 			return err
 		}
 		if raw := original.Source.Scope["project_id"]; raw != nil {
-			if _, err = tx.Exec(ctx, `UPDATE source_versions SET scope=$4 WHERE owner_id=$1 AND source_id=$2 AND version=$3`, string(scope.OwnerID), string(derived.ID), derived.Version, asJSON(original.Source.Scope)); err != nil {
+			if _, err = tx.Exec(ctx, `UPDATE source_versions SET scope=$4 WHERE owner_id=$1 AND source_id=$2 AND version=$3`, string(scope.OwnerID), string(derived.ID), derived.Version, kernel.JSON(original.Source.Scope)); err != nil {
 				return err
 			}
 		}

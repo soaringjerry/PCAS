@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -56,7 +58,7 @@ func TestExtractionEvidenceSignalAndReminderDeletion(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		content := map[string]any{"items": []map[string]any{{"kind": "memory", "nature": "fact", "text": "书店重新营业", "subject": "旧书店", "predicate": "营业状态", "quote": src.Text, "confidence": 0.99, "explicit": true}, {"kind": "memory", "nature": "fact", "text": "凭空捏造", "quote": "原文不存在", "confidence": 1}}, "signals": []conditionSignal{{IdeaID: idea.ID, ConditionID: idea.Conditions[0].ID, Quote: src.Text, Explanation: "导入资料写明重新营业", Confidence: 0.99}}}
-		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(content))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 30}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(kernel.JSON(content))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 30}})
 	}))
 	defer server.Close()
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "模型", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, InputPerMillion: 1, OutputPerMillion: 2}}}})
@@ -112,21 +114,21 @@ func TestRunGrantRevocationAndArtifactCleanup(t *testing.T) {
 	// not select an unrelated fact under ranked retrieval.
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", Kind: "summary", Prompt: "总结受控的私密事实"})
 	run := st.Runs[0]
-	if !oneOf(mem.ID, run.ContextMemoryIDs...) {
+	if !kernel.OneOf(mem.ID, run.ContextMemoryIDs...) {
 		t.Fatal("fixture run did not include the private memory")
 	}
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "pasteRunResult", ID: run.ID, Output: "由私密事实推导的结果"})
 	undoAutoAdoption(t, s, scope, run.ID)
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "由私密事实推导的结果"})
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: task.ID, Patch: asJSON(map[string]any{"notes": st.Tasks[0].Notes + strings.Repeat("n", 31000)})})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: task.ID, Patch: kernel.JSON(map[string]any{"notes": st.Tasks[0].Notes + strings.Repeat("n", 31000)})})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", Kind: "ask", Prompt: "使用采纳内容"})
 	if strings.Contains(st.Runs[0].Brief, "["+mem.ID+"@") {
 		t.Fatal("fixture must exclude the direct memory text from the oversized brief")
 	}
-	if !oneOf(mem.ID, st.Runs[0].ContextMemoryIDs...) {
+	if !kernel.OneOf(mem.ID, st.Runs[0].ContextMemoryIDs...) {
 		t.Fatal("derived context lost its transitive dependency")
 	}
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "manual", Patch: asJSON(map[string]any{"memoryKinds": []string{"preference"}})})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "manual", Patch: kernel.JSON(map[string]any{"memoryKinds": []string{"preference"}})})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "manual", Kind: "ask", Prompt: "只看偏好"})
 	if strings.Contains(st.Runs[0].Brief, "私密事实") {
 		t.Fatal("copied result bypassed kind policy")
@@ -187,7 +189,7 @@ func TestAsyncRunInvalidatesDuringGenerationAndBudget(t *testing.T) {
 	if st.Runs[0].Status != "done" || !st.Runs[0].StaleContext || st.Runs[0].Output != "旧依据生成的结果" || st.Runs[0].Adopted != nil {
 		t.Fatal("corrected-context response was not retained for review")
 	}
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": 0})})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": 0})})
 	_, err = s.Execute(ctx, scope, workspace.Command{Type: "requestRun", ThingID: task.ID, AgentID: "model", Kind: "ask", Prompt: "再次", RequestID: string(memory.NewID()), ExpectedRevision: st.Revision})
 	if !errors.Is(err, workspace.ErrBudget) {
 		t.Fatal("budget bypass", err)
@@ -245,14 +247,14 @@ func TestTemporalChangeCorrectionAndHistoricalKnowledge(t *testing.T) {
 	claim := expanded.Claims[0]
 	knownBefore := time.Now()
 	movedAt := knownBefore.Add(-time.Hour)
-	claim.Value = asJSON("搬到山边")
+	claim.Value = kernel.JSON("搬到山边")
 	claim.ValidTime = memory.TimeRange{From: &movedAt, Precision: "instant"}
 	changed, err := s.Correct(ctx, scope, memory.CorrectRequest{Target: ref, Replacement: claim, ChangeType: "change", Reason: "真实搬家"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	knownChange := time.Now()
-	claim.Value = asJSON("搬到湖边")
+	claim.Value = kernel.JSON("搬到湖边")
 	corrected, err := s.Correct(ctx, scope, memory.CorrectRequest{Target: changed, Replacement: claim, Reason: "把山边记错了"})
 	if err != nil {
 		t.Fatal(err)

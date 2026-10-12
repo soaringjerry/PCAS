@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -85,11 +86,11 @@ func TestUrgentIsATaskPatch(t *testing.T) {
 	s, scope := testStore(t), owner()
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "整理发票"})
 	id := st.Tasks[0].ID
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(map[string]bool{"urgent": true})})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: kernel.JSON(map[string]bool{"urgent": true})})
 	if !st.Tasks[0].Urgent {
 		t.Fatal("patch did not mark")
 	}
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(map[string]bool{"urgent": false})})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: kernel.JSON(map[string]bool{"urgent": false})})
 	if st.Tasks[0].Urgent {
 		t.Fatal("patch did not clear")
 	}
@@ -112,7 +113,7 @@ func TestUrgentMigrationMarksOnlyOpenUntimedTasks(t *testing.T) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "尽快开始推广，不能再拖"})
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "尽快交报告"})
 	due := testsupport.DateFromToday(t, "Asia/Shanghai", 2, 9, 0).Format("2006-01-02T15:04:05Z07:00")
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: urgentTask(t, st, "尽快交报告").ID, Patch: asJSON(map[string]string{"due": due})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: urgentTask(t, st, "尽快交报告").ID, Patch: kernel.JSON(map[string]string{"due": due})})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "马上回电话"})
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setTaskStatus", ID: urgentTask(t, st, "马上回电话").ID, Status: "cancelled"})
 	workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "整理发票"})

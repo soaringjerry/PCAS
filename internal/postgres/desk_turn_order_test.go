@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -85,7 +86,7 @@ func orderedPeer(t *testing.T, s *Store) *Store {
 func TestSecretaryOrderCommittedFIFOAcrossStores(t *testing.T) {
 	s, scope := testStore(t), owner()
 	peer := orderedPeer(t, s)
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "UTC"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "UTC"})})
 	conversation := string(memory.NewID())
 	held, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
@@ -312,7 +313,7 @@ func TestSecretaryOrderQueuedCancellationAndCaptureRecovery(t *testing.T) {
 				}
 				secretaryModelReply(w, `{"actions":[{"op":"create_task","title":"new intent"}]}`)
 			})
-			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]bool{"autoAccept": true})})
+			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]bool{"autoAccept": true})})
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			canceled := turnRequest("请建明天三点旧会议-private-f15")
@@ -429,7 +430,7 @@ func TestSecretaryOrderCanceledBeforeAdmission(t *testing.T) {
 
 func TestSecretaryOrderRecoveryDoesNotDeletePublishedCaptureJob(t *testing.T) {
 	s, scope := testStore(t), owner()
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]bool{"autoAccept": true})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]bool{"autoAccept": true})})
 	req := turnRequest("old intent")
 	conversation := string(memory.NewID())
 	req.ConversationID = &conversation
@@ -439,7 +440,7 @@ func TestSecretaryOrderRecoveryDoesNotDeletePublishedCaptureJob(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	hash := sha256.Sum256(asJSON(req))
+	hash := sha256.Sum256(kernel.JSON(req))
 	if _, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, conversation, hash[:]); err != nil {
 		t.Fatal(err)
 	}
@@ -467,7 +468,7 @@ func TestSecretaryOrderRecoveryDuplicateDoesNotSuppressPublishedJobs(t *testing.
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	hash := sha256.Sum256(asJSON(req))
+	hash := sha256.Sum256(kernel.JSON(req))
 	if _, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, conversation, hash[:]); err != nil {
 		t.Fatal(err)
 	}
@@ -488,7 +489,7 @@ func TestSecretaryOrderConnectionLossThenNewStoreContinues(t *testing.T) {
 	s, scope := testStore(t), owner()
 	peer := orderedPeer(t, s)
 	conversation := string(memory.NewID())
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "UTC"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "UTC"})})
 	base := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "surviving meeting", Due: testsupport.DateFromToday(t, "UTC", 1, 15, 0).UTC().Format(time.RFC3339)})
 	id := base.Tasks[0].ID
 	entered, release := make(chan struct{}), make(chan struct{})
@@ -560,7 +561,7 @@ func TestSecretaryOrderExpiredAdmissionSurvivesStoreRestart(t *testing.T) {
 	req := turnRequest("abandoned old intent")
 	conversation := string(memory.NewID())
 	req.ConversationID = &conversation
-	hash := sha256.Sum256(asJSON(req))
+	hash := sha256.Sum256(kernel.JSON(req))
 	// Commit a genuine admission without an executor, representing death between
 	// admission and execution. Accelerate only its deadline, without fabricating a
 	// completed turn or relying on an actual two-minute wall-clock pause.

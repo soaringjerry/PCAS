@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/claim"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/claim"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -92,7 +94,7 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		}
 		// A repeated assertion in a newer source version is fresh evidence for
 		// the same claim, not a second claim and not continued reliance on v1.
-		locator := asJSON(map[string]int{"start_rune": start, "end_rune": end})
+		locator := kernel.JSON(map[string]int{"start_rune": start, "end_rune": end})
 		if _, err := tx.Exec(ctx, `INSERT INTO evidence(owner_id,id,source_id,source_version,target_id,target_version,locator,acquisition,stance)
 			SELECT $1,gen_random_uuid(),$2,$3,$4,$5,$6,$7,'supports'
 			WHERE NOT EXISTS(SELECT 1 FROM evidence WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 AND target_id=$4 AND target_version=$5 AND stance='supports')`, string(scope.OwnerID), string(in.Source.ID), in.Source.Version, prior, version, locator, in.Acquisition); err != nil {
@@ -134,7 +136,7 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 			if _, err := tx.Exec(ctx, "INSERT INTO entities(owner_id,id) VALUES($1,$2)", string(scope.OwnerID), subject); err != nil {
 				return result, err
 			}
-			if _, err := tx.Exec(ctx, "INSERT INTO entity_versions(owner_id,entity_id,version,entity_type,name,disambiguation) VALUES($1,$2,1,'unknown',$3,$4)", string(scope.OwnerID), subject, in.Subject, asJSON(map[string]string{"source_id": string(in.Source.ID)})); err != nil {
+			if _, err := tx.Exec(ctx, "INSERT INTO entity_versions(owner_id,entity_id,version,entity_type,name,disambiguation) VALUES($1,$2,1,'unknown',$3,$4)", string(scope.OwnerID), subject, in.Subject, kernel.JSON(map[string]string{"source_id": string(in.Source.ID)})); err != nil {
 				return result, err
 			}
 			if _, err := tx.Exec(ctx, "INSERT INTO aliases(owner_id,entity_id,entity_version,alias) VALUES($1,$2,1,$3)", string(scope.OwnerID), subject, in.Subject); err != nil {
@@ -188,7 +190,7 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	if _, err := tx.Exec(ctx, "INSERT INTO claim_source_keys(owner_id,source_id,claim_key,claim_id) VALUES($1,$2,$3,$4)", string(scope.OwnerID), string(in.Source.ID), stringHex(key[:]), string(id)); err != nil {
 		return result, err
 	}
-	if err := enqueue(ctx, tx, scope.OwnerID, id, 1, "memory.index"); err != nil {
+	if err := kernel.Enqueue(ctx, tx, scope.OwnerID, id, 1, "memory.index"); err != nil {
 		return result, err
 	}
 	if err := refreshSummaryJobsTx(ctx, tx, scope.OwnerID, in.Source.ID); err != nil {
@@ -197,14 +199,6 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	return memory.Ref{ID: id, Version: 1, Kind: memory.ClaimKind}, nil
 }
 
-func oneOf(value string, values ...string) bool {
-	for _, v := range values {
-		if v == value {
-			return true
-		}
-	}
-	return false
-}
 func stringHex(value []byte) string {
 	const chars = "0123456789abcdef"
 	out := make([]byte, len(value)*2)

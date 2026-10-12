@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -21,7 +22,7 @@ import (
 
 func admittedInteractiveRequest(t *testing.T, s *Store, scope memory.Scope, provider string) modelcall.Request {
 	t.Helper()
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "UTC"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "UTC"})})
 	execution := memory.NewID()
 	hash := sha256.Sum256([]byte("Fictitious admitted request."))
 	ctx, cancel := context.WithTimeout(context.Background(), heavyUseTimeout)
@@ -30,8 +31,8 @@ func admittedInteractiveRequest(t *testing.T, s *Store, scope memory.Scope, prov
 	if err != nil || !ticket.own {
 		t.Fatal(ticket, err)
 	}
-	policy := interactiveCallPolicy{Kind: "secretary", Token: ticket.creator, Origin: fmt.Sprintf("%x", hash), RequestHash: hash[:], AgentID: provider, Usage: modelUsage{ID: memory.NewID(), Tier: "heavy", Purpose: "reader", TurnID: string(memory.NewID()), Plan: asJSON(usePlan{Groups: []string{"self:rule"}})}}
-	return modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: execution, RootExecutionID: execution, Function: "reader", Stage: "catalog", ProviderID: provider, Instructions: prompts.Must("memory-reader"), ContextBuilderVersion: "fictitious-reader-v1", Prompt: asJSON(map[string]string{"rawPrompt": "Fictitious catalog input."}), Policy: policy}
+	policy := interactiveCallPolicy{Kind: "secretary", Token: ticket.creator, Origin: fmt.Sprintf("%x", hash), RequestHash: hash[:], AgentID: provider, Usage: modelUsage{ID: memory.NewID(), Tier: "heavy", Purpose: "reader", TurnID: string(memory.NewID()), Plan: kernel.JSON(usePlan{Groups: []string{"self:rule"}})}}
+	return modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: execution, RootExecutionID: execution, Function: "reader", Stage: "catalog", ProviderID: provider, Instructions: prompts.Must("memory-reader"), ContextBuilderVersion: "fictitious-reader-v1", Prompt: kernel.JSON(map[string]string{"rawPrompt": "Fictitious catalog input."}), Policy: policy}
 }
 
 func TestInteractiveStagesKeepDistinctResultsWithoutAdmissionLockDeadlock(t *testing.T) {
@@ -144,7 +145,7 @@ func TestInteractiveResultRejectsChangedInputBindings(t *testing.T) {
 	}
 	changes := map[string]func(*modelcall.Request){
 		"payload": func(r *modelcall.Request) {
-			r.Prompt = asJSON(map[string]string{"rawPrompt": "Changed fictitious input."})
+			r.Prompt = kernel.JSON(map[string]string{"rawPrompt": "Changed fictitious input."})
 		},
 		"provider":     func(r *modelcall.Request) { r.ProviderID = "another-model" },
 		"instructions": func(r *modelcall.Request) { r.Instructions = prompts.Must("secretary") },

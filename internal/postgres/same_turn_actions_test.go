@@ -17,6 +17,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -158,7 +159,7 @@ func TestSameTurnCreateStepsReplayAndReverseUndo(t *testing.T) {
 		t.Fatal("actual model request omitted N protocol", err, request)
 	}
 	replayed := mustTurn(t, s, scope, req)
-	if fake.calls.Load() != 1 || !bytes.Equal(asJSON(out.Turn), asJSON(replayed.Turn)) || len(sameTurnItem(t, replayed.State, id).Checklist) != 2 || len(replayed.State.Tasks) != 2 {
+	if fake.calls.Load() != 1 || !bytes.Equal(kernel.JSON(out.Turn), kernel.JSON(replayed.Turn)) || len(sameTurnItem(t, replayed.State, id).Checklist) != 2 || len(replayed.State.Tasks) != 2 {
 		t.Fatal("request replay repeated actions", replayed)
 	}
 	state, err := s.Undo(context.Background(), scope, *out.Turn.Receipts[1].ActionID)
@@ -217,7 +218,7 @@ func TestSameTurnInvalidNReferencesDoNotFallBack(t *testing.T) {
 		t.Run(ref, func(t *testing.T) {
 			s, scope := testStore(t), owner()
 			old := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "旧事项"}).Tasks[0]
-			payload := string(asJSON(map[string]any{"actions": []any{map[string]string{"op": "create_task", "title": "新事项"}, map[string]any{"op": "update", "ref": ref, "set": map[string]string{"title": "不能改"}}, map[string]string{"op": "create_task", "title": "后面的事项"}}}))
+			payload := string(kernel.JSON(map[string]any{"actions": []any{map[string]string{"op": "create_task", "title": "新事项"}, map[string]any{"op": "update", "ref": ref, "set": map[string]string{"title": "不能改"}}, map[string]string{"op": "create_task", "title": "后面的事项"}}}))
 			sameTurnFakeModel(t, s, payload)
 			req := turnRequest("非法引用不能改旧事项")
 			req.ThingID = &old.ID
@@ -305,7 +306,7 @@ func TestSameTurnOriginalTenActionLimit(t *testing.T) {
 	for i := 1; i < 12; i++ {
 		actions = append(actions, map[string]any{"op": "add_steps", "ref": "N1", "steps": []string{"一步"}})
 	}
-	sameTurnFakeModel(t, s, string(asJSON(map[string]any{"actions": actions})))
+	sameTurnFakeModel(t, s, string(kernel.JSON(map[string]any{"actions": actions})))
 	out := mustTurn(t, s, scope, turnRequest("原数组最多十个动作"))
 	statuses := []string{"done", "done", "done", "done", "done", "done", "done", "done", "done", "done", "skipped"}
 	sameTurnReceipts(t, s, scope, out, statuses...)

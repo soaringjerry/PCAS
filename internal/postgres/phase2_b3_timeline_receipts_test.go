@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -40,7 +41,7 @@ func b3ReceiptGold(t *testing.T) b3ReceiptOracle {
 // receipt. Synthetic dates and claims do not invent the receipt or item id.
 func b3ReceiptTurn(t *testing.T, s *Store, scope memory.Scope, f *b1Fake, text, title string) (workspace.DeskTurnRequest, workspace.DeskTurnResponse, memory.Ref, workspace.DeskReceipt) {
 	t.Helper()
-	f.set(string(asJSON(map[string]any{"reply": "安排好了。", "actions": []map[string]any{{"op": "create_task", "title": title}}})))
+	f.set(string(kernel.JSON(map[string]any{"reply": "安排好了。", "actions": []map[string]any{{"op": "create_task", "title": title}}})))
 	req := turnRequest(text)
 	out := mustTurn(t, s, scope, req)
 	for _, receipt := range out.Turn.Receipts {
@@ -155,7 +156,7 @@ func TestPhase2B3_K10_UndoneCreationLeavesNoAssociatedItems(t *testing.T) {
 			ref := b3Claim(t, s, scope, b3ClaimSpec{Text: text, Nature: "fact", Subject: self, Said: &said, Source: source, Mentions: []b3Mention{{place, "place"}}})
 			if corrected {
 				text, want = gold.ChangedText, gold.CorrectedStatus
-				replacement := memory.Claim{SubjectID: self, Predicate: "验收事项", Value: asJSON(text), Nature: "fact", Acquisition: "direct", Confirmation: "confirmed"}
+				replacement := memory.Claim{SubjectID: self, Predicate: "验收事项", Value: kernel.JSON(text), Nature: "fact", Acquisition: "direct", Confirmation: "confirmed"}
 				updated, err := s.Correct(t.Context(), scope, memory.CorrectRequest{ChangeType: "correction", Target: ref, Replacement: replacement, Reason: "独立背景记忆的纠正"})
 				if err != nil {
 					t.Fatal(err)

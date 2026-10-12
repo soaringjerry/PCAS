@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +10,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -79,7 +81,7 @@ func extractionTestModel(t *testing.T, s *Store, handler http.HandlerFunc) {
 }
 
 func writeExtractionResponse(w http.ResponseWriter, item extractedItem) {
-	_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(extracted{Items: []extractedItem{item}}))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 30}})
+	_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(kernel.JSON(extracted{Items: []extractedItem{item}}))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 30}})
 }
 
 func TestDirectCaptureEntersDefaultRunAsSourceBacked(t *testing.T) {
@@ -114,7 +116,7 @@ func TestDirectCaptureEntersDefaultRunAsSourceBacked(t *testing.T) {
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "查询月光列车"})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: st.Tasks[0].ID, AgentID: "manual", Kind: "ask", Prompt: "月光列车的交付暗号是什么"})
 	run := st.Runs[0]
-	if !strings.Contains(run.Brief, text) || !oneOf(m.ID, run.ContextMemoryIDs...) {
+	if !strings.Contains(run.Brief, text) || !kernel.OneOf(m.ID, run.ContextMemoryIDs...) {
 		t.Fatal("current direct capture missing from default assistant context", run.Brief)
 	}
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return verifyRunTx(ctx, tx, scope, run) }); err != nil {

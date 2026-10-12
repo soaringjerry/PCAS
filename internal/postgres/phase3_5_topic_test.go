@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/topicproject"
@@ -117,7 +118,7 @@ func TestPhase35C2C4G1T4EligibleTopicLinksReceiptsUndoAndReplay(t *testing.T) {
 			MemoryIDs    []string
 		}
 	}
-	_ = json.Unmarshal(asJSON(st.Projects[0]), &provenance)
+	_ = json.Unmarshal(kernel.JSON(st.Projects[0]), &provenance)
 	if provenance.Creation == nil || provenance.Creation.By != "background_topic" || provenance.Creation.GroupKey != f.Topics[0] || len(provenance.Creation.MemoryIDs) == 0 {
 		t.Fatal("topic project lost evidence provenance")
 	}
@@ -125,7 +126,7 @@ func TestPhase35C2C4G1T4EligibleTopicLinksReceiptsUndoAndReplay(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, `SELECT action_id::text FROM topic_project_links WHERE owner_id=$1 AND topic_id=$2 AND undone_at IS NULL`, f.Scope.OwnerID, strings.TrimPrefix(f.Topics[0], "entity:")).Scan(&action); err != nil {
 		t.Fatal(err)
 	}
-	phase35RequireSingleReceipt(t, st, asJSON(st.Projects[0]), action)
+	phase35RequireSingleReceipt(t, st, kernel.JSON(st.Projects[0]), action)
 	if _, err := s.ScheduleStatus(ctx, time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -555,7 +556,7 @@ func TestTopicProjectOnlyWhatIsStillBeingWorkedOn(t *testing.T) {
 	}
 	st := phase35Snapshot(t, s, f.Scope)
 	if len(st.Projects) != 1 || st.Projects[0].Title != "虚构声音档案" || st.Projects[0].Goal != "虚构：把旧录音整理成可检索的档案" {
-		t.Fatalf("project=%s", asJSON(st.Projects))
+		t.Fatalf("project=%s", kernel.JSON(st.Projects))
 	}
 	if calls.Load() < 2 {
 		t.Fatalf("model calls=%d", calls.Load())

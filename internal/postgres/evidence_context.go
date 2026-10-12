@@ -3,10 +3,12 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -22,7 +24,7 @@ type conversationPoint struct {
 
 func (s *Store) SourceConversation(ctx context.Context, scope memory.Scope, in memory.ConversationRequest) (memory.ConversationResult, error) {
 	out := memory.ConversationResult{Messages: []memory.ConversationMessage{}, Gaps: []string{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !in.ID.Valid() || in.Version < 0 || in.Limit < 0 || in.Limit > 20 || in.Before != "" && !in.Before.Valid() || in.After != "" && !in.After.Valid() || in.Before != "" && in.After != "" {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -26,7 +27,7 @@ func TestWorkspaceTimezoneCreationAndSettings(t *testing.T) {
 		t.Fatal("existing preference overwritten", again.Settings, err)
 	}
 	for _, zone := range []any{"Australia/Unknown", "", "Local", nil, 8, []string{"UTC"}} {
-		_, err := s.Execute(ctx, scope, workspace.Command{Type: "updateSettings", RequestID: string(memory.NewID()), ExpectedRevision: state.Revision, Patch: asJSON(map[string]any{"timezone": zone, "dailyBudget": 20})})
+		_, err := s.Execute(ctx, scope, workspace.Command{Type: "updateSettings", RequestID: string(memory.NewID()), ExpectedRevision: state.Revision, Patch: kernel.JSON(map[string]any{"timezone": zone, "dailyBudget": 20})})
 		if !errors.Is(err, workspace.ErrTimezone) {
 			t.Fatalf("%v: %v", zone, err)
 		}
@@ -35,7 +36,7 @@ func TestWorkspaceTimezoneCreationAndSettings(t *testing.T) {
 			t.Fatal("invalid patch partially saved", again.Settings, err)
 		}
 	}
-	state = workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "America/New_York"})})
+	state = workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "America/New_York"})})
 	again, err = s.Snapshot(ctx, scope)
 	if err != nil || again.Settings.Timezone != "America/New_York" {
 		t.Fatal("timezone did not persist", again.Settings, err)

@@ -3,11 +3,13 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -270,7 +272,7 @@ func TestPhase2B4b_C6_ReplacesOnlyUntouchedSystemMemoriesAndMarksHistory(t *test
 	old := b4bOldClaim(t, s, scope, "成都旧计划青灯", a.Sources[0])
 	// Explicitly allow the secretary to use this legacy pending plan so the
 	// real answer records the dependency that R28 must later invalidate.
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: asJSON(map[string]any{"memoryKinds": []string{"plan"}, "includeInferred": true})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: kernel.JSON(map[string]any{"memoryKinds": []string{"plan"}, "includeInferred": true})})
 	req := turnRequest("成都旧计划青灯是什么？")
 	out := mustTurn(t, s, scope, req)
 	b1HasRef(t, b1Refs(t, s, scope, req.RequestID), old, true)

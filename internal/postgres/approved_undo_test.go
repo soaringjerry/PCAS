@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -57,7 +58,7 @@ func approvedUndoHTTP(t *testing.T, s *Store, scope memory.Scope, action, code s
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(asJSON(st)) != string(asJSON(after)) {
+	if string(kernel.JSON(st)) != string(kernel.JSON(after)) {
 		t.Fatal("refused undo changed state")
 	}
 	var undone bool
@@ -191,7 +192,7 @@ func TestApprovedUndoHistoricalOrder(t *testing.T) {
 				if mode == "duplicate-receipt" {
 					receipts = append(receipts, map[string]string{"actionId": later})
 				}
-				response := asJSON(map[string]any{"turn": map[string]any{"receipts": receipts}})
+				response := kernel.JSON(map[string]any{"turn": map[string]any{"receipts": receipts}})
 				if _, err := s.pool.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,response) VALUES($1,$2,'fixture','fixture','fixture',$3)", string(scope.OwnerID), turnID, response); err != nil {
 					t.Fatal(err)
 				}

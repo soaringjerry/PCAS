@@ -10,6 +10,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 )
 
@@ -19,7 +20,7 @@ func TestUnsupportedRequiredSchemaHasCallRecordWithoutSpending(t *testing.T) {
 	ordinarySecretaryModel(t, s, func(http.ResponseWriter, *http.Request) { invocations.Add(1) })
 	organizeTestMemory(t, s, scope, "Fictitious unfinished report.")
 	job := organizeTestJob(t, s, scope)
-	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: job.ID, RootExecutionID: job.ID, Function: "organize", Stage: job.Stage, ProviderID: s.models.ExtractionID(), Instructions: prompts.Must("organize"), Schema: prompts.MustSchema("use-groups"), ContextBuilderVersion: "fictitious-context-v1", Prompt: asJSON(map[string]string{"rawPrompt": "Fictitious input."}), Policy: job}
+	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: job.ID, RootExecutionID: job.ID, Function: "organize", Stage: job.Stage, ProviderID: s.models.ExtractionID(), Instructions: prompts.Must("organize"), Schema: prompts.MustSchema("use-groups"), ContextBuilderVersion: "fictitious-context-v1", Prompt: kernel.JSON(map[string]string{"rawPrompt": "Fictitious input."}), Policy: job}
 	ctx := context.Background()
 	if _, err := s.Gateway().Call(ctx, request); !errors.Is(err, ai.ErrUnsupportedCapability) {
 		t.Fatal("unsupported schema did not fail explicitly", err)
@@ -44,7 +45,7 @@ func TestSelectedCodexCallRecordsRegisteredModeAndExactUsageLink(t *testing.T) {
 	organizeTestMemory(t, s, scope, "Fictitious unfinished report.")
 	job := organizeTestJob(t, s, scope)
 	dir := secretaryRetryCodex(t, s, 0, 0, "")
-	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: job.ID, RootExecutionID: job.ID, Function: "organize", Stage: job.Stage, ProviderID: "chatgpt", Instructions: prompts.Must("organize"), Schema: prompts.MustSchema("secretary-output"), Search: true, ContextBuilderVersion: "fictitious-context-v1", Prompt: asJSON(map[string]string{"rawPrompt": "Fictitious input."}), Policy: job}
+	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: job.ID, RootExecutionID: job.ID, Function: "organize", Stage: job.Stage, ProviderID: "chatgpt", Instructions: prompts.Must("organize"), Schema: prompts.MustSchema("secretary-output"), Search: true, ContextBuilderVersion: "fictitious-context-v1", Prompt: kernel.JSON(map[string]string{"rawPrompt": "Fictitious input."}), Policy: job}
 	ctx := context.Background()
 	paid, err := s.Gateway().Call(ctx, request)
 	if err != nil {

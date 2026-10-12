@@ -9,6 +9,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 // directCalls records embedding, image, and transcription invocations in the
@@ -22,7 +23,7 @@ func (a directCalls) Begin(ctx context.Context, r modelcall.DirectRequest) (mode
 	if refs == nil {
 		refs = []memory.Ref{}
 	}
-	manifest := asJSON(map[string]any{"version": "direct-input-v1", "inputs": r.Inputs, "bytes": r.Bytes, "memoryRefs": refs})
+	manifest := kernel.JSON(map[string]any{"version": "direct-input-v1", "inputs": r.Inputs, "bytes": r.Bytes, "memoryRefs": refs})
 	var promptName, promptHash any
 	if r.Instructions.Name() != "" {
 		promptName, promptHash = r.Instructions.Name(), r.Instructions.Hash()
@@ -32,7 +33,7 @@ func (a directCalls) Begin(ctx context.Context, r modelcall.DirectRequest) (mode
 		_, err := tx.Exec(ctx, `WITH t AS (SELECT clock_timestamp() AS at)
  INSERT INTO model_calls(owner_id,id,execution_id,root_execution_id,causation_id,attempt_number,attempt_limit,function_name,stage,provider_id,model,prompt_name,instruction_hash,input_manifest,required_capabilities,actual_mode,outcome,reservation_id,accounting_state,created_at,started_at,updated_at)
  SELECT $1,$2,$3,$4,$5,1,1,$6,$7,$8,$9,$12,$13,$10,jsonb_build_array($14::text),jsonb_build_object('operation',$14::text),'started',$11,'reserved',t.at,t.at,t.at FROM t`,
-			string(r.OwnerID), string(call.InvocationID), string(r.ExecutionID), string(r.RootExecutionID), nullString(string(r.CausationID)), r.Function, r.Stage, r.Provider.ID, r.Provider.Model, manifest, reservation, promptName, promptHash, r.Operation)
+			string(r.OwnerID), string(call.InvocationID), string(r.ExecutionID), string(r.RootExecutionID), kernel.NullString(string(r.CausationID)), r.Function, r.Stage, r.Provider.ID, r.Provider.Model, manifest, reservation, promptName, promptHash, r.Operation)
 		return err
 	})
 	return call, err

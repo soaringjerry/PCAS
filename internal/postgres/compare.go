@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -308,7 +309,7 @@ func (a compareSession) Ready() error {
 func (a compareSession) NextBatch(ctx context.Context, j worker.Job, version int) (json.RawMessage, []memory.Ref, bool, error) {
 	var input *comparisonBatch
 	err := pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		var err error
@@ -317,14 +318,14 @@ func (a compareSession) NextBatch(ctx context.Context, j worker.Job, version int
 			return err
 		}
 		if input == nil {
-			return acknowledge(ctx, tx, j)
+			return kernel.Acknowledge(ctx, tx, j)
 		}
 		return backgroundHourlyTx(ctx, tx, CompareStage, "compare_hourly_limit")
 	})
 	if err != nil || input == nil {
 		return nil, nil, false, err
 	}
-	return asJSON(input), input.Refs, true, nil
+	return kernel.JSON(input), input.Refs, true, nil
 }
 
 func (a compareSession) Apply(ctx context.Context, j worker.Job, record json.RawMessage, edges []comparison.Edge, valid bool) error {
@@ -346,7 +347,7 @@ func (a compareSession) Apply(ctx context.Context, j worker.Job, record json.Raw
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(j.OwnerID), CompareStage); err != nil {
 			return err
 		}
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		if valid {
@@ -360,7 +361,7 @@ func (a compareSession) Apply(ctx context.Context, j worker.Job, record json.Raw
 		if err := discardPaidResultTx(ctx, tx, j); err != nil {
 			return err
 		}
-		return acknowledge(ctx, tx, j)
+		return kernel.Acknowledge(ctx, tx, j)
 	})
 }
 
@@ -372,7 +373,7 @@ func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.I
 	}
 	rows, err := tx.Query(ctx, `SELECT input.n,c.confirmation='confirmed',EXISTS(SELECT 1 FROM record_versions edited WHERE edited.owner_id=r.owner_id AND edited.record_id=r.id AND edited.version>1 AND edited.actor='user'),`+restoredMemorySQL("$3")+
 		strings.Replace(compareCurrent, " WHERE r.state", ` JOIN jsonb_to_recordset($4::jsonb) input(id uuid,version integer,n integer) ON r.id=input.id AND r.version=input.version WHERE r.state`, 1)+`
- AND cl.owner_id=$2 ORDER BY r.id FOR UPDATE OF r,cl`, OrganizeVersion, string(owner), version, asJSON(inputs))
+ AND cl.owner_id=$2 ORDER BY r.id FOR UPDATE OF r,cl`, OrganizeVersion, string(owner), version, kernel.JSON(inputs))
 	if err != nil {
 		return err
 	}
@@ -415,7 +416,7 @@ func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.I
 			// Keep older pointers terminal too. Supersession of a keeper also
 			// supersedes its earlier duplicates rather than silently preserving
 			// their old answers against the changed assertion.
-			ancestors, err := queryDocuments[string](ctx, tx, `WITH changed AS (
+			ancestors, err := kernel.QueryDocuments[string](ctx, tx, `WITH changed AS (
  UPDATE claims SET retired_by=$3,retired=CASE WHEN $4='superseded' THEN 'superseded' ELSE retired END WHERE owner_id=$1 AND retired_by=$2 RETURNING id)
  SELECT to_jsonb(id::text) FROM changed`, string(owner), string(old.Ref.ID), string(new.Ref.ID), edge.Kind)
 			if err != nil {

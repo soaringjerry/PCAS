@@ -22,6 +22,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -75,7 +76,7 @@ func deliveredFor(t *testing.T, s *Store, id string) map[string]json.RawMessage 
 func TestNotifyDeliveryAndRecheck(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Australia/Melbourne"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Australia/Melbourne"})})
 	now := time.Now().Add(time.Second)
 	t.Setenv("PCAS_PUBLIC_URL", "https://example.com")
 	notice := dueNotice(t, s, scope, now)

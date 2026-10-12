@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"log/slog"
 	"net/http"
@@ -16,6 +15,9 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
@@ -38,7 +40,7 @@ func ordinarySecretaryModel(t *testing.T, s *Store, handler http.HandlerFunc) {
 	s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "测试秘书", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free"}}}})
 }
 func secretaryModelReply(w http.ResponseWriter, value any) {
-	content := string(asJSON(value))
+	content := string(kernel.JSON(value))
 	if text, ok := value.(string); ok {
 		content = text
 	}
@@ -66,7 +68,7 @@ func TestSecretarySchedulesAndUpdatesRecentTask(t *testing.T) {
 			secretaryModelReply(w, fmt.Sprintf(`{"reply":"改好了。","actions":[{"op":"update","ref":"R1","set":{"due":"%s"}}]}`, testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Format("2006-01-02T15:04")))
 		}
 	})
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Name: "A"})
 	project := st.Projects[0].ID
 	req := turnRequest("周五下午三点给张三回邮件，算在 A 项目里；还有买牛奶")
@@ -137,7 +139,7 @@ func TestSecretaryRejectsUntrustedRefsAndLimitsActions(t *testing.T) {
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, payload) })
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "原事项"})
 	id := st.Tasks[0].ID
-	payload = secretaryOutput{Actions: []secretaryAction{{Op: "update", Ref: "T999", Set: map[string]json.RawMessage{"title": asJSON("伪造")}}, {Op: "update", Ref: id, Set: map[string]json.RawMessage{"title": asJSON("真实 UUID")}}, {Op: "update", Ref: "T1", Set: map[string]json.RawMessage{"status": asJSON("evil"), "notesAppend": asJSON("保留正常字段")}}, {Op: "create_task", Title: "新任务", Due: stringPointer("bad-date")}}}
+	payload = secretaryOutput{Actions: []secretaryAction{{Op: "update", Ref: "T999", Set: map[string]json.RawMessage{"title": kernel.JSON("伪造")}}, {Op: "update", Ref: id, Set: map[string]json.RawMessage{"title": kernel.JSON("真实 UUID")}}, {Op: "update", Ref: "T1", Set: map[string]json.RawMessage{"status": kernel.JSON("evil"), "notesAppend": kernel.JSON("保留正常字段")}}, {Op: "create_task", Title: "新任务", Due: stringPointer("bad-date")}}}
 	out := mustTurn(t, s, scope, turnRequest("改事项"))
 	if len(out.State.Tasks) != 2 || out.Turn.Receipts[0].Status != "skipped" || out.Turn.Receipts[1].Status != "skipped" {
 		t.Fatal(out)
@@ -184,7 +186,7 @@ func TestSecretaryFallbackPersistsOriginal(t *testing.T) {
 			if mode == "budget" {
 				s.models.Config.Providers[0].InputPerMillion = 1
 				s.models.Config.Providers[0].CostMode = ""
-				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": 0})})
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": 0})})
 			}
 			out := mustTurn(t, s, scope, req)
 			if out.Turn.Reply != "" || len(out.Turn.Cards) != 0 || len(out.Turn.Receipts) != 1 || out.Turn.Receipts[0].Op != "capture" || out.Turn.Receipts[0].ActionID != nil || out.Turn.Receipts[0].Undoable || len(out.State.Tasks) != 0 {
@@ -209,7 +211,7 @@ func TestSecretaryFallbackPersistsOriginal(t *testing.T) {
 			if replay.Turn.ID != out.Turn.ID {
 				t.Fatal("fallback not idempotent")
 			}
-			if oneOf(mode, "manual", "missing", "budget") && calls.Load() != 0 {
+			if kernel.OneOf(mode, "manual", "missing", "budget") && calls.Load() != 0 {
 				t.Fatal("called unavailable/over-budget model")
 			}
 		})
@@ -346,7 +348,7 @@ func TestDeskExtractionSkipsTaskAndIdea(t *testing.T) {
 		t.Fatal(err, st.Memories)
 	}
 	for _, c := range st.Candidates {
-		if oneOf(c.Kind, "task", "idea") {
+		if kernel.OneOf(c.Kind, "task", "idea") {
 			t.Fatal("duplicate desk candidate", c)
 		}
 	}
@@ -395,7 +397,7 @@ func TestSecretaryConcurrentRetryAndHTTPContract(t *testing.T) {
 	token := strings.Repeat("b", 64)
 	api := httpapi.New(s, s, httpapi.NewOwnerToken(token, scope.OwnerID), func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s})
 	send := func(method, path string, body any) *httptest.ResponseRecorder {
-		request := httptest.NewRequest(method, path, strings.NewReader(string(asJSON(body))))
+		request := httptest.NewRequest(method, path, strings.NewReader(string(kernel.JSON(body))))
 		request.Header.Set("Authorization", "Bearer "+token)
 		request.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -450,7 +452,7 @@ func TestSecretaryConcurrentRetryAndHTTPContract(t *testing.T) {
 func TestSecretaryActionMappingAndDateDefaults(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	var payload string
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, payload) })
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Name: "A"})
@@ -735,7 +737,7 @@ func TestSecretaryReceiptUndoneIsLiveOnHistoryAndReplay(t *testing.T) {
 		method, path string
 		body         any
 	}{{"GET", "/v1/desk/turns?conversationId=" + initial.ConversationID, nil}, {"POST", "/v1/desk/turn", req}} {
-		request := httptest.NewRequest(endpoint.method, endpoint.path, strings.NewReader(string(asJSON(endpoint.body))))
+		request := httptest.NewRequest(endpoint.method, endpoint.path, strings.NewReader(string(kernel.JSON(endpoint.body))))
 		request.Header.Set("Authorization", "Bearer "+token)
 		request.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()

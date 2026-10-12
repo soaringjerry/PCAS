@@ -434,7 +434,16 @@ Index progress and interactive work keep their declared capacity while other eve
 
 The existing [queue schema](../internal/postgres/migrations/001_memory.sql), [enqueue helper](../internal/postgres/sources.go), and [worker](../internal/worker/worker.go) supply the starting mechanism.
 The [handler map](../cmd/pcas/main.go) already names stage responses.
-Causal identities of queued work exist since migration `063_recorded_events.sql`. Events for committed data changes, centralized producer mappings, and chain limits are target work, not existing guarantees.
+Causal identities of queued work exist since migration `063_recorded_events.sql`.
+
+The causal chain has a limit since 2026-10-12 (`internal/postgres/event_limits.go`, migration `064_event_limits.sql`).
+
+| Item | Value | Basis | Overflow |
+|---|---|---|---|
+| Depth of a causal chain of queue jobs | 200 | The job history of the live instance on 2026-10-12: 166,049 jobs for 27,474 sources. The deepest real chain is the extraction of an imported conversation, where each segment queues the next. Of 1,447 conversations the longest had depth 36, and the 99th percentile was 10. The limit is about five times the deepest real chain. | A queued job above the limit is not run. It becomes `failed` with the code `chain_limit`, and it is counted as a failure of its stage in the background health. Its row, its root, and its depth stay. The owner's retry command queues it again after the cause is found. |
+| Retention of a recorded event | 90 days after its chain has no job that waits or runs | An event is evidence for the investigation of a chain. At the rate of the history above, 90 days are about 1.2 million rows. The jobs themselves are kept. | Removal runs once an hour and writes the count to the log. |
+
+Events for committed data changes, centralized producer mappings, and the other limits of the table above are target work, not existing guarantees.
 
 ## 8 State and Recovery Boundaries
 

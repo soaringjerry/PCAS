@@ -37,6 +37,9 @@ func (s *Store) claim(ctx context.Context, lease time.Duration, indexOnly bool) 
 	if err := s.expireExhaustedJobs(ctx); err != nil {
 		return nil, err
 	}
+	if err := s.applyEventLimits(ctx); err != nil {
+		return nil, err
+	}
 	var err error
 	var job worker.Job
 	var id, ownerID, recordID, token, kind string

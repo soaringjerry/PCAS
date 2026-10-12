@@ -111,3 +111,28 @@ func TestBriefAddsSourcesAndTheirContextUpToItsLimit(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+func TestTheMemoryPartOfABriefIsReplacedByItsByteRange(t *testing.T) {
+	before, old, after := "事项：虚构\n", "旧的记忆部分\n", "\n本次请求：拆成步骤"
+	run := workspace.Run{Prompt: "拆成步骤", Brief: before + old + after, MemoryContextRange: &[2]int{len(before), len(before) + len(old)}}
+	if HeavyTask(run) != "拆成步骤\n"+before {
+		t.Fatalf("%q", HeavyTask(run))
+	}
+	u := contextbuilder.UseContext{Supplemental: []workspace.Memory{{ID: "a", Version: 2, Trust: "confirmed", Text: "喜欢茶"}}}
+	RefreshMemory(&run, u)
+	section := "[a@2 / trust=confirmed] 喜欢茶\n"
+	if run.Brief != before+section+after || *run.MemoryContextRange != [2]int{len(before), len(before) + len(section)} {
+		t.Fatalf("%q %v", run.Brief, *run.MemoryContextRange)
+	}
+	// A second refresh replaces the part again; the request keeps its place.
+	RefreshMemory(&run, contextbuilder.UseContext{})
+	if run.Brief != before+after {
+		t.Fatalf("%q", run.Brief)
+	}
+	// A brief without a range gets the part at its end.
+	legacy := workspace.Run{Prompt: "p", Brief: "旧布局"}
+	RefreshMemory(&legacy, u)
+	if legacy.Brief != "旧布局"+section || legacy.MemoryContextRange != nil || HeavyTask(legacy) != "p" {
+		t.Fatalf("%q", legacy.Brief)
+	}
+}

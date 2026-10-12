@@ -19,6 +19,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/ownerstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/schedulestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -103,6 +104,7 @@ func TestDeputyGenerationRecoversWritesWithoutRepeatingPaidWork(t *testing.T) {
 				// A new process has no pending responses, model registry, or reviewer.
 				worker = &Store{DB: &kernel.DB{Pool: s.Pool}}
 				worker.Reader = &memoryread.Reader{DB: worker.DB}
+				worker.Sources = &sourcestore.Sources{DB: worker.DB}
 				worker.Items = &itemstore.Items{DB: worker.DB}
 				worker.Owners = &ownerstore.Owners{DB: worker.DB}
 				worker.Activity = &activitystore.Activity{DB: worker.DB}

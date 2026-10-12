@@ -12,6 +12,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -70,7 +71,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			return err
 		}
 
-		run := workspace.Run{DocumentVersions: []workspace.RunDocumentVersion{}, DocumentID: c.DocumentID, BaseVersion: c.BaseVersion, TargetHash: targetHash, SmokeID: smokeID(ctx), ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: kernel.Stamp()}
+		run := workspace.Run{DocumentVersions: []workspace.RunDocumentVersion{}, DocumentID: c.DocumentID, BaseVersion: c.BaseVersion, TargetHash: targetHash, SmokeID: actionlog.SmokeID(ctx), ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: kernel.Stamp()}
 		var brief deputy.Brief
 		projectID := item.ProjectID
 		var project *workspace.Item
@@ -347,7 +348,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 
 func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run, as, text, actionID string, auto bool) error {
 	if run.SmokeID != "" {
-		ctx = withSmoke(ctx, run.SmokeID)
+		ctx = actionlog.WithSmoke(ctx, run.SmokeID)
 	}
 	if err := deputy.CheckAdoption(*run, as, text); err != nil {
 		return err
@@ -1053,7 +1054,7 @@ func (s *Store) autoAdoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 
 func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run) error {
 	if run.SmokeID != "" {
-		ctx = withSmoke(ctx, run.SmokeID)
+		ctx = actionlog.WithSmoke(ctx, run.SmokeID)
 	}
 	item, err := itemstore.GetItem(ctx, tx, scope, run.ThingID)
 	if err != nil {
@@ -1072,8 +1073,8 @@ func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	}
 	id := string(memory.NewID())
 	ctx = kernel.WithActor(ctx, "assistant")
-	ctx = withActionLog(ctx, id, "worker", "", summary)
-	if err := beginActionLogTx(ctx, tx); err != nil {
+	ctx = actionlog.WithActionLog(ctx, id, "worker", "", summary)
+	if err := actionlog.BeginActionLogTx(ctx, tx); err != nil {
 		return err
 	}
 	if err := s.adoptRunTx(ctx, tx, scope, run, as, run.Output, id, true); err != nil {
@@ -1082,7 +1083,7 @@ func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if _, err := tx.Exec(ctx, "UPDATE agent_runs SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, kernel.JSON(run)); err != nil {
 		return err
 	}
-	return flushActionLog(ctx, tx, scope)
+	return actionlog.FlushActionLog(ctx, tx, scope)
 }
 
 // runNoticePrefix marks a notice that reports how handed-off work ended,

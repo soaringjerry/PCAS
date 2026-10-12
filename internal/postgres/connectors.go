@@ -15,6 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
 )
 
 const connectionColumns = `id::text,name,kind,url,token_env,interval_seconds,enabled,version,status,last_sync,next_sync,imported,error_code,gaps`
@@ -176,7 +177,7 @@ func (s *Store) importBatchTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	}
 	episodes := map[string]*episodeBatch{}
 	for _, r := range batch.Records {
-		result, err := s.ingestTx(ctx, tx, scope, archiveIngestRequest(namespace, r))
+		result, err := s.IngestTx(ctx, tx, scope, archiveIngestRequest(namespace, r))
 		if errors.Is(err, memory.ErrBlocked) {
 			out.Blocked++
 			continue
@@ -310,7 +311,7 @@ func (s *Store) linkEpisodeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 			if _, err := tx.Exec(ctx, "UPDATE memory_records SET version=$3,updated_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id, version); err != nil {
 				return err
 			}
-			if err := invalidateTx(ctx, tx, scope, id); err != nil {
+			if err := sourcestore.InvalidateTx(ctx, tx, scope, id); err != nil {
 				return err
 			}
 		}

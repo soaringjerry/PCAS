@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
@@ -325,18 +326,18 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 			}
 		}
 		if recordAction {
-			ctx = withActionLog(ctx, in.RequestID, "command", "", commandSummary(ctx, tx, scope, in))
+			ctx = actionlog.WithActionLog(ctx, in.RequestID, "command", "", commandSummary(ctx, tx, scope, in))
 			if in.Type == "undoAction" {
 				ctx = withUndoOf(ctx, in.ID)
 			}
-			if err := beginActionLogTx(ctx, tx); err != nil {
+			if err := actionlog.BeginActionLogTx(ctx, tx); err != nil {
 				return err
 			}
 		}
 		if err := s.commandTx(ctx, tx, scope, in); err != nil {
 			return err
 		}
-		if err := flushActionLog(ctx, tx, scope); err != nil {
+		if err := actionlog.FlushActionLog(ctx, tx, scope); err != nil {
 			return err
 		}
 		if _, err = tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {

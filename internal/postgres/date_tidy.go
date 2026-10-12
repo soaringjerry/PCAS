@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/currentstate/datereview"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/prompts"
@@ -243,14 +244,14 @@ func (u dateReviewUnit) Event(outcome, reason string, count int) error {
 
 func (u dateReviewUnit) Act(label string, fn func(datereview.Action) error) (string, error) {
 	id := string(memory.NewID())
-	actionCtx := withActionLog(kernel.WithActor(u.ctx, "ai"), id, "background_tidy", "", label)
-	if err := beginActionLogTx(actionCtx, u.tx); err != nil {
+	actionCtx := actionlog.WithActionLog(kernel.WithActor(u.ctx, "ai"), id, "background_tidy", "", label)
+	if err := actionlog.BeginActionLogTx(actionCtx, u.tx); err != nil {
 		return "", err
 	}
 	if err := fn(dateReviewAction{ctx: actionCtx, unit: u, id: id}); err != nil {
 		return "", err
 	}
-	return id, flushActionLog(actionCtx, u.tx, u.scope)
+	return id, actionlog.FlushActionLog(actionCtx, u.tx, u.scope)
 }
 
 func (u dateReviewUnit) RecordDecision(class string, input datereview.Input, output datereview.Output, itemID, actionID *string) error {

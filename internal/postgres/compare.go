@@ -15,6 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -424,7 +425,7 @@ func (s *Store) writeComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.I
 			}
 			if edge.Kind == "superseded" {
 				for _, id := range append(ancestors, string(old.Ref.ID)) {
-					if err := invalidateTx(ctx, tx, memory.Scope{OwnerID: owner, IsOwner: true}, id); err != nil {
+					if err := sourcestore.InvalidateTx(ctx, tx, memory.Scope{OwnerID: owner, IsOwner: true}, id); err != nil {
 						return err
 					}
 				}

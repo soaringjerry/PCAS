@@ -9,6 +9,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/claim"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
+	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -101,7 +102,7 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 			WHERE NOT EXISTS(SELECT 1 FROM evidence WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 AND target_id=$4 AND target_version=$5 AND stance='supports')`, string(scope.OwnerID), string(in.Source.ID), in.Source.Version, prior, version, locator, in.Acquisition); err != nil {
 			return result, err
 		}
-		if err := invalidateTx(ctx, tx, scope, prior); err != nil {
+		if err := sourcestore.InvalidateTx(ctx, tx, scope, prior); err != nil {
 			return result, err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage)
@@ -172,7 +173,7 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		return result, err
 	}
 	if in.Actor == "user" {
-		receipt, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "memory-input", ExternalID: string(id), ExternalVersion: "1", Title: "用户确认的记忆", Text: in.Text, MediaType: "text/plain"})
+		receipt, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "memory-input", ExternalID: string(id), ExternalVersion: "1", Title: "用户确认的记忆", Text: in.Text, MediaType: "text/plain"})
 		if err != nil {
 			return result, err
 		}

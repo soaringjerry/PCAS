@@ -9,20 +9,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-type smokeKey struct{}
-
-func withSmoke(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, smokeKey{}, id)
-}
-func smokeID(ctx context.Context) string {
-	id, _ := ctx.Value(smokeKey{}).(string)
-	return id
-}
 func smokeLockTx(ctx context.Context, tx pgx.Tx, owner, id string) error {
 	return secretaryTryLock(ctx, tx, "desk-smoke:"+owner+":"+id)
 }
@@ -88,7 +80,7 @@ func (s *Store) registerSmokeRequest(ctx context.Context, scope memory.Scope, re
 }
 
 func lockSmokeTurnTx(ctx context.Context, tx pgx.Tx, owner string) error {
-	id := smokeID(ctx)
+	id := actionlog.SmokeID(ctx)
 	if id == "" {
 		return nil
 	}
@@ -103,57 +95,16 @@ func lockSmokeTurnTx(ctx context.Context, tx pgx.Tx, owner string) error {
 	return err
 }
 
-// Only server-collected changes may choose these SQL table names.
-func smokeTable(table string) bool {
-	return kernel.OneOf(table, "work_items", "work_documents", "agent_runs", "training_samples")
-}
-func smokeDocumentHashTx(ctx context.Context, tx pgx.Tx, owner, table, id string) (*string, error) {
-	if !smokeTable(table) {
-		return nil, memory.ErrInvalid
-	}
-	var hash string
-	err := tx.QueryRow(ctx, "SELECT encode(sha256(convert_to(document::text,'UTF8')),'hex') FROM "+table+" WHERE owner_id=$1 AND id=$2", owner, id).Scan(&hash)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	return &hash, err
-}
-func recordSmokeActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, actionID string, changes []actionChange) error {
-	id := smokeID(ctx)
-	if id == "" {
-		return nil
-	}
-	owner := string(scope.OwnerID)
-	var order int64
-	if err := tx.QueryRow(ctx, "SELECT action_order FROM action_log WHERE owner_id=$1 AND id=$2", owner, actionID).Scan(&order); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, "INSERT INTO desk_smoke_actions(owner_id,action_id,smoke_id) VALUES($1,$2,$3)", owner, actionID, id); err != nil {
-		return err
-	}
-	for _, c := range changes {
-		hash, err := smokeDocumentHashTx(ctx, tx, owner, c.Table, c.ID)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO desk_smoke_changes(owner_id,smoke_id,table_name,record_id,before_document,after_hash,action_order)
-   VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(owner_id,smoke_id,table_name,record_id)
-   DO UPDATE SET after_hash=excluded.after_hash,action_order=excluded.action_order`, owner, id, c.Table, c.ID, c.Before, hash, order); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-func refreshSmokeChangesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, changes []actionChange) error {
-	if smokeID(ctx) == "" {
+func refreshSmokeChangesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, changes []actionlog.ActionChange) error {
+	if actionlog.SmokeID(ctx) == "" {
 		return nil
 	}
 	for _, c := range changes {
-		hash, err := smokeDocumentHashTx(ctx, tx, string(scope.OwnerID), c.Table, c.ID)
+		hash, err := actionlog.SmokeDocumentHashTx(ctx, tx, string(scope.OwnerID), c.Table, c.ID)
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, "UPDATE desk_smoke_changes SET after_hash=$5 WHERE owner_id=$1 AND smoke_id=$2 AND table_name=$3 AND record_id=$4", string(scope.OwnerID), smokeID(ctx), c.Table, c.ID, hash); err != nil {
+		if _, err := tx.Exec(ctx, "UPDATE desk_smoke_changes SET after_hash=$5 WHERE owner_id=$1 AND smoke_id=$2 AND table_name=$3 AND record_id=$4", string(scope.OwnerID), actionlog.SmokeID(ctx), c.Table, c.ID, hash); err != nil {
 			return err
 		}
 	}
@@ -171,7 +122,7 @@ func (s *Store) CleanupSmoke(ctx context.Context, scope memory.Scope, id string)
 		return memory.ErrInvalid
 	}
 	id = strings.ToLower(id)
-	ctx = withSmoke(ctx, id)
+	ctx = actionlog.WithSmoke(ctx, id)
 	if _, err := s.Snapshot(ctx, scope); err != nil {
 		return err
 	}
@@ -210,7 +161,7 @@ func (s *Store) CleanupSmoke(ctx context.Context, scope memory.Scope, id string)
 				rows.Close()
 				return err
 			}
-			if !smokeTable(c.table) {
+			if !actionlog.SmokeTable(c.table) {
 				rows.Close()
 				return memory.ErrInvalid
 			}
@@ -247,7 +198,7 @@ func (s *Store) CleanupSmoke(ctx context.Context, scope memory.Scope, id string)
 				// it. Deletion fences its late completion; usage accounting stays intact.
 				continue
 			}
-			hash, e := smokeDocumentHashTx(ctx, tx, owner, c.table, c.id)
+			hash, e := actionlog.SmokeDocumentHashTx(ctx, tx, owner, c.table, c.id)
 			if e != nil {
 				return e
 			}

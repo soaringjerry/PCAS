@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -377,7 +378,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 		return out, err
 	}
 	if req.SmokeID != "" {
-		ctx = withSmoke(ctx, req.SmokeID)
+		ctx = actionlog.WithSmoke(ctx, req.SmokeID)
 	}
 	text := strings.TrimSpace(req.Text)
 	// Finish accepted input durably even when the caller disconnects. Model
@@ -618,7 +619,7 @@ func (t *secretarySession) SaveSentence(ctx context.Context) error {
 	s := t.secretaryAsk
 	original := workspace.SourceRef{Label: "秘书原话", Excerpt: s.req.Text, At: kernel.Stamp()}
 	if t.text != "" && s.req.SmokeID == "" {
-		ref, err := s.store.ingestTx(ctx, s.tx, s.scope, memory.IngestRequest{Connector: "desk", ExternalID: s.req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: s.req.Text, MediaType: "text/plain"})
+		ref, err := s.store.IngestTx(ctx, s.tx, s.scope, memory.IngestRequest{Connector: "desk", ExternalID: s.req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: s.req.Text, MediaType: "text/plain"})
 		if err != nil {
 			return err
 		}
@@ -712,7 +713,7 @@ func (t *secretaryTurn) Cards(ctx context.Context, answer secretaryOutput, sent 
 func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[string]workspace.Item) (secretary.ActionOutcome, error) {
 	s, c := t.store, t.c
 	out := secretary.ActionOutcome{ActionID: string(memory.NewID())}
-	actionCtx := withActionLog(kernel.WithActor(WithMemoryTier(ctx, c.Tier), "secretary"), out.ActionID, "desk", t.turnID, "秘书："+a.Op)
+	actionCtx := actionlog.WithActionLog(kernel.WithActor(WithMemoryTier(ctx, c.Tier), "secretary"), out.ActionID, "desk", t.turnID, "秘书："+a.Op)
 	projectReceipts := []workspace.DeskReceipt{}
 	actionCtx = context.WithValue(actionCtx, secretaryCreationKey{}, t.original)
 	actionCtx = context.WithValue(actionCtx, secretaryProjectReceiptsKey{}, &projectReceipts)
@@ -727,7 +728,7 @@ func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[
 	if err != nil {
 		return out, err
 	}
-	if err = beginActionLogTx(actionCtx, actionTx); err != nil {
+	if err = actionlog.BeginActionLogTx(actionCtx, actionTx); err != nil {
 		_ = actionTx.Rollback(ctx)
 		return out, err
 	}
@@ -736,8 +737,8 @@ func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[
 		return out, actionTx.Rollback(ctx)
 	}
 	// The summary and receipt describe the actual persisted result.
-	actionCtx = withActionLog(actionCtx, out.ActionID, "desk", t.turnID, out.Receipt.Text)
-	if err = flushActionLog(actionCtx, actionTx, t.scope); err != nil {
+	actionCtx = actionlog.WithActionLog(actionCtx, out.ActionID, "desk", t.turnID, out.Receipt.Text)
+	if err = actionlog.FlushActionLog(actionCtx, actionTx, t.scope); err != nil {
 		_ = actionTx.Rollback(ctx)
 		return out, err
 	}

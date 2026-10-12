@@ -22,6 +22,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/ownerstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/schedulestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 )
 
@@ -32,6 +33,7 @@ var migrations embed.FS
 // storage packages share.
 type Store struct {
 	*kernel.DB
+	*sourcestore.Sources
 	*itemstore.Items
 	*ownerstore.Owners
 	*activitystore.Activity
@@ -86,7 +88,7 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		return nil, fmt.Errorf("database unavailable")
 	}
 	db := &kernel.DB{Pool: pool}
-	return &Store{DB: db, Items: &itemstore.Items{DB: db}, Owners: &ownerstore.Owners{DB: db}, Activity: &activitystore.Activity{DB: db}, Schedules: &schedulestore.Schedules{DB: db}, Usage: &usagelog.Usage{DB: db}, Memory: &memorystore.Memory{DB: db}, Reader: &memoryread.Reader{DB: db}, secretarySlots: make(chan struct{}, config.MaxConns-1)}, nil
+	return &Store{DB: db, Sources: &sourcestore.Sources{DB: db}, Items: &itemstore.Items{DB: db}, Owners: &ownerstore.Owners{DB: db}, Activity: &activitystore.Activity{DB: db}, Schedules: &schedulestore.Schedules{DB: db}, Usage: &usagelog.Usage{DB: db}, Memory: &memorystore.Memory{DB: db}, Reader: &memoryread.Reader{DB: db}, secretarySlots: make(chan struct{}, config.MaxConns-1)}, nil
 }
 
 func (s *Store) Close()                         { s.Pool.Close() }
@@ -171,3 +173,5 @@ func (s *Store) CheckSchema(ctx context.Context) error {
 	}
 	return nil
 }
+
+var _ memory.Repository = (*Store)(nil)

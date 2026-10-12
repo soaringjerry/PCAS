@@ -18,6 +18,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -410,7 +411,7 @@ func TestSmokeRetiredTicketCannotCreateIncompleteCandidate(t *testing.T) {
 	req := turnRequest("虚构已经过期的检查安排")
 	req.SmokeID = string(memory.NewID())
 	req.ConversationID = &req.SmokeID
-	ctx, cancel := context.WithTimeout(withSmoke(context.Background(), req.SmokeID), 10*time.Second)
+	ctx, cancel := context.WithTimeout(actionlog.WithSmoke(context.Background(), req.SmokeID), 10*time.Second)
 	defer cancel()
 	if err := s.registerSmokeRequest(ctx, scope, req); err != nil {
 		t.Fatal(err)

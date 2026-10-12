@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
@@ -81,8 +82,8 @@ func TestUndoDocumentsAndFirstBefore(t *testing.T) {
 	}
 	action := string(memory.NewID())
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		logCtx := withActionLog(ctx, action, "desk", "", "两次更新")
-		if err := beginActionLogTx(logCtx, tx); err != nil {
+		logCtx := actionlog.WithActionLog(ctx, action, "desk", "", "两次更新")
+		if err := actionlog.BeginActionLogTx(logCtx, tx); err != nil {
 			return err
 		}
 		if err := s.commandTx(logCtx, tx, scope, workspace.Command{Type: "renameThing", ID: thing, Title: "第一次"}); err != nil {
@@ -91,7 +92,7 @@ func TestUndoDocumentsAndFirstBefore(t *testing.T) {
 		if err := s.commandTx(logCtx, tx, scope, workspace.Command{Type: "renameThing", ID: thing, Title: "第二次"}); err != nil {
 			return err
 		}
-		return flushActionLog(logCtx, tx, scope)
+		return actionlog.FlushActionLog(logCtx, tx, scope)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -131,14 +132,14 @@ func TestUndoQueuedDelegationAndStartedWork(t *testing.T) {
 		id := string(memory.NewID())
 		action := string(memory.NewID())
 		err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-			logged := withActionLog(ctx, action, "desk", "", "写方案")
-			if err := beginActionLogTx(logged, tx); err != nil {
+			logged := actionlog.WithActionLog(ctx, action, "desk", "", "写方案")
+			if err := actionlog.BeginActionLogTx(logged, tx); err != nil {
 				return err
 			}
 			if err := s.commandTx(logged, tx, scope, workspace.Command{Type: "delegateTask", ID: id, Title: "写方案", Prompt: "写方案", AgentID: "model"}); err != nil {
 				return err
 			}
-			return flushActionLog(logged, tx, scope)
+			return actionlog.FlushActionLog(logged, tx, scope)
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -249,14 +250,14 @@ func TestDeletionExpiresItemAndDocumentSnapshots(t *testing.T) {
 	}
 	docID, docAction := string(memory.NewID()), string(memory.NewID())
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		logged := withActionLog(ctx, docAction, "worker", "", "文档审计摘要")
-		if err := beginActionLogTx(logged, tx); err != nil {
+		logged := actionlog.WithActionLog(ctx, docAction, "worker", "", "文档审计摘要")
+		if err := actionlog.BeginActionLogTx(logged, tx); err != nil {
 			return err
 		}
 		if err := saveDoc(logged, tx, scope, workspace.Doc{ID: docID, ThingID: itemID, RunID: run.ID, Title: "生成的文档", Body: "要删除的私密资料", By: "ai", CreatedAt: kernel.Stamp(), UpdatedAt: kernel.Stamp()}); err != nil {
 			return err
 		}
-		return flushActionLog(logged, tx, scope)
+		return actionlog.FlushActionLog(logged, tx, scope)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -382,11 +383,11 @@ func TestActionSnapshotRetentionKeepsAuditMetadata(t *testing.T) {
 	}
 	noOp := string(memory.NewID())
 	if err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		logged := withActionLog(ctx, noOp, "desk", "", "无变更")
-		if err := beginActionLogTx(logged, tx); err != nil {
+		logged := actionlog.WithActionLog(ctx, noOp, "desk", "", "无变更")
+		if err := actionlog.BeginActionLogTx(logged, tx); err != nil {
 			return err
 		}
-		return flushActionLog(logged, tx, scope)
+		return actionlog.FlushActionLog(logged, tx, scope)
 	}); err != nil {
 		t.Fatal(err)
 	}

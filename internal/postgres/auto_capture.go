@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -84,14 +85,14 @@ func (s *Store) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		actionID := string(memory.NewID())
 		item.Creation = &workspace.ItemCreation{By: "background_extraction", ActionID: actionID, Source: &v.Source}
 		label := map[string]string{"task": "待办", "idea": "想法"}[v.Kind]
-		actionCtx := withActionLog(kernel.WithActor(ctx, "ai"), actionID, "background_extraction", "", "建了"+label+"「"+v.Text+"」")
-		if err := beginActionLogTx(actionCtx, tx); err != nil {
+		actionCtx := actionlog.WithActionLog(kernel.WithActor(ctx, "ai"), actionID, "background_extraction", "", "建了"+label+"「"+v.Text+"」")
+		if err := actionlog.BeginActionLogTx(actionCtx, tx); err != nil {
 			return err
 		}
 		if err := itemstore.SaveItem(actionCtx, tx, scope, item); err != nil {
 			return err
 		}
-		if err := flushActionLog(actionCtx, tx, scope); err != nil {
+		if err := actionlog.FlushActionLog(actionCtx, tx, scope); err != nil {
 			return err
 		}
 		v.State = "accepted"

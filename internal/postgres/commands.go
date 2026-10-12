@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/ownerstore"
@@ -71,7 +72,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if err := kernel.RequireText(c.Text); err != nil {
 			return err
 		}
-		in, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "capture", ExternalID: c.RequestID, ExternalVersion: "1", Title: "快速记录", Text: c.Text, MediaType: "text/plain"})
+		in, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "capture", ExternalID: c.RequestID, ExternalVersion: "1", Title: "快速记录", Text: c.Text, MediaType: "text/plain"})
 		if err != nil {
 			return err
 		}
@@ -93,8 +94,8 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		origin := itemcommand.Origin{Actor: kernel.ActorFromContext(ctx), Collected: ctx.Value(secretaryHistoryKey{}) != nil}
 		if original, ok := ctx.Value(secretaryCreationKey{}).(workspace.SourceRef); ok {
 			origin.SecretarySource = &original
-			if log, ok := ctx.Value(actionLogKey{}).(actionLog); ok {
-				origin.ActionID = log.id
+			if log, ok := ctx.Value(actionlog.ActionLogKey{}).(actionlog.ActionLog); ok {
+				origin.ActionID = log.ID
 			}
 		}
 		item, err := itemcommand.New(ctx, c, origin, itemEffects{tx: tx, scope: scope})
@@ -346,11 +347,11 @@ func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	if item.Kind == "idea" {
 		item.Evolution = append(item.Evolution, revision)
 	}
-	if smokeID(ctx) != "" {
+	if actionlog.SmokeID(ctx) != "" {
 		return itemstore.SaveItem(ctx, tx, scope, item)
 	}
 	// Action records remain authoritative for execution; memory retains a versioned receipt.
-	source, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "actions", ExternalID: item.ID, ExternalVersion: fmt.Sprint(item.Version), Title: item.Title, Text: string(kernel.JSON(item)), MediaType: "text/plain"})
+	source, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "actions", ExternalID: item.ID, ExternalVersion: fmt.Sprint(item.Version), Title: item.Title, Text: string(kernel.JSON(item)), MediaType: "text/plain"})
 	if err != nil {
 		return err
 	}

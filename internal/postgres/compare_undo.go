@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -71,7 +72,7 @@ func restoreMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id stri
 	if err != nil {
 		return err
 	}
-	log, ok := ctx.Value(actionLogKey{}).(actionLog)
+	log, ok := ctx.Value(actionlog.ActionLogKey{}).(actionlog.ActionLog)
 	if !ok {
 		return memory.ErrInvalid
 	}
@@ -79,11 +80,11 @@ func restoreMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id stri
 	// protection independently, so expiration never silently retires a restored
 	// memory again. This done marker carries IDs only and is not worker work.
 	if _, err := tx.Exec(ctx, `INSERT INTO background_markers(owner_id,record_id,record_version,stage)
- VALUES($1,$2,$3,$4)`, string(scope.OwnerID), id, before.Version, fmt.Sprintf("%s:%d:restored:%s", CompareStage, CompareVersion, log.id)); err != nil {
+ VALUES($1,$2,$3,$4)`, string(scope.OwnerID), id, before.Version, fmt.Sprintf("%s:%d:restored:%s", CompareStage, CompareVersion, log.ID)); err != nil {
 		return err
 	}
 	changes := kernel.JSON([]map[string]any{{"table": "claim_retirement", "id": id, "before": before, "afterHash": retirementFingerprint(after), "rule": CompareVersion}})
-	if _, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'command','恢复退出的记忆',$3)", string(scope.OwnerID), log.id, changes); err != nil {
+	if _, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'command','恢复退出的记忆',$3)", string(scope.OwnerID), log.ID, changes); err != nil {
 		return err
 	}
 	return nil

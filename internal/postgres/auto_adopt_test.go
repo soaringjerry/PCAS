@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
@@ -271,7 +272,7 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 				if source != "worker" || summary != tc.summary {
 					t.Fatalf("action=%s %s", source, summary)
 				}
-				var entries []actionChange
+				var entries []actionlog.ActionChange
 				if err := json.Unmarshal(changes, &entries); err != nil {
 					t.Fatal(err)
 				}

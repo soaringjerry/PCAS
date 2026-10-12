@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/soaringjerry/PCAS/internal/input/attachment"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -76,7 +77,7 @@ func (s *Store) deskAttachmentReceiptTx(ctx context.Context, tx pgx.Tx, scope me
 	actionID, sourceID := string(memory.NewID()), string(a.Ref.ID)
 	// A source receipt uses the regular action ID, expiry and undo endpoint; its
 	// narrowly typed change deletes the source through normal propagation.
-	changes := []actionChange{{Table: "source_attachments", ID: sourceID, Before: kernel.JSON(a.Ref)}}
+	changes := []actionlog.ActionChange{{Table: "source_attachments", ID: sourceID, Before: kernel.JSON(a.Ref)}}
 	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes) VALUES($1,$2,'desk',$3,$4,$5)", string(scope.OwnerID), actionID, turn, text, kernel.JSON(changes))
 	return workspace.DeskReceipt{ActionID: &actionID, SourceID: &sourceID, SourceVersion: a.Ref.Version, Op: "attachment", Text: text, Undoable: true, Status: "done"}, err
 }

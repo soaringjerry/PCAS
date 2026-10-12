@@ -20,6 +20,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -1291,7 +1292,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 		} else {
 			dependencies = c.Dependencies
 			if text != "" {
-				if _, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk", ExternalID: req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: req.Text, MediaType: "text/plain"}); err != nil {
+				if _, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk", ExternalID: req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: req.Text, MediaType: "text/plain"}); err != nil {
 					return err
 				}
 			}
@@ -1317,12 +1318,12 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 					continue
 				}
 				actionID := string(memory.NewID())
-				actionCtx := withActionLog(kernel.WithActor(ctx, "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
+				actionCtx := actionlog.WithActionLog(kernel.WithActor(ctx, "secretary"), actionID, "desk", out.Turn.ID, "秘书："+a.Op)
 				actionTx, err := tx.Begin(ctx)
 				if err != nil {
 					return err
 				}
-				if err = beginActionLogTx(actionCtx, actionTx); err != nil {
+				if err = actionlog.BeginActionLogTx(actionCtx, actionTx); err != nil {
 					_ = actionTx.Rollback(ctx)
 					return err
 				}
@@ -1338,8 +1339,8 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 					}
 				} else {
 					// The summary and receipt describe the actual persisted result.
-					actionCtx = withActionLog(actionCtx, actionID, "desk", out.Turn.ID, receipt.Text)
-					if err = flushActionLog(actionCtx, actionTx, scope); err != nil {
+					actionCtx = actionlog.WithActionLog(actionCtx, actionID, "desk", out.Turn.ID, receipt.Text)
+					if err = actionlog.FlushActionLog(actionCtx, actionTx, scope); err != nil {
 						_ = actionTx.Rollback(ctx)
 						return err
 					}

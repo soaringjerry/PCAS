@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -462,116 +461,23 @@ func (s *Store) DeskTurn(ctx context.Context, scope memory.Scope, req workspace.
 				return err
 			}
 		}
-		timing.beginPrepare()
-		c, contextErr := s.secretaryContextTx(ctx, tx, scope, req, conversationID)
-		timing.Tier = c.Tier
-		for _, a := range attachments {
-			if a.Context != "" {
-				c.AttachmentContext += a.Context + "\n"
-				c.Dependencies = append(c.Dependencies, a.Ref)
-			}
+		session := &secretarySession{
+			secretaryAsk:  &secretaryAsk{store: s, tx: tx, scope: scope, req: req, turnID: out.Turn.ID, requestCtx: requestCtx, timing: timing},
+			secretaryTurn: &secretaryTurn{store: s, tx: tx, scope: scope, req: req, turnID: out.Turn.ID},
+			conversation:  conversationID, attachments: attachments, text: text, started: turnStarted,
 		}
-		failureStage := "context"
-		if captureOnly {
-			contextErr = errors.New("secretary turn incomplete")
-			failureStage = "order"
-		}
-		out.Turn.Agent = c.Agent.Name
-		var answer secretaryOutput
-		var selfcheckErr error
-		selfcheckAttempted := false
-		generationAttempted := false
-		sent := map[string]workspace.Memory{}
-		if contextErr == nil {
-			var prompt string
-			prompt, sent, contextErr = s.secretaryPrompt(ctx, tx, scope, req, &c)
-			if contextErr == nil {
-				failureStage = "verify"
-				contextErr = s.checkSecretaryUseContextTx(ctx, tx, scope, c)
-			}
-			if contextErr == nil {
-				state := &secretary.Asking{Tier: c.Tier, Use: c.Use, Sent: sent, Input: prompt, Dependencies: c.Dependencies, Text: req.Text, Location: deskLocation(c.Settings), Started: turnStarted}
-				if item, ok := c.Aliases["THIS"]; ok {
-					state.This = &item
-				}
-				model := &secretaryAsk{store: s, tx: tx, scope: scope, req: req, c: &c, turnID: out.Turn.ID, requestCtx: requestCtx, timing: timing}
-				asked, err := secretary.Ask(ctx, model, state, secretary.Limits{Model: secretaryModelTimeout, HeavyReader: heavyReaderBudget, Total: heavyUseTimeout})
-				model.sync(state)
-				if err != nil {
-					return err
-				}
-				generationAttempted, selfcheckAttempted, selfcheckErr = asked.Generated, asked.Checked, asked.CheckFailure
-				answer, contextErr, failureStage = asked.Answer, asked.Failure, asked.Stage
-			}
-		}
-		timing.beginWrite(c.Tier)
-		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
+		conducted, err := secretary.Conduct(ctx, session, secretary.Conducting{Unordered: captureOnly, HasText: text != "", CheckOnly: req.SmokeID != "",
+			Limits: secretary.Limits{Model: secretaryModelTimeout, HeavyReader: heavyReaderBudget, Total: heavyUseTimeout}})
+		if err != nil {
 			return err
 		}
-		if contextErr == nil {
-			failureStage = "verify"
-			contextErr = s.checkSecretaryActionTargetsTx(ctx, tx, scope, c, answer)
-		}
-		if selfcheckAttempted {
-			application, reason := secretary.SelfcheckApplication(selfcheckErr, contextErr)
-			if selfcheckErr != nil {
-				if err := stageEventTx(ctx, tx, scope.OwnerID, "selfcheck", "failure", reason, 1); err != nil {
-					return err
-				}
-				if contextErr == nil {
-					out.Turn.Receipts = append(out.Turn.Receipts, secretary.SelfcheckSkipped(selfcheckErr))
-				}
-			}
-			if err := (interactiveCalls{store: s}).recordApplicationTx(ctx, tx, scope.OwnerID, memory.ID(req.RequestID), "selfcheck", application, reason); err != nil {
-				return err
-			}
-		}
-		if generationAttempted {
-			application, reason := secretary.AnswerApplication(failureStage, contextErr)
-			if err := (interactiveCalls{store: s}).recordApplicationTx(ctx, tx, scope.OwnerID, memory.ID(req.RequestID), "answer", application, reason); err != nil {
-				return err
-			}
-		}
+		c := *session.c
+		out.Turn.Agent, out.Turn.Reply, out.Turn.Ask = conducted.Agent, conducted.Reply, conducted.Ask
+		out.Turn.Receipts = append(out.Turn.Receipts, conducted.Receipts...)
 		dependencies := []memory.Ref{}
-		if contextErr != nil {
-			slog.WarnContext(ctx, "secretary capture fallback", "stage", failureStage, "error_type", secretary.ErrorType(failureStage, contextErr))
-			receiptText := secretary.CaptureReceipt(failureStage, contextErr, captureOnly, text != "")
-			if captureOnly {
-				if text != "" && req.SmokeID == "" {
-					if err := s.captureIncompleteSecretaryTurn(ctx, tx, scope, req.RequestID, req.Text); err != nil {
-						return err
-					}
-				}
-			} else if text != "" && req.SmokeID == "" {
-				if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "capture", RequestID: req.RequestID, Text: req.Text}); err != nil {
-					return err
-				}
-			}
-			out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "capture", Text: receiptText, Status: "done"})
-		} else {
+		if conducted.Finished {
+			out.Turn.Cards = conducted.Cards
 			dependencies = c.Dependencies
-			original := workspace.SourceRef{Label: "秘书原话", Excerpt: req.Text, At: stamp()}
-			if text != "" && req.SmokeID == "" {
-				ref, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk", ExternalID: req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: req.Text, MediaType: "text/plain"})
-				if err != nil {
-					return err
-				}
-				original.SourceID = string(ref.ID)
-				original.Version = ref.Version
-			}
-			in := secretary.Answer{Output: answer, Sent: sent, Aliases: c.Aliases, KeepsSentence: text != "" && req.SmokeID == ""}
-			if c.Use.Coverage != nil {
-				in.NotRead, in.ReaderNotices = c.Use.Coverage.Skipped, c.Use.Coverage.Notices
-			}
-			if len(c.History) > 0 {
-				in.Last = &c.History[len(c.History)-1]
-			}
-			applied, err := secretary.Apply(ctx, &secretaryTurn{store: s, tx: tx, scope: scope, req: req, c: &c, turnID: out.Turn.ID, original: original, sent: sent}, in)
-			if err != nil {
-				return err
-			}
-			out.Turn.Reply, out.Turn.Ask, out.Turn.Cards = applied.Reply, applied.Ask, applied.Cards
-			out.Turn.Receipts = append(out.Turn.Receipts, applied.Receipts...)
 		}
 		for _, a := range attachments {
 			receipt, err := s.deskAttachmentReceiptTx(ctx, tx, scope, out.Turn.ID, a)
@@ -609,6 +515,108 @@ func pointerValueOrNull(v *string) any {
 		return nil
 	}
 	return *v
+}
+
+// secretarySession is one turn in its place in the conversation. It holds
+// the context of the turn and gives the turn its reads, its model calls, and
+// its writes in the transaction of the turn.
+type secretarySession struct {
+	*secretaryAsk
+	*secretaryTurn
+	c            *secretaryContext
+	conversation string
+	attachments  []deskAttachment
+	text         string
+	started      time.Time
+	input        string
+}
+
+func (t *secretarySession) Context(ctx context.Context) (secretary.View, error) {
+	s := t.secretaryAsk
+	s.timing.beginPrepare()
+	c, err := s.store.secretaryContextTx(ctx, s.tx, s.scope, s.req, t.conversation)
+	s.timing.Tier = c.Tier
+	for _, a := range t.attachments {
+		if a.Context != "" {
+			c.AttachmentContext += a.Context + "\n"
+			c.Dependencies = append(c.Dependencies, a.Ref)
+		}
+	}
+	t.c, t.secretaryAsk.c, t.secretaryTurn.c = &c, &c, &c
+	t.secretaryTurn.sent = map[string]workspace.Memory{}
+	view := secretary.View{Agent: c.Agent.Name, Aliases: c.Aliases}
+	if len(c.History) > 0 {
+		view.Last = &c.History[len(c.History)-1]
+	}
+	return view, err
+}
+
+func (t *secretarySession) Input(ctx context.Context) (*secretary.Asking, string, error) {
+	s, c := t.secretaryAsk, t.c
+	prompt, sent, err := s.store.secretaryPrompt(ctx, s.tx, s.scope, s.req, c)
+	if err != nil {
+		return nil, "context", err
+	}
+	t.secretaryTurn.sent = sent
+	if err := s.store.checkSecretaryUseContextTx(ctx, s.tx, s.scope, *c); err != nil {
+		return nil, "verify", err
+	}
+	state := &secretary.Asking{Tier: c.Tier, Use: c.Use, Sent: sent, Input: prompt, Dependencies: c.Dependencies, Text: s.req.Text, Location: deskLocation(c.Settings), Started: t.started}
+	if item, ok := c.Aliases["THIS"]; ok {
+		state.This = &item
+	}
+	return state, "verify", nil
+}
+
+func (t *secretarySession) Asked(state *secretary.Asking) { t.secretaryAsk.sync(state) }
+
+func (t *secretarySession) BeginWrite(ctx context.Context) error {
+	s := t.secretaryAsk
+	s.timing.beginWrite(t.c.Tier)
+	_, err := s.tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(s.scope.OwnerID))
+	return err
+}
+
+func (t *secretarySession) VerifyTargets(ctx context.Context, answer secretaryOutput) error {
+	s := t.secretaryAsk
+	return s.store.checkSecretaryActionTargetsTx(ctx, s.tx, s.scope, *t.c, answer)
+}
+
+func (t *secretarySession) CheckFailed(ctx context.Context, reason string) error {
+	s := t.secretaryAsk
+	return stageEventTx(ctx, s.tx, s.scope.OwnerID, "selfcheck", "failure", reason, 1)
+}
+
+func (t *secretarySession) RecordApplication(ctx context.Context, stage, application, reason string) error {
+	s := t.secretaryAsk
+	return (interactiveCalls{store: s.store}).recordApplicationTx(ctx, s.tx, s.scope.OwnerID, memory.ID(s.req.RequestID), stage, application, reason)
+}
+
+// A check-only turn and a turn without text keep nothing.
+func (t *secretarySession) KeepSentence(ctx context.Context, unordered bool) error {
+	s := t.secretaryAsk
+	if t.text == "" || s.req.SmokeID != "" {
+		return nil
+	}
+	if unordered {
+		return s.store.captureIncompleteSecretaryTurn(ctx, s.tx, s.scope, s.req.RequestID, s.req.Text)
+	}
+	return s.store.commandTx(ctx, s.tx, s.scope, workspace.Command{Type: "capture", RequestID: s.req.RequestID, Text: s.req.Text})
+}
+
+func (t *secretarySession) SaveSentence(ctx context.Context) error {
+	s := t.secretaryAsk
+	original := workspace.SourceRef{Label: "秘书原话", Excerpt: s.req.Text, At: stamp()}
+	if t.text != "" && s.req.SmokeID == "" {
+		ref, err := s.store.ingestTx(ctx, s.tx, s.scope, memory.IngestRequest{Connector: "desk", ExternalID: s.req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: s.req.Text, MediaType: "text/plain"})
+		if err != nil {
+			return err
+		}
+		original.SourceID = string(ref.ID)
+		original.Version = ref.Version
+	}
+	t.secretaryTurn.original = original
+	return nil
 }
 
 // secretaryAsk makes the reads and the model calls of one turn. A call

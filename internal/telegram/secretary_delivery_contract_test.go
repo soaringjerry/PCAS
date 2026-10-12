@@ -43,7 +43,7 @@ func stabilizationSecretarySnapshot(t *testing.T, s *postgres.Store, p *poller, 
 func TestTelegramDuplicateUpdateExecutesOnce(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
-	p.store = s
+	p.store = composed{s}
 	calls := stabilizationSecretaryModel(t, s)
 	u := textUpdate(10, "同一条安排")
 	b.enqueue(u, u)
@@ -65,7 +65,7 @@ func TestTelegramDuplicateUpdateExecutesOnce(t *testing.T) {
 func TestTelegramDuplicateUndoCallbackExecutesOnce(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
-	p.store = s
+	p.store = composed{s}
 	calls := stabilizationSecretaryModel(t, s)
 	b.enqueue(textUpdate(1, "可撤销安排"))
 	step(t, p)
@@ -88,7 +88,7 @@ func TestTelegramDuplicateUndoCallbackExecutesOnce(t *testing.T) {
 func TestTelegramTelegramOptionContinuesSameObject(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
-	p.store = s
+	p.store = composed{s}
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		content := `{"actions":[{"op":"create_task","title":"S6渠道会议"}],"ask":{"question":"地点？","options":["办公室","线上"]}}`
@@ -132,7 +132,7 @@ func TestTelegramNewBotResetsProgressAndConversation(t *testing.T) {
 		t.Run(map[int64]string{100: "lower_update_id", 1: "colliding_message_id"}[oldID], func(t *testing.T) {
 			s := integrationStore(t)
 			p, _, b := fixture(t)
-			p.store = s
+			p.store = composed{s}
 			calls := stabilizationSecretaryModel(t, s)
 			b.enqueue(textUpdate(oldID, "旧bot安排"))
 			step(t, p)
@@ -174,7 +174,7 @@ func TestTelegramUnauthorizedAndForgedCallbacksHaveNoEffects(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			s := integrationStore(t)
 			p, _, b := fixture(t)
-			p.store = s
+			p.store = composed{s}
 			calls := stabilizationSecretaryModel(t, s)
 			b.enqueue(textUpdate(1, "合法安排"))
 			step(t, p)
@@ -257,7 +257,7 @@ func TestTelegramLongReplyFitsBotLimit(t *testing.T) {
 func TestTelegramUnconfiguredTranscriptionPreservesAudio(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
-	p.store = s
+	p.store = composed{s}
 	u := textUpdate(1, "")
 	u.Message.Voice = &file{ID: "voice", Duration: 3}
 	b.enqueue(u)
@@ -298,7 +298,7 @@ func TestTelegramRestartAfterCommittedTurnBeforeDelivery(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			s := integrationStore(t)
 			p, _, b := fixture(t)
-			p.store = s
+			p.store = composed{s}
 			calls := stabilizationSecretaryModel(t, s)
 			u := textUpdate(10, "重启中途安排")
 			if mode == "voice" {
@@ -345,7 +345,7 @@ func TestTelegramRestartAfterCommittedTurnBeforeDelivery(t *testing.T) {
 func TestTelegramBotIdentitySurvivesRotationAndReturn(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
-	p.store = s
+	p.store = composed{s}
 	calls := stabilizationSecretaryModel(t, s)
 	b.enqueue(textUpdate(1, "身份一的安排"))
 	step(t, p)
@@ -373,7 +373,7 @@ func TestTelegramBotIdentitySurvivesRotationAndReturn(t *testing.T) {
 func TestTelegramUndoBindingSurvivesRestartAndRejectsAnotherTurn(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
-	p.store = s
+	p.store = composed{s}
 	calls := stabilizationSecretaryModel(t, s)
 	b.enqueue(textUpdate(1, "第一项"), textUpdate(2, "第二项"))
 	step(t, p)
@@ -414,7 +414,7 @@ func TestTelegramLegacyRecoveryRequiresUnchangedConversationAnchor(t *testing.T)
 		t.Run(mode, func(t *testing.T) {
 			s := integrationStore(t)
 			p, _, b := fixture(t)
-			p.store = s
+			p.store = composed{s}
 			calls := stabilizationSecretaryModel(t, s)
 			conversation := string(memory.NewID())
 			if err := p.settings.UpdateTelegramProgress("fixture", "123", 0, conversation); err != nil {
@@ -425,7 +425,7 @@ func TestTelegramLegacyRecoveryRequiresUnchangedConversationAnchor(t *testing.T)
 				legacyConversation = string(memory.NewID())
 			}
 			legacyID := requestID("123", "message:10")
-			original, err := s.DeskTurn(context.Background(), p.scope, workspace.DeskTurnRequest{RequestID: legacyID, ConversationID: &legacyConversation, Text: "升级前已提交的安排"})
+			original, err := composed{s}.DeskTurn(context.Background(), p.scope, workspace.DeskTurnRequest{RequestID: legacyID, ConversationID: &legacyConversation, Text: "升级前已提交的安排"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -472,7 +472,7 @@ func TestTelegramLegacyRecoveryRequiresUnchangedConversationAnchor(t *testing.T)
 func TestTelegramCommittedVoiceRecoveryRespectsDeletionAndOwner(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
-	p.store = s
+	p.store = composed{s}
 	calls := stabilizationSecretaryModel(t, s)
 	p.models = &changingTranscriber{}
 	u := textUpdate(10, "")
@@ -552,7 +552,7 @@ func TestTelegramSelectedTurnRecoveryAfterDeliveryFailure(t *testing.T) {
 func TestTelegramSameBotRotationKeepsSentUndoBinding(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
-	p.store = s
+	p.store = composed{s}
 	calls := stabilizationSecretaryModel(t, s)
 	b.enqueue(textUpdate(1, "轮换凭据前的安排"))
 	step(t, p)

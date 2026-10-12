@@ -57,7 +57,7 @@ func (f *fakeSession) SaveSentence(context.Context) error {
 
 func conduct(f *fakeSession, in Conducting) Conducted {
 	in.Limits = limits
-	out, err := Conduct(context.Background(), f, in)
+	out, err := Conduct(context.Background(), f, f, in)
 	if err != nil {
 		panic(err)
 	}

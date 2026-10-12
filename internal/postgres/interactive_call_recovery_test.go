@@ -16,6 +16,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 )
 
 func admittedInteractiveRequest(t *testing.T, s *Store, scope memory.Scope, provider string) modelcall.Request {
@@ -221,7 +222,7 @@ func TestInteractiveUnknownFailureKeepsBudgetAndBoundedRetry(t *testing.T) {
 	ctx := context.Background()
 	_, err := s.calls.Call(ctx, request)
 	var first *modelcall.Failure
-	if !errors.Is(err, modelcall.ErrOutcomeUnknown) || !errors.As(err, &first) || !retryableSecretaryModelError(err) {
+	if !errors.Is(err, modelcall.ErrOutcomeUnknown) || !errors.As(err, &first) || !secretary.RetryableModelError(err) {
 		t.Fatal(err)
 	}
 	peer, err := Open(ctx, s.pool.Config().ConnConfig.ConnString())
@@ -231,7 +232,7 @@ func TestInteractiveUnknownFailureKeepsBudgetAndBoundedRetry(t *testing.T) {
 	defer peer.Close()
 	_, err = peer.calls.Call(ctx, request)
 	var recovered *modelcall.Failure
-	if !errors.As(err, &recovered) || recovered.InvocationID != first.InvocationID || !retryableSecretaryModelError(err) {
+	if !errors.As(err, &recovered) || recovered.InvocationID != first.InvocationID || !secretary.RetryableModelError(err) {
 		t.Fatal("durable failure lost retry metadata", err)
 	}
 	p.RetryOf = first.InvocationID

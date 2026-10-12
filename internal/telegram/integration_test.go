@@ -48,7 +48,7 @@ func integrationStore(t *testing.T) *postgres.Store {
 func TestIntegrationDeskTurnReplayAndUndo(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
-	p.store = s
+	p.store = composed{s}
 	var calls atomic.Int32
 	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -84,7 +84,7 @@ func TestIntegrationDeskTurnReplayAndUndo(t *testing.T) {
 func TestIntegrationUnconfiguredVoicePreservesOriginal(t *testing.T) {
 	s := integrationStore(t)
 	p, _, b := fixture(t)
-	p.store = s
+	p.store = composed{s}
 	u := textUpdate(1, "")
 	u.Message.Voice = &file{ID: "voice", Duration: 3}
 	b.enqueue(u)

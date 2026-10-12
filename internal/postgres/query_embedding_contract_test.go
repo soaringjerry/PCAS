@@ -103,7 +103,7 @@ func TestQueryEmbeddingInsideAnExecutionKeepsItsRootAndCause(t *testing.T) {
 	mustIngest(t, s, scope, input())
 	queryEmbeddingModel(t, s, queryEmbeddingReply)
 	parent := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), RootExecutionID: memory.NewID()}
-	ctx := context.WithValue(context.Background(), interactiveExecutionKey{}, parent)
+	ctx := modelcall.WithExecution(context.Background(), parent)
 	for range 2 {
 		if _, err := s.Recall(ctx, scope, memory.RecallRequest{Query: "旧书店", Mode: memory.Remember}); err != nil {
 			t.Fatal(err)

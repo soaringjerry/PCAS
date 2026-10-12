@@ -6,11 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 )
-
-type executionTimingKey struct{}
 
 type executionTiming struct {
 	Kind        string `json:"kind"`
@@ -35,26 +33,20 @@ type executionTimer struct {
 
 func newExecutionTimer(ctx context.Context, kind string, started time.Time) (context.Context, *executionTimer) {
 	timer := &executionTimer{executionTiming: executionTiming{Kind: kind}, started: started}
-	ctx = context.WithValue(ctx, executionTimingKey{}, timer)
-	return executionCallContext(ctx, "prepare"), timer
+	return modelcall.Timed(modelcall.WithTimer(ctx, timer), "prepare"), timer
 }
 
-func executionCallContext(ctx context.Context, purpose string) context.Context {
-	timer, ok := ctx.Value(executionTimingKey{}).(*executionTimer)
-	if !ok {
-		return ctx
+// AddModelTime adds the time of one provider invocation.
+func (timer *executionTimer) AddModelTime(purpose string, ms int64) {
+	timer.mu.Lock()
+	defer timer.mu.Unlock()
+	timer.ModelMS += ms
+	switch purpose {
+	case "answer":
+		timer.AnswerMS += ms
+	case "selfcheck":
+		timer.SelfcheckMS += ms
 	}
-	return ai.WithInvocationObserver(ctx, func(ms int64) {
-		timer.mu.Lock()
-		defer timer.mu.Unlock()
-		timer.ModelMS += ms
-		switch purpose {
-		case "answer":
-			timer.AnswerMS += ms
-		case "selfcheck":
-			timer.SelfcheckMS += ms
-		}
-	})
 }
 
 func (timer *executionTimer) beginPrepare() {

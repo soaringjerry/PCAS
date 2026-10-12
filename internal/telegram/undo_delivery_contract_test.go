@@ -23,7 +23,7 @@ import (
 func TestTelegramWebThenTelegramAlreadyUndone(t *testing.T) {
 	s := integrationStore(t)
 	p, _, bot := fixture(t)
-	p.store = s
+	p.store = composed{s}
 	var calls atomic.Int32
 	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)

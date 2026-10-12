@@ -23,9 +23,8 @@ type View struct {
 }
 
 // Session is one turn in its place in the conversation. It gives the turn
-// its reads, its model calls, and its writes, all in one transaction.
+// its reads and its writes, all in one transaction.
 type Session interface {
-	Model
 	Turn
 	// Context reads the context of the turn. failure is a failure that
 	// falls back to keeping the sentence.
@@ -76,7 +75,7 @@ type Conducted struct {
 // that the targets of the answer are unchanged, and applies the answer. A
 // turn that cannot finish keeps the owner's sentence and says why; it changes
 // nothing else. Each paid call is recorded with what became of it.
-func Conduct(ctx context.Context, s Session, in Conducting) (Conducted, error) {
+func Conduct(ctx context.Context, s Session, m Model, in Conducting) (Conducted, error) {
 	out := Conducted{Receipts: []workspace.DeskReceipt{}, Cards: []workspace.DeskCard{}}
 	view, failure := s.Context(ctx)
 	stage := "context"
@@ -90,7 +89,7 @@ func Conduct(ctx context.Context, s Session, in Conducting) (Conducted, error) {
 		state, stage, failure = s.Input(ctx)
 		if failure == nil {
 			var err error
-			asked, err = Ask(ctx, s, state, in.Limits)
+			asked, err = Ask(ctx, m, state, in.Limits)
 			s.Asked(state)
 			if err != nil {
 				return out, err

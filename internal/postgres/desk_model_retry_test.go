@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"math"
 	"os"
 	"os/exec"
@@ -17,66 +15,9 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func TestSecretaryModelRetryClassification(t *testing.T) {
-	for _, category := range []string{"rateLimitExceeded", "flexUnavailable", "serverOverloaded", "internalServerError", "httpConnectionFailed", "responseStreamConnectionFailed", "responseStreamDisconnected", "responseTooManyFailedAttempts"} {
-		for _, status := range []int{0, 408, 429, 500, 502, 503, 504} {
-			if !retryableSecretaryModelError(fmt.Errorf("wrapped: %w", &ai.CodexError{Category: category, HTTPStatus: status})) {
-				t.Errorf("did not retry %s HTTP %d", category, status)
-			}
-		}
-		for _, status := range []int{400, 401, 403, 404, 501, 505} {
-			if retryableSecretaryModelError(&ai.CodexError{Category: category, HTTPStatus: status}) {
-				t.Errorf("retried %s HTTP %d", category, status)
-			}
-		}
-	}
-	for _, category := range []string{"contextWindowExceeded", "sessionBudgetExceeded", "usageLimitExceeded", "cyberPolicy", "misalignmentPolicyViolation", "tooManyDenials", "unauthorized", "badRequest", "threadRollbackFailed", "sandboxError", "other", "activeTurnNotSteerable", "unknown", "refresh_token_reused", "refresh_token_expired", "refresh_token_invalidated", "sign_in_required", "transport_error", "event_buffer_exceeded", "turn_failed", "turn_interrupted", "empty_output", "invalid_thread", "invalid_turn"} {
-		if retryableSecretaryModelError(&ai.CodexError{Category: category}) {
-			t.Errorf("retried terminal category %s", category)
-		}
-	}
-	for _, err := range []error{context.Canceled, context.DeadlineExceeded, errors.New("unclassified"), &ai.CodexError{Category: "serverOverloaded", Cause: context.Canceled}, &modelcall.PersistenceError{Err: &ai.CodexError{Category: "serverOverloaded"}}} {
-		if retryableSecretaryModelError(err) {
-			t.Errorf("retried cancellation/unknown error %v", err)
-		}
-	}
-}
-
-func TestSecretaryModelRetrySharesDeadline(t *testing.T) {
-	for _, timeout := range []time.Duration{100 * time.Millisecond, 800 * time.Millisecond} {
-		t.Run(timeout.String(), func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			defer cancel()
-			deadline, _ := ctx.Deadline()
-			calls := 0
-			start := time.Now()
-			_, err := retrySecretaryModel(ctx, func(callCtx context.Context) (ai.Result, error) {
-				calls++
-				if got, ok := callCtx.Deadline(); !ok || !got.Equal(deadline) {
-					t.Fatal("attempt extended the deadline")
-				}
-				if calls > 1 {
-					<-callCtx.Done()
-				}
-				return ai.Result{}, &ai.CodexError{Category: "serverOverloaded"}
-			})
-			wantCalls := 1
-			if timeout > secretaryModelRetryDelay {
-				wantCalls = 2
-			}
-			if !errors.Is(err, context.DeadlineExceeded) || calls != wantCalls || time.Since(start) > timeout+time.Second {
-				t.Fatal("deadline was not respected", calls, err, time.Since(start))
-			}
-		})
-	}
-}
-
-// The fake CLI fails real app-server turns, rather than mocking DeskTurn. Its
-// state also verifies that both attempts get exactly the same model context.
 func secretaryRetryCodex(t *testing.T, s *Store, failures, gate int, category string) string {
 	t.Helper()
 	if _, err := exec.LookPath("python3"); err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"net/http"
 	"strings"
@@ -458,7 +459,7 @@ func TestB4HeavyCutoffUsesFinishedReaders(t *testing.T) {
 	defer cancel()
 	start := time.Now()
 	execution := admittedInteractiveRequest(t, s, scope, agent.ID)
-	ctx = context.WithValue(ctx, interactiveExecutionKey{}, execution)
+	ctx = modelcall.WithExecution(ctx, execution)
 	picked, _, chosen := s.heavyUse(ctx, context.Background(), scope, agent, nil, "虚构请求", u, "", "", "reader:prepare")
 	if len(picked) != 2 || len(chosen) != 3 || time.Since(start) > 1500*time.Millisecond {
 		t.Fatal(len(picked), chosen, time.Since(start))

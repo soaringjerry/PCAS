@@ -79,7 +79,7 @@ func (s *Store) Recall(ctx context.Context, scope memory.Scope, in memory.Recall
 		// Its own execution identity lets concurrent queries stay separate.
 		request := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "query_embedding", Stage: "query", Provider: provider, Estimate: reserved}
 		request.RootExecutionID = request.ExecutionID
-		if parent, ok := ctx.Value(interactiveExecutionKey{}).(modelcall.Request); ok && parent.OwnerID == scope.OwnerID {
+		if parent, ok := modelcall.Execution(ctx); ok && parent.OwnerID == scope.OwnerID {
 			request.RootExecutionID, request.CausationID = parent.RootExecutionID, parent.ExecutionID
 		}
 		embeddings, e = s.calls.CallEmbedding(ctx, request, []string{provider.EmbeddingQueryPrefix + query})

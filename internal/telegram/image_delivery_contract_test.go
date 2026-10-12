@@ -23,7 +23,7 @@ func TestTelegramImageUsesSharedDeskTurn(t *testing.T) {
 		t.Run(fmt.Sprint(caption != ""), func(t *testing.T) {
 			s := integrationStore(t)
 			p, _, b := fixture(t)
-			p.store = s
+			p.store = composed{s}
 			var visions, secretaries atomic.Int32
 			model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var body struct {

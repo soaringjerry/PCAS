@@ -16,30 +16,13 @@ import (
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 )
 
 // interactiveCallPolicy binds an existing admitted request or leased deputy.
 // Token is an execution fence, not a fabricated queue lease. Origin survives
 // reacquisition and excludes transient presentation-turn and usage identities.
-type interactiveCallPolicy struct {
-	Kind        string
-	Token       string
-	Origin      string
-	RequestHash []byte
-	AgentID     string
-	ThingID     string
-	Usage       modelUsage
-	RetryOf     memory.ID
-	InputPolicy string
-	BudgetOwner string
-}
-
-// An admitted request or committed deputy lease supplies this identity.
-// Child stages inherit it; they cannot create an execution from a turn ID.
-type interactiveExecutionKey struct{}
-
-// CallPolicy marks an admitted execution as the execution policy of a model call.
-func (interactiveCallPolicy) CallPolicy() {}
+type interactiveCallPolicy = modelcall.InteractivePolicy
 
 type interactiveCalls struct{ store *Store }
 
@@ -321,7 +304,7 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 		}
 		attempt, limit := 1, 1
 		if p.Kind == "secretary" && r.Stage == "answer" {
-			limit = secretaryModelAttempts
+			limit = secretary.ModelAttempts
 		}
 		if previous != nil {
 			if previous.Manifest.BindingHash != hash {
@@ -337,7 +320,7 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 				return modelcall.ErrOutcomeUnknown
 			}
 			failure := &modelcall.Failure{Code: previous.ErrorCode, Details: previous.Receipt.Billing.FailureDetails}
-			if !retryableSecretaryModelError(failure) {
+			if !secretary.RetryableModelError(failure) {
 				return failure
 			}
 			attempt = previous.Attempt + 1

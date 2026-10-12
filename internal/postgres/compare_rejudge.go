@@ -96,7 +96,7 @@ func (a compareSession) RejudgePair(ctx context.Context, j worker.Job, refs []me
 		if input == nil {
 			return finishRejudgeTx(ctx, tx, j, "inputs_changed")
 		}
-		return backgroundHourlyTx(ctx, tx, CompareStage, "compare_hourly_limit")
+		return kernel.HourlyLimit(ctx, tx, CompareStage, "compare_hourly_limit")
 	})
 	if err != nil || input == nil {
 		return nil, false, err

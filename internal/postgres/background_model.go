@@ -56,7 +56,19 @@ func (a jobCallStore) ReleaseUnavailable(ctx context.Context, j worker.Job, rese
 }
 
 func (a jobCallStore) HourlyLimited(stage string) bool {
-	return backgroundHourlyBudgets[backgroundStage(stage)] != 0
+	return kernel.HourlyBudgets[kernel.BaseStage(stage)] != 0
 }
 
 func (a jobCallStore) RetryDelay(attempts int) time.Duration { return kernel.RetryDelay(attempts) }
+
+// ErrUnavailable means no request was sent. Release its reservation under the
+// job fence so a metered retry cannot be mistaken for an ambiguous paid call.
+func (s *Store) releaseUnavailableReservation(ctx context.Context, j worker.Job, reservationID string) error {
+	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, "DELETE FROM background_usage WHERE owner_id=$1 AND job_id=$2 AND id=$3", string(j.OwnerID), string(j.ID), reservationID)
+		return err
+	})
+}

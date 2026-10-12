@@ -159,7 +159,7 @@ func (s *Store) ScheduleOrganize(ctx context.Context, now time.Time) (int, error
 		}
 		for _, owner := range owners {
 			scope := memory.Scope{OwnerID: owner, PrincipalID: "worker", IsOwner: true}
-			if err := s.ensureOwner(ctx, tx, scope); err != nil {
+			if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 				return err
 			}
 			if err := kernel.OwnerLock(ctx, tx, owner); err != nil {
@@ -225,7 +225,7 @@ func organizeCompareHourlyTx(ctx context.Context, tx pgx.Tx, code string) error 
 	if strings.HasPrefix(code, "compare") {
 		stage = CompareStage
 	}
-	return backgroundHourlyTx(ctx, tx, stage, code)
+	return kernel.HourlyLimit(ctx, tx, stage, code)
 }
 
 // OrganizeStore gives the organize service its reads and writes.

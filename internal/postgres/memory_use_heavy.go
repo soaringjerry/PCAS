@@ -63,7 +63,7 @@ func (s *Store) deputyUseContext(ctx context.Context, scope memory.Scope, run *w
 		if err != nil {
 			return err
 		}
-		u.Location = deskLocation(settings)
+		u.Location = kernel.Location(settings)
 		u.Tier = run.MemoryTier
 		return s.finishUseContextTx(ctx, tx, scope, agent, &run.ThingID, run.Prompt, ms, &u)
 	})

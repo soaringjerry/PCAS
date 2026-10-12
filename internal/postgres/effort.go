@@ -7,23 +7,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 )
-
-// Every item save applies the workspace plan rule with the owner's settings.
-func maintainTaskPlanTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item *workspace.Item) error {
-	if item.Kind != "task" {
-		return nil
-	}
-	settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
-	if err != nil {
-		return err
-	}
-	return effort.PlanTask(item, settings, deskLocation(settings))
-}
 
 func enqueueEffortTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor memory.Ref, now time.Time) (int, error) {
 	installed, err := studioInstalledTx(ctx, tx)
@@ -54,7 +43,7 @@ func (a effortStore) Load(ctx context.Context, j worker.Job, project string, wan
 			return err
 		}
 		var err error
-		item, err = getItem(ctx, tx, scope, project)
+		item, err = itemstore.GetItem(ctx, tx, scope, project)
 		if errors.Is(err, memory.ErrNotFound) {
 			done = true
 			return kernel.Acknowledge(ctx, tx, j)
@@ -96,18 +85,20 @@ type effortUnit struct {
 
 func (u effortUnit) Location() (*time.Location, error) {
 	settings, err := kernel.QueryDocument[workspace.Settings](u.ctx, u.tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(u.scope.OwnerID))
-	return deskLocation(settings), err
+	return kernel.Location(settings), err
 }
 
 func (u effortUnit) Task(id string) (workspace.Item, bool, error) {
-	item, err := getItem(u.ctx, u.tx, u.scope, id)
+	item, err := itemstore.GetItem(u.ctx, u.tx, u.scope, id)
 	if errors.Is(err, memory.ErrNotFound) {
 		return item, false, nil
 	}
 	return item, err == nil, err
 }
 
-func (u effortUnit) SaveTask(item workspace.Item) error { return saveItem(u.ctx, u.tx, u.scope, item) }
+func (u effortUnit) SaveTask(item workspace.Item) error {
+	return itemstore.SaveItem(u.ctx, u.tx, u.scope, item)
+}
 
 func (u effortUnit) Event(outcome, reason string, count int) error {
 	return kernel.StageEvent(u.ctx, u.tx, u.job.OwnerID, EffortStage, outcome, reason, count)

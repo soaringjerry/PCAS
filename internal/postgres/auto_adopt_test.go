@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 
@@ -244,7 +245,7 @@ func TestAutoAdoptDestinationsAndUndo(t *testing.T) {
 						}
 					} else {
 						field := map[string]string{"task": "notes", "idea": "body"}[tc.itemKind]
-						if !strings.Contains(fieldText(item, field), tc.output) {
+						if !strings.Contains(itemstore.FieldText(item, field), tc.output) {
 							t.Fatalf("missing progress: %+v", item)
 						}
 					}

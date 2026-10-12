@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -136,11 +135,6 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 		}
 	}
 	return count, nil
-}
-
-func statusScheduleBusy(err error) bool {
-	var busy *worker.JobError
-	return errors.As(err, &busy) && busy.Code == "background_write_busy"
 }
 
 func statusCardPriority(key string) int {

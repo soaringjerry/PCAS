@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -31,7 +32,7 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 	}
 	scope := memory.Scope{OwnerID: owner, PrincipalID: "worker", IsOwner: true}
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(owner)); err != nil {
@@ -39,15 +40,15 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 		}
 		stage := ""
 		if j != nil {
-			stage = backgroundStage(j.Stage)
+			stage = kernel.BaseStage(j.Stage)
 			if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':budget:'||$1,0))", stage); err != nil {
 				return err
 			}
 			reason := strings.TrimPrefix(stage, "memory.") + "_hourly_limit"
-			if stage == HandoverStage {
+			if stage == handover.Stage {
 				reason = "memory.handover_hourly_limit"
 			}
-			if err := backgroundHourlyTx(ctx, tx, stage, reason); err != nil {
+			if err := kernel.HourlyLimit(ctx, tx, stage, reason); err != nil {
 				return err
 			}
 		}
@@ -61,7 +62,7 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM background_usage WHERE job_id=$1)", string(j.ID)).Scan(&exists); err != nil {
 				return err
 			}
-			if exists && j.Attempts != 1 && cost > 0 && backgroundHourlyBudgets[backgroundStage(j.Stage)] == 0 {
+			if exists && j.Attempts != 1 && cost > 0 && kernel.HourlyBudgets[kernel.BaseStage(j.Stage)] == 0 {
 				// Only the journal's bounded, linked recovery can replace an
 				// unknown paid invocation. Existing known-failure policy stays.
 				var recovery bool

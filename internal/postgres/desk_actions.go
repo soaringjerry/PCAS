@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 )
@@ -124,11 +125,11 @@ func (w *secretaryWorkspace) Command(ctx context.Context, c workspace.Command) e
 }
 
 func (w *secretaryWorkspace) Item(ctx context.Context, id string) (workspace.Item, error) {
-	return getItem(ctx, w.tx, w.scope, id)
+	return itemstore.GetItem(ctx, w.tx, w.scope, id)
 }
 
 func (w *secretaryWorkspace) SaveItem(ctx context.Context, item workspace.Item) error {
-	return saveItem(ctx, w.tx, w.scope, item)
+	return itemstore.SaveItem(ctx, w.tx, w.scope, item)
 }
 
 func (w *secretaryWorkspace) NoteChange(ctx context.Context, item workspace.Item, summary string) error {

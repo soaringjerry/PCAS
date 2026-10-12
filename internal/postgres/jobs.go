@@ -14,7 +14,7 @@ import (
 
 // These stages keep paid snapshots and retry until success or changed inputs.
 func persistentBackgroundStage(stage string) bool {
-	_, ok := backgroundHourlyBudgets[backgroundStage(stage)]
+	_, ok := kernel.HourlyBudgets[kernel.BaseStage(stage)]
 	return ok
 }
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -61,7 +62,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 		}
 		item := workspace.Item{ID: c.ID, Kind: "task", ProjectID: c.ProjectID}
 		if c.Type == "requestRun" {
-			item, err = getItem(ctx, tx, scope, c.ThingID)
+			item, err = itemstore.GetItem(ctx, tx, scope, c.ThingID)
 			if err != nil {
 				return err
 			}
@@ -71,7 +72,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 		if err != nil {
 			return err
 		}
-		plan = memory.PlanQuery(c.Prompt, s.BusinessNow(), deskLocation(settings))
+		plan = memory.PlanQuery(c.Prompt, s.BusinessNow(), kernel.Location(settings))
 		u, err := s.startUseContextTx(ctx, tx, scope)
 		if err != nil {
 			return err

@@ -16,6 +16,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -204,7 +205,7 @@ func rememberForContinuity(t *testing.T, s *Store, scope memory.Scope, source me
 	t.Helper()
 	var ref memory.Ref
 	err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(context.Background(), tx, scope); err != nil {
+		if err := s.EnsureOwner(context.Background(), tx, scope); err != nil {
 			return err
 		}
 		var err error
@@ -310,7 +311,7 @@ func TestDecayRecallAndSnoozeStayIndependent(t *testing.T) {
 	item := st.Ideas[0]
 	item.Status = "awakened"
 	item.Wake = &workspace.Wake{At: kernel.Stamp(), Reason: "测试到期提醒"}
-	if err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return saveItem(ctx, tx, scope, item) }); err != nil {
+	if err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return itemstore.SaveItem(ctx, tx, scope, item) }); err != nil {
 		t.Fatal(err)
 	}
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "ideaSnooze", ID: id, Days: 3})

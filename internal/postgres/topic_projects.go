@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -337,7 +338,7 @@ func (u topicProjectUnit) ProjectByName(name string) (string, bool, error) {
 }
 
 func (u topicProjectUnit) Project(id string) (workspace.Item, error) {
-	return getItem(u.ctx, u.tx, u.scope, id)
+	return itemstore.GetItem(u.ctx, u.tx, u.scope, id)
 }
 
 func (u topicProjectUnit) ProjectsCreatedSince(at time.Time) (int, error) {
@@ -347,7 +348,7 @@ func (u topicProjectUnit) ProjectsCreatedSince(at time.Time) (int, error) {
 }
 
 func (u topicProjectUnit) SaveProject(item workspace.Item) error {
-	return saveItem(u.ctx, u.tx, u.scope, item)
+	return itemstore.SaveItem(u.ctx, u.tx, u.scope, item)
 }
 
 func (u topicProjectUnit) LinkTopic(topic string, input topicproject.Input, project, actionID string, created bool) error {
@@ -399,7 +400,7 @@ func (s *Store) undoTopicProjectTx(ctx context.Context, tx pgx.Tx, scope memory.
 		return true, err
 	}
 	if created {
-		if _, err = tx.Exec(ctx, `DELETE FROM work_items w WHERE w.owner_id=$1 AND w.id=$2 AND w.version=1 AND NOT EXISTS(SELECT 1 FROM work_items c WHERE c.owner_id=w.owner_id AND c.project_id=w.id) AND NOT EXISTS(SELECT 1 FROM work_documents d WHERE d.owner_id=w.owner_id AND d.thing_id=w.id) AND NOT EXISTS(SELECT 1 FROM agent_runs r WHERE r.owner_id=w.owner_id AND r.thing_id=w.id)`, string(scope.OwnerID), project); err != nil {
+		if err = itemstore.DeleteUnusedCreatedItem(ctx, tx, scope.OwnerID, project); err != nil {
 			return true, err
 		}
 	}

@@ -321,7 +321,7 @@ func (a extractionStore) Input(ctx context.Context, j worker.Job, source memory.
 	}
 	var settings workspace.Settings
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		var err error
@@ -459,18 +459,6 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 			return err
 		}
 		return completeExtractionTx(ctx, tx, j, "")
-	})
-}
-
-// ErrUnavailable means no request was sent. Release its reservation under the
-// job fence so a metered retry cannot be mistaken for an ambiguous paid call.
-func (s *Store) releaseUnavailableReservation(ctx context.Context, j worker.Job, reservationID string) error {
-	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := kernel.LockJob(ctx, tx, j); err != nil {
-			return err
-		}
-		_, err := tx.Exec(ctx, "DELETE FROM background_usage WHERE owner_id=$1 AND job_id=$2 AND id=$3", string(j.OwnerID), string(j.ID), reservationID)
-		return err
 	})
 }
 

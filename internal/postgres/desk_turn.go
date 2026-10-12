@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -128,7 +129,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	}{{"P", &out.Projects}, {"T", &out.Tasks}, {"I", &out.Ideas}, {"R", &out.Recent}} {
 		for i := range *group.items {
 			item := (*group.items)[i]
-			original, err := getItem(ctx, tx, scope, item.ID)
+			original, err := itemstore.GetItem(ctx, tx, scope, item.ID)
 			if err != nil {
 				return out, err
 			}
@@ -145,7 +146,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		}
 	}
 	if req.ThingID != nil {
-		item, err := getItem(ctx, tx, scope, *req.ThingID)
+		item, err := itemstore.GetItem(ctx, tx, scope, *req.ThingID)
 		if err != nil {
 			return out, err
 		}
@@ -190,7 +191,7 @@ func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		return err
 	}
 	for _, sent := range items {
-		current, err := getItem(ctx, tx, scope, sent.ID)
+		current, err := itemstore.GetItem(ctx, tx, scope, sent.ID)
 		if err != nil {
 			return memory.ErrConflict
 		}
@@ -210,11 +211,11 @@ func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 }
 func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretaryContext, search secretary.Recall) (string, map[string]workspace.Memory, error) {
 	var prompt strings.Builder
-	loc := deskLocation(c.Settings)
+	loc := kernel.Location(c.Settings)
 	c.Plan = memory.PlanQuery(req.Text, s.BusinessNow(), loc)
 	var projectID *string
 	if req.ThingID != nil {
-		item, err := getItem(ctx, tx, scope, *req.ThingID)
+		item, err := itemstore.GetItem(ctx, tx, scope, *req.ThingID)
 		if err != nil {
 			return "", nil, err
 		}
@@ -238,7 +239,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 			line := secretary.HistoryReceipt{Text: receipt.Text, Undone: receipt.Undone}
 			// A receipt of an item that the agent may not read now is hidden.
 			if t.Text != "" && receipt.ThingID != nil {
-				if item, err := getItem(ctx, tx, scope, *receipt.ThingID); err == nil {
+				if item, err := itemstore.GetItem(ctx, tx, scope, *receipt.ThingID); err == nil {
 					permitted, _, err := sanitizeItemTx(ctx, tx, scope, c.Agent.ID, item)
 					if err != nil {
 						return "", nil, err
@@ -466,7 +467,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 		out.Turn = workspace.SecretaryTurn{ID: string(memory.NewID()), Text: req.Text, Cards: []workspace.DeskCard{}, Receipts: []workspace.DeskReceipt{}, CreatedAt: kernel.Stamp()}
 		timing.id = out.Turn.ID
 		if req.ThingID != nil && !captureOnly {
-			if _, err := getItem(ctx, tx, scope, *req.ThingID); err != nil {
+			if _, err := itemstore.GetItem(ctx, tx, scope, *req.ThingID); err != nil {
 				return err
 			}
 		}
@@ -570,7 +571,7 @@ func (t *secretarySession) Input(ctx context.Context, recall secretary.Recall) (
 	if err := s.store.checkSecretaryUseContextTx(ctx, s.tx, s.scope, *c); err != nil {
 		return nil, "verify", err
 	}
-	state := &secretary.Asking{Tier: c.Tier, Use: c.Use, Sent: sent, Input: prompt, Dependencies: c.Dependencies, Text: s.req.Text, Location: deskLocation(c.Settings), Started: t.started}
+	state := &secretary.Asking{Tier: c.Tier, Use: c.Use, Sent: sent, Input: prompt, Dependencies: c.Dependencies, Text: s.req.Text, Location: kernel.Location(c.Settings), Started: t.started}
 	if item, ok := c.Aliases["THIS"]; ok {
 		state.This = &item
 	}
@@ -699,11 +700,11 @@ func (t *secretaryTurn) Overflow(ctx context.Context, reason string, count int) 
 }
 
 func (t *secretaryTurn) Item(ctx context.Context, id string) (workspace.Item, error) {
-	return getItem(ctx, t.tx, t.scope, id)
+	return itemstore.GetItem(ctx, t.tx, t.scope, id)
 }
 
 func (t *secretaryTurn) Cards(ctx context.Context, answer secretaryOutput, sent map[string]workspace.Memory) ([]workspace.DeskCard, error) {
-	return t.store.secretaryCardsTx(ctx, t.tx, t.scope, answer, sent, t.c.Sources, t.c.Aliases, deskLocation(t.c.Settings), t.c.Plan.Recall)
+	return t.store.secretaryCardsTx(ctx, t.tx, t.scope, answer, sent, t.c.Sources, t.c.Aliases, kernel.Location(t.c.Settings), t.c.Plan.Recall)
 }
 
 // Act does one action in a transaction of its own inside the turn, with its
@@ -730,7 +731,7 @@ func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[
 		_ = actionTx.Rollback(ctx)
 		return out, err
 	}
-	out.Receipt, out.Err = s.executeSecretaryActionTx(actionCtx, actionTx, t.scope, a, aliases, c.Agent, deskLocation(c.Settings), pointerValue(t.req.ThingID))
+	out.Receipt, out.Err = s.executeSecretaryActionTx(actionCtx, actionTx, t.scope, a, aliases, c.Agent, kernel.Location(c.Settings), pointerValue(t.req.ThingID))
 	if !secretary.Done(out.Receipt, out.Err) {
 		return out, actionTx.Rollback(ctx)
 	}

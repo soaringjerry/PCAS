@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -18,7 +20,7 @@ func currentStudioProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	if thing == "" {
 		return "", nil
 	}
-	item, err := getItem(ctx, tx, scope, thing)
+	item, err := itemstore.GetItem(ctx, tx, scope, thing)
 	if err != nil {
 		return "", err
 	}
@@ -50,7 +52,7 @@ func (s *Store) secretaryHandoverEvidenceTx(ctx context.Context, tx pgx.Tx, scop
 					continue
 				}
 				items[e.ID] = true
-				item, err := getItem(ctx, tx, scope, e.ID)
+				item, err := itemstore.GetItem(ctx, tx, scope, e.ID)
 				if errors.Is(err, memory.ErrNotFound) {
 					continue
 				}
@@ -99,7 +101,7 @@ func (s *Store) secretaryHandoverEvidenceTx(ctx context.Context, tx pgx.Tx, scop
 			if alias == "" {
 				alias = fmt.Sprintf("M%d", len(sent)+1)
 				sent[alias] = m
-				fmt.Fprintf(b, "\n交接说明依据当前记忆 [%s / trust=%s] %s\n", alias, m.Trust, m.Text+contextbuilder.MemorySuffix(m, deskLocation(c.Settings)))
+				fmt.Fprintf(b, "\n交接说明依据当前记忆 [%s / trust=%s] %s\n", alias, m.Trust, m.Text+contextbuilder.MemorySuffix(m, kernel.Location(c.Settings)))
 			}
 			labels[m.ID] = alias
 			c.Dependencies = append(c.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})

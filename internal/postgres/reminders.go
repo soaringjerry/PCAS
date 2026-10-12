@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
@@ -166,7 +167,7 @@ func (s *Store) CheckReminders(ctx context.Context, now time.Time) error {
 					item.Version++
 					item.UpdatedAt = kernel.Stamp()
 					item.Evolution = append(item.Evolution, workspace.Revision{At: kernel.Stamp(), By: "system", Summary: "唤醒：" + condition.Description})
-					if err := saveItem(ctx, tx, scope, item); err != nil {
+					if err := itemstore.SaveItem(ctx, tx, scope, item); err != nil {
 						return err
 					}
 					break

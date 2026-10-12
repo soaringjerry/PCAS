@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
@@ -355,7 +356,7 @@ func TestP2RandomVisibilityAndSourceSequence(t *testing.T) {
 					p2Bytes(t, fmt.Sprintf("random selected memory step %d", step), wanted, got)
 				}
 			}
-			item, err := getItem(ctx, tx, scope, p2ID("task", 1+step%5))
+			item, err := itemstore.GetItem(ctx, tx, scope, p2ID("task", 1+step%5))
 			if err != nil {
 				return err
 			}

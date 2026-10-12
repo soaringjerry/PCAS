@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/currentstate/datereview"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -27,7 +28,7 @@ const DateTidyStage = datereview.Stage
 // One small call per date. Thirty an hour clears a backlog of a few hundred
 // rows within a day without holding the provider; a normal day adds a handful.
 // Jobs past the hour's budget wait for the next hour; none is dropped.
-const dateTidyHourly = 30
+const dateTidyHourly = kernel.DateTidyHourly
 
 // Open to-dos and ideas shown so the model does not make a second copy. The
 // secretary is shown the same 40 and 20 (2.6 C6); what is left out is counted.
@@ -269,7 +270,7 @@ type dateReviewAction struct {
 
 func (a dateReviewAction) ID() string { return a.id }
 func (a dateReviewAction) SaveItem(item workspace.Item) error {
-	return saveItem(a.ctx, a.unit.tx, a.unit.scope, item)
+	return itemstore.SaveItem(a.ctx, a.unit.tx, a.unit.scope, item)
 }
 func (a dateReviewAction) CloseDate(as string) error {
 	return completeDeadlineTx(a.ctx, a.unit.tx, a.unit.scope, string(a.unit.job.Record.ID), a.unit.job.Record.Version, as)

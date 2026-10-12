@@ -168,7 +168,7 @@ func (s *Store) scheduleCompareVersion(ctx context.Context, now time.Time, versi
 				}
 			}
 			e := kernel.BackgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
-				if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), backgroundStage(map[bool]string{false: CompareStage, true: EntityCompareStage}[entity])); err != nil {
+				if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), kernel.BaseStage(map[bool]string{false: CompareStage, true: EntityCompareStage}[entity])); err != nil {
 					return err
 				}
 				if input != nil {
@@ -320,7 +320,7 @@ func (a compareSession) NextBatch(ctx context.Context, j worker.Job, version int
 		if input == nil {
 			return kernel.Acknowledge(ctx, tx, j)
 		}
-		return backgroundHourlyTx(ctx, tx, CompareStage, "compare_hourly_limit")
+		return kernel.HourlyLimit(ctx, tx, CompareStage, "compare_hourly_limit")
 	})
 	if err != nil || input == nil {
 		return nil, nil, false, err

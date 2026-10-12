@@ -84,7 +84,7 @@ func (s *Store) ConfigureConnection(ctx context.Context, scope memory.Scope, in 
 		return out, memory.ErrInvalid
 	}
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		if in.ExpectedVersion == 0 {
@@ -167,7 +167,7 @@ func (s *Store) ImportBatch(ctx context.Context, scope memory.Scope, id memory.I
 }
 func (s *Store) importBatchTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, namespace string, batch connectors.Batch, archive *memory.Ref) (connectors.Result, error) {
 	out := connectors.Result{Refs: []memory.Ref{}, Gaps: append([]string{}, batch.Gaps...)}
-	if err := s.ensureOwner(ctx, tx, scope); err != nil {
+	if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 		return out, err
 	}
 	type episodeBatch struct {

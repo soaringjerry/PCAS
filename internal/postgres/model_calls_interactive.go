@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -736,7 +737,7 @@ func (a interactiveCalls) Record(ctx context.Context, r modelcall.Request, paid 
 	usage.OutputEstimated = paid.OutputEstimated
 	usage.CostEstimated = paid.CostEstimated
 	if r.Policy.(interactiveCallPolicy).BudgetOwner == "deputy_run" {
-		var snapshot reviseSnapshot
+		var snapshot deputy.Snapshot
 		if json.Unmarshal(r.Prompt, &snapshot) == nil && snapshot.Run.Kind != "revise" && !snapshot.MemoryReady {
 			return a.store.recordReturnedUsage(persist, paid.Output, usage)
 		}
@@ -846,7 +847,7 @@ type deputyResultSelection struct {
 	Fallback   string    `json:"fallback,omitempty"`
 }
 
-func deputyAnswerRequest(owner memory.ID, token string, snapshot reviseSnapshot) modelcall.Request {
+func deputyAnswerRequest(owner memory.ID, token string, snapshot deputy.Snapshot) modelcall.Request {
 	return deputy.AnswerRequest(owner, token, snapshot)
 }
 
@@ -854,7 +855,7 @@ func deputyAnswerRequest(owner memory.ID, token string, snapshot reviseSnapshot)
 // from current memory, and an input-only receipt is never treated as output.
 func (a interactiveCalls) deputyInput(ctx context.Context, q interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
-}, owner memory.ID, run workspace.Run) (*interactiveCallRow, *reviseSnapshot, error) {
+}, owner memory.ID, run workspace.Run) (*interactiveCallRow, *deputy.Snapshot, error) {
 	var row interactiveCallRow
 	err := q.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE owner_id=$1 AND execution_id=$2 AND stage='answer' AND function_name='deputy' AND input_manifest->>'budgetOwner'='deputy_run' AND input_manifest->>'origin'=$3 ORDER BY created_at DESC,id DESC LIMIT 1`, string(owner), run.ID, run.CreatedAt).Scan(&row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -865,7 +866,7 @@ func (a interactiveCalls) deputyInput(ctx context.Context, q interface {
 	}
 	if value, ok := a.store.pendingInteractive.Load(row.ID); ok {
 		entry := value.(*pendingInteractiveResult)
-		var snapshot reviseSnapshot
+		var snapshot deputy.Snapshot
 		if err := json.Unmarshal(entry.request.Prompt, &snapshot); err != nil {
 			return nil, nil, err
 		}
@@ -877,7 +878,7 @@ func (a interactiveCalls) deputyInput(ctx context.Context, q interface {
 	if row.Reservation == "" {
 		return &row, nil, nil
 	}
-	var snapshot reviseSnapshot
+	var snapshot deputy.Snapshot
 	err = q.QueryRow(ctx, `SELECT prompt FROM background_model_results WHERE owner_id=$1 AND job_id=$2 AND reservation_id=$3 AND provider_id=$4 AND model=$5`, string(owner), string(row.ID), row.Reservation, row.Provider, row.Model).Scan(&snapshot)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return &row, nil, nil
@@ -990,4 +991,15 @@ func (a interactiveCalls) recordDeputyApplicationTx(ctx context.Context, tx pgx.
 func (a interactiveCalls) recordInterruptedDeputyApplications(ctx context.Context) error {
 	_, err := a.store.Pool.Exec(ctx, `UPDATE model_calls c SET actual_mode=actual_mode||jsonb_build_object('applicationOutcome','not_applicable','applicationReason','deputy_execution_interrupted'),updated_at=clock_timestamp() WHERE c.function_name='deputy' AND c.stage='answer' AND c.input_manifest->>'budgetOwner'='deputy_run' AND NOT(c.actual_mode ? 'applicationOutcome') AND EXISTS(SELECT 1 FROM agent_runs r WHERE r.owner_id=c.owner_id AND r.id=c.execution_id AND r.document->>'createdAt'=c.input_manifest->>'origin' AND r.status='failed' AND r.document->>'error'='进程中断，结果和用量未确认；未自动重试')`)
 	return err
+}
+
+func (s *Store) recordReturnedUsage(ctx context.Context, text string, usage usagelog.ModelUsage) error {
+	if strings.TrimSpace(text) == "" && usage.InputTokens+usage.OutputTokens == 0 && usage.DurationMS == nil {
+		return nil
+	}
+	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	return pgx.BeginFunc(persistCtx, s.Pool, func(tx pgx.Tx) error {
+		return usagelog.RecordUsageTx(persistCtx, tx, usage)
+	})
 }

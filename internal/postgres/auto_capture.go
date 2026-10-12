@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -87,7 +88,7 @@ func (s *Store) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		if err := beginActionLogTx(actionCtx, tx); err != nil {
 			return err
 		}
-		if err := saveItem(actionCtx, tx, scope, item); err != nil {
+		if err := itemstore.SaveItem(actionCtx, tx, scope, item); err != nil {
 			return err
 		}
 		if err := flushActionLog(actionCtx, tx, scope); err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -172,13 +173,13 @@ func TestDueReminderTracksCommandDue(t *testing.T) {
 	id := st.Tasks[0].ID
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		item, err := getItem(ctx, tx, scope, id)
+		item, err := itemstore.GetItem(ctx, tx, scope, id)
 		if err != nil {
 			return err
 		}
 		item.Due = testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).UTC().Format(time.RFC3339)
 		secretary.ApplyDueReminder(&item, "-30m", loc)
-		return saveItem(ctx, tx, scope, item)
+		return itemstore.SaveItem(ctx, tx, scope, item)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -223,12 +224,12 @@ func TestDeletionExpiresItemAndDocumentSnapshots(t *testing.T) {
 	itemID := st.Tasks[0].ID
 	// Retain a source preview on the item, as an accepted task normally does.
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		item, err := getItem(ctx, tx, scope, itemID)
+		item, err := itemstore.GetItem(ctx, tx, scope, itemID)
 		if err != nil {
 			return err
 		}
 		item.Sources = append(item.Sources, candidate.Source)
-		return saveItem(ctx, tx, scope, item)
+		return itemstore.SaveItem(ctx, tx, scope, item)
 	})
 	if err != nil {
 		t.Fatal(err)

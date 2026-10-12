@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -65,7 +66,7 @@ func (s *Store) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, sc
 				continue
 			}
 			seen[sent.ID] = true
-			current, err := getItem(ctx, tx, scope, sent.ID)
+			current, err := itemstore.GetItem(ctx, tx, scope, sent.ID)
 			if err != nil {
 				return memory.ErrConflict
 			}
@@ -139,7 +140,7 @@ func checkUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run
 	if !agent.Enabled {
 		return memory.ErrForbidden
 	}
-	item, err := getItem(ctx, tx, scope, run.ThingID)
+	item, err := itemstore.GetItem(ctx, tx, scope, run.ThingID)
 	if err != nil {
 		return err
 	}

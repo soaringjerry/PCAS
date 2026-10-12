@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -266,13 +267,13 @@ func (s *Store) CleanupSmoke(ctx context.Context, scope memory.Scope, id string)
 				if err := json.Unmarshal(c.before, &before); err != nil {
 					return err
 				}
-				current, err := getItem(ctx, tx, scope, c.id)
+				current, err := itemstore.GetItem(ctx, tx, scope, c.id)
 				if err != nil {
 					return err
 				}
 				before.Version = current.Version + 1
 				before.UpdatedAt = kernel.Stamp()
-				if err := saveItem(ctx, tx, scope, before); err != nil {
+				if err := itemstore.SaveItem(ctx, tx, scope, before); err != nil {
 					return err
 				}
 			case "work_documents":
@@ -307,7 +308,13 @@ func (s *Store) CleanupSmoke(ctx context.Context, scope memory.Scope, id string)
 				if c.table != table || string(c.before) != "null" {
 					continue
 				}
-				if _, err := tx.Exec(ctx, "DELETE FROM "+table+" WHERE owner_id=$1 AND id=$2", owner, c.id); err != nil {
+				var err error
+				if table == "work_items" {
+					err = itemstore.DeleteItem(ctx, tx, memory.ID(owner), c.id)
+				} else {
+					_, err = tx.Exec(ctx, "DELETE FROM "+table+" WHERE owner_id=$1 AND id=$2", owner, c.id)
+				}
+				if err != nil {
 					return err
 				}
 			}

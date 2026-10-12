@@ -106,7 +106,7 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 	}
 	in := memory.IngestRequest{Connector: namespace, ExternalID: archive.Hash, ExternalVersion: "1", Title: name, MediaType: "application/x-pcas-archive", Text: "[附件原件；正文尚未解析。校验标识：" + archive.Hash + "]"}
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
@@ -386,7 +386,7 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 		}
 		stopped := false
 		err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-			if err := s.ensureOwner(ctx, tx, scope); err != nil {
+			if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 				return err
 			}
 			if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {

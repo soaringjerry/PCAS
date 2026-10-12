@@ -132,7 +132,7 @@ func rememberExtractedForTest(t *testing.T, s *Store, scope memory.Scope, source
 	ctx := context.Background()
 	var ref memory.Ref
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		var err error

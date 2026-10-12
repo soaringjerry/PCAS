@@ -81,7 +81,7 @@ func (s *Store) BackgroundHealth(ctx context.Context, scope memory.Scope) (json.
  'requirements',coalesce((SELECT sum(count) FROM background_stage_events e WHERE e.owner_id=$1 AND e.stage=s.stage AND e.reason='reorganize_requirements_withdrawn' AND e.at>now()-interval '1 hour'),0)),
  'calls',(SELECT count(*) FROM background_usage b WHERE b.stage=s.stage AND b.created_at>now()-interval '1 hour')) ORDER BY s.stage),'[]'::jsonb),
  'overflow',coalesce((SELECT jsonb_agg(jsonb_build_object('stage',stage,'reason',reason,'count',n)) FROM (
- SELECT stage,reason,sum(count) AS n FROM background_stage_events WHERE owner_id=$1 AND outcome='overflow' AND at>now()-interval '1 hour' GROUP BY stage,reason) excess),'[]'::jsonb)) FROM stages s`, string(scope.OwnerID), kernel.JSON(backgroundHourlyBudgets)).Scan(&out)
+ SELECT stage,reason,sum(count) AS n FROM background_stage_events WHERE owner_id=$1 AND outcome='overflow' AND at>now()-interval '1 hour' GROUP BY stage,reason) excess),'[]'::jsonb)) FROM stages s`, string(scope.OwnerID), kernel.JSON(kernel.HourlyBudgets)).Scan(&out)
 	return out, err
 }
 
@@ -101,4 +101,9 @@ func (s *Store) warnLongDeferrals(ctx context.Context) error {
 		slog.WarnContext(ctx, "background job deferred over 30 minutes", "job_id", id, "deferred_since", started)
 	}
 	return rows.Err()
+}
+
+func statusScheduleBusy(err error) bool {
+	var busy *worker.JobError
+	return errors.As(err, &busy) && busy.Code == "background_write_busy"
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -66,7 +67,7 @@ func (s *Store) ReadProjectHandover(ctx context.Context, scope memory.Scope, id 
 		return out, memory.ErrInvalid
 	}
 	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
-		item, err := getItem(ctx, tx, scope, id)
+		item, err := itemstore.GetItem(ctx, tx, scope, id)
 		if err != nil {
 			return err
 		}
@@ -124,7 +125,7 @@ func enqueueProjectHandoversTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (projectHandoverInput, []memory.Ref, error) {
 	out := projectHandoverInput{Parts: []projectInputPart{}, Deadlines: []workspace.LibraryDeadline{}}
 	var err error
-	out.Project, err = getItem(ctx, tx, scope, id)
+	out.Project, err = itemstore.GetItem(ctx, tx, scope, id)
 	if err != nil {
 		return out, nil, err
 	}
@@ -250,7 +251,7 @@ type projectHandoverUnit struct {
 }
 
 func (u projectHandoverUnit) Project(id string) (workspace.Item, bool, error) {
-	item, err := getItem(u.ctx, u.tx, u.scope, id)
+	item, err := itemstore.GetItem(u.ctx, u.tx, u.scope, id)
 	if errors.Is(err, memory.ErrNotFound) {
 		return item, false, nil
 	}

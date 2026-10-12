@@ -5,13 +5,14 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func artifactTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, runID, thingID, kind, id, body string) error {
-	if err := adoptBlocksTx(ctx, tx, scope, runID, thingID, kind, body); err != nil {
+	if err := itemstore.AdoptBlocksTx(ctx, tx, scope, runID, thingID, kind, body); err != nil {
 		return err
 	}
 	_, err := tx.Exec(ctx, "INSERT INTO adopted_artifacts(owner_id,run_id,thing_id,kind,artifact_id,body) VALUES($1,$2,$3,$4,$5,$6)", string(scope.OwnerID), runID, thingID, kind, id, body)
@@ -44,14 +45,14 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 	}
 	dependencies := []memory.Ref{}
 	type fieldBlocks struct {
-		Field  string          `json:"field"`
-		Blocks []artifactBlock `json:"blocks"`
+		Field  string                    `json:"field"`
+		Blocks []itemstore.ArtifactBlock `json:"blocks"`
 	}
 	fields, err := kernel.QueryDocuments[fieldBlocks](ctx, tx, "SELECT jsonb_build_object('field',field,'blocks',blocks) FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
 	if err != nil {
 		return item, nil, err
 	}
-	owned := map[string][]artifactBlock{}
+	owned := map[string][]itemstore.ArtifactBlock{}
 	for _, f := range fields {
 		owned[f.Field] = f.Blocks
 	}
@@ -95,7 +96,7 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 			field = "title"
 		}
 		if blocks, ok := owned[field]; ok {
-			kept := []artifactBlock{}
+			kept := []itemstore.ArtifactBlock{}
 			for _, block := range blocks {
 				dependent := kernel.OneOf(runID, block.Runs...)
 				used = used || dependent
@@ -147,11 +148,11 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 		}
 	}
 	for field, blocks := range owned {
-		text := blockText(blocks)
+		text := itemstore.BlockText(blocks)
 		if field == "title" && text == "" {
 			text = "事项内容需要重新授权或核验"
 		}
-		setField(&item, field, text)
+		itemstore.SetField(&item, field, text)
 	}
 	return item, dependencies, rows.Err()
 }
@@ -185,7 +186,7 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 	}
 	things := []string{}
 	for _, a := range artifacts {
-		item, err := getItem(ctx, tx, scope, a.Thing)
+		item, err := itemstore.GetItem(ctx, tx, scope, a.Thing)
 		if err != nil {
 			return nil, err
 		}
@@ -193,28 +194,28 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 		if field == "task" {
 			field = "title"
 		}
-		var blocks []artifactBlock
+		var blocks []itemstore.ArtifactBlock
 		blockErr := tx.QueryRow(ctx, "SELECT blocks FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2 AND field=$3", string(scope.OwnerID), item.ID, field).Scan(&blocks)
 		if blockErr == nil {
-			kept := []artifactBlock{}
+			kept := []itemstore.ArtifactBlock{}
 			for _, block := range blocks {
 				if !kernel.OneOf(a.Run, block.Runs...) {
 					kept = append(kept, block)
 				}
 			}
-			text := blockText(kept)
+			text := itemstore.BlockText(kept)
 			if field == "title" && text == "" {
 				text = "已删除的生成内容"
-				kept = []artifactBlock{{Text: text, Runs: []string{}}}
+				kept = []itemstore.ArtifactBlock{{Text: text, Runs: []string{}}}
 			}
-			setField(&item, field, text)
-			if err := saveBlocksTx(ctx, tx, scope, item.ID, field, kept); err != nil {
+			itemstore.SetField(&item, field, text)
+			if err := itemstore.SaveBlocksTx(ctx, tx, scope, item.ID, field, kept); err != nil {
 				return nil, err
 			}
 		} else if blockErr != pgx.ErrNoRows {
 			return nil, blockErr
 		} else if kernel.OneOf(field, "notes", "body", "progress", "title") {
-			text := fieldText(item, field)
+			text := itemstore.FieldText(item, field)
 			if text != "" && text != a.Body && text != "\n"+a.Body {
 				// Ownership cannot be reconstructed after historical freeform edits.
 				// Quarantine for explicit owner review; never feed it to a model.
@@ -227,7 +228,7 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 			if field == "title" {
 				text = "已删除的生成内容"
 			}
-			setField(&item, field, text)
+			itemstore.SetField(&item, field, text)
 		} else if a.Kind == "check" {
 			kept := []workspace.Check{}
 			for _, check := range item.Checklist {
@@ -239,7 +240,7 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 		}
 		item.Version++
 		item.UpdatedAt = kernel.Stamp()
-		if err := saveItem(ctx, tx, scope, item); err != nil {
+		if err := itemstore.SaveItem(ctx, tx, scope, item); err != nil {
 			return nil, err
 		}
 		things = append(things, item.ID)

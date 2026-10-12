@@ -446,13 +446,13 @@ func TestMemoryStagesHaveIndependentBudgets(t *testing.T) {
 	scope := owner()
 	phase35Snapshot(t, s, scope)
 	for stage, want := range map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6, HandoverStage: 2} {
-		if backgroundHourlyBudgets[stage] != want {
-			t.Fatalf("%s budget=%d want=%d", stage, backgroundHourlyBudgets[stage], want)
+		if kernel.HourlyBudgets[stage] != want {
+			t.Fatalf("%s budget=%d want=%d", stage, kernel.HourlyBudgets[stage], want)
 		}
 		if _, err := s.Pool.Exec(ctx, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) SELECT gen_random_uuid(),$1,0,$2 FROM generate_series(1,$3)`, scope.OwnerID, stage, want); err != nil {
 			t.Fatal(err)
 		}
-		err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return backgroundHourlyTx(ctx, tx, stage, "phase35_hourly_limit") })
+		err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return kernel.HourlyLimit(ctx, tx, stage, "phase35_hourly_limit") })
 		var e *worker.JobError
 		if !errors.As(err, &e) || !e.NoAttempt || e.Until.IsZero() {
 			t.Fatalf("%s did not enforce independent budget: %v", stage, err)
@@ -460,7 +460,7 @@ func TestMemoryStagesHaveIndependentBudgets(t *testing.T) {
 		if _, err := s.Pool.Exec(ctx, `DELETE FROM background_usage WHERE owner_id=$1 AND stage=$2`, scope.OwnerID, stage); err != nil {
 			t.Fatal(err)
 		}
-		if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return backgroundHourlyTx(ctx, tx, stage, "phase35_hourly_limit") }); err != nil {
+		if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return kernel.HourlyLimit(ctx, tx, stage, "phase35_hourly_limit") }); err != nil {
 			t.Fatal("unused own capacity unavailable", err)
 		}
 	}

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/ownerstore"
 	"github.com/soaringjerry/PCAS/internal/workspace/itemcommand"
 	"github.com/soaringjerry/PCAS/internal/workspace/settings"
 
@@ -141,7 +143,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			if !memory.ID(doc.ID).Valid() || doc.By != "user" || doc.RunID != "" {
 				return memory.ErrInvalid
 			}
-			if _, err := getItem(ctx, tx, scope, doc.ThingID); err != nil {
+			if _, err := itemstore.GetItem(ctx, tx, scope, doc.ThingID); err != nil {
 				return err
 			}
 			var exists bool
@@ -206,7 +208,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			return err
 		}
 		if initialize {
-			if err := initializeAgentMemoriesTx(ctx, tx, scope.OwnerID, a.ID); err != nil {
+			if err := ownerstore.InitializeAgentMemoriesTx(ctx, tx, scope.OwnerID, a.ID); err != nil {
 				return err
 			}
 			a.MemoryInitialized = true
@@ -214,7 +216,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		_, err = tx.Exec(ctx, "UPDATE workspace_agents SET document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID, kernel.JSON(a))
 		return err
 	case "toggleContextMemory":
-		if _, err := getItem(ctx, tx, scope, c.ThingID); err != nil {
+		if _, err := itemstore.GetItem(ctx, tx, scope, c.ThingID); err != nil {
 			return err
 		}
 		if !memory.ID(c.MemoryID).Valid() {
@@ -261,7 +263,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		return s.deleteThingTx(ctx, tx, scope, c.ID)
 	}
 	// Remaining commands operate on a single action record.
-	item, err := getItem(ctx, tx, scope, itemcommand.Target(c))
+	item, err := itemstore.GetItem(ctx, tx, scope, itemcommand.Target(c))
 	if err != nil {
 		return err
 	}
@@ -285,11 +287,11 @@ func (w candidateWrites) Remember(ctx context.Context, text, nature, projectID s
 }
 
 func (w candidateWrites) Item(ctx context.Context, id string) (workspace.Item, error) {
-	return getItem(ctx, w.tx, w.scope, id)
+	return itemstore.GetItem(ctx, w.tx, w.scope, id)
 }
 
 func (w candidateWrites) SaveItem(ctx context.Context, item workspace.Item) error {
-	return saveItem(ctx, w.tx, w.scope, item)
+	return itemstore.SaveItem(ctx, w.tx, w.scope, item)
 }
 
 // itemEffects gives an item command the owner's time zone and the writes of
@@ -312,7 +314,7 @@ func (e itemEffects) Location(ctx context.Context) (*time.Location, error) {
 }
 
 func (e itemEffects) PromoteIdea(ctx context.Context, ideaID string, task workspace.Item) error {
-	if err := saveItem(ctx, e.tx, e.scope, task); err != nil {
+	if err := itemstore.SaveItem(ctx, e.tx, e.scope, task); err != nil {
 		return err
 	}
 	return promoteArtifactsTx(ctx, e.tx, e.scope, ideaID, task.ID)
@@ -337,7 +339,7 @@ func saveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.D
 func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, summary string) error {
 	if history, ok := ctx.Value(secretaryHistoryKey{}).(*secretaryHistory); ok {
 		history.record(item.ID, summary)
-		return saveItem(ctx, tx, scope, item)
+		return itemstore.SaveItem(ctx, tx, scope, item)
 	}
 	revision := workspace.Revision{At: kernel.Stamp(), By: kernel.ActorFromContext(ctx), Summary: summary}
 	item.History = append(item.History, revision)
@@ -345,7 +347,7 @@ func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		item.Evolution = append(item.Evolution, revision)
 	}
 	if smokeID(ctx) != "" {
-		return saveItem(ctx, tx, scope, item)
+		return itemstore.SaveItem(ctx, tx, scope, item)
 	}
 	// Action records remain authoritative for execution; memory retains a versioned receipt.
 	source, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "actions", ExternalID: item.ID, ExternalVersion: fmt.Sprint(item.Version), Title: item.Title, Text: string(kernel.JSON(item)), MediaType: "text/plain"})
@@ -353,7 +355,7 @@ func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		return err
 	}
 	item.Sources = append(item.Sources, workspace.SourceRef{SourceID: string(source.ID), Version: source.Version, Label: summary, At: revision.At})
-	return saveItem(ctx, tx, scope, item)
+	return itemstore.SaveItem(ctx, tx, scope, item)
 }
 
 func activeClaim(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
@@ -380,7 +382,7 @@ func sampleTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, sample workspa
 // on it, and the receipts memory kept of its changes are deleted like any
 // other material. It is confirmed in the interface and cannot be undone.
 func (s *Store) deleteThingTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
-	item, err := getItem(ctx, tx, scope, id)
+	item, err := itemstore.GetItem(ctx, tx, scope, id)
 	if err != nil {
 		return err
 	}
@@ -407,8 +409,7 @@ func (s *Store) deleteThingTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 			return err
 		}
 	}
-	if _, err := tx.Exec(ctx, `UPDATE work_items SET document=jsonb_set(document,'{dependsOn}',(document->'dependsOn')-$2)
-		WHERE owner_id=$1 AND kind='task' AND document->'dependsOn' ? $2`, string(scope.OwnerID), item.ID); err != nil {
+	if err := itemstore.RemoveItemDependency(ctx, tx, scope.OwnerID, item.ID); err != nil {
 		return err
 	}
 	// Undo keeps earlier versions of the item, its documents, its agent runs
@@ -436,7 +437,7 @@ func (s *Store) deleteThingTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	if _, err := tx.Exec(ctx, "DELETE FROM agent_runs WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, "DELETE FROM work_items WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), item.ID); err != nil {
+	if err := itemstore.DeleteItem(ctx, tx, scope.OwnerID, item.ID); err != nil {
 		return err
 	}
 	_, err = tx.Exec(ctx, "SELECT set_config('pcas.expire_actions',$1,true)", previous)

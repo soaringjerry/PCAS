@@ -22,6 +22,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -46,7 +47,7 @@ func dueNotice(t *testing.T, s *Store, scope memory.Scope, now time.Time) worksp
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "提醒事项"})
 	item := state.Tasks[0]
 	item.Triggers = []workspace.Trigger{{ID: "due-reminder", Kind: "time", Description: "截止前提醒", NextAt: now.Add(-time.Minute).UTC().Format(time.RFC3339), Active: true}}
-	if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error { return saveItem(context.Background(), tx, scope, item) }); err != nil {
+	if err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error { return itemstore.SaveItem(context.Background(), tx, scope, item) }); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.CheckReminders(context.Background(), now); err != nil {

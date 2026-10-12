@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -103,7 +104,7 @@ func commandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c worksp
 		id = c.IdeaID
 	}
 	if title == "" && memory.ID(id).Valid() {
-		if item, err := getItem(ctx, tx, scope, id); err == nil {
+		if item, err := itemstore.GetItem(ctx, tx, scope, id); err == nil {
 			title = item.Title
 		}
 	}
@@ -266,7 +267,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 					return err
 				}
 				if referenced {
-					project, e := getItem(ctx, tx, scope, c.ID)
+					project, e := itemstore.GetItem(ctx, tx, scope, c.ID)
 					if e != nil {
 						return e
 					}
@@ -291,7 +292,11 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 					return err
 				}
 			}
-			_, err = tx.Exec(ctx, "DELETE FROM "+c.Table+" WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
+			if c.Table == "work_items" {
+				err = itemstore.DeleteItem(ctx, tx, scope.OwnerID, c.ID)
+			} else {
+				_, err = tx.Exec(ctx, "DELETE FROM "+c.Table+" WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID)
+			}
 		} else {
 			switch c.Table {
 			case "work_items":
@@ -299,7 +304,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 				if err = json.Unmarshal(c.Before, &item); err != nil {
 					return err
 				}
-				current, e := getItem(ctx, tx, scope, c.ID)
+				current, e := itemstore.GetItem(ctx, tx, scope, c.ID)
 				if e != nil {
 					return e
 				}
@@ -534,7 +539,7 @@ func (s *Store) Undo(ctx context.Context, scope memory.Scope, actionID string) (
 		return out, err
 	}
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := s.ensureOwner(ctx, tx, scope); err != nil {
+		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
@@ -40,7 +41,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err := deputy.CheckRequest(c.Kind, c.Prompt); err != nil {
 			return err
 		}
-		item, err := getItem(ctx, tx, scope, c.ThingID)
+		item, err := itemstore.GetItem(ctx, tx, scope, c.ThingID)
 		if err != nil {
 			return err
 		}
@@ -76,7 +77,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if item.Kind == "project" {
 			projectID = item.ID
 		} else if projectID != "" {
-			found, err := getItem(ctx, tx, scope, projectID)
+			found, err := itemstore.GetItem(ctx, tx, scope, projectID)
 			if err != nil {
 				return err
 			}
@@ -123,7 +124,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		if err != nil {
 			return err
 		}
-		loc := deskLocation(settings)
+		loc := kernel.Location(settings)
 		plan := memory.PlanQuery(c.Prompt, s.BusinessNow(), loc)
 		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
 			plan = prepared.Plan
@@ -364,7 +365,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 	if err := verifyRunAccessTx(ctx, useClockTx{Tx: tx, at: time.Now()}, scope, *run); err != nil {
 		return err
 	}
-	item, err := getItem(ctx, tx, scope, run.ThingID)
+	item, err := itemstore.GetItem(ctx, tx, scope, run.ThingID)
 	if err != nil {
 		return err
 	}
@@ -420,7 +421,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 					task.IdeaID = item.ID
 					task.ProjectID = item.ProjectID
 				}
-				if err := saveItem(ctx, tx, scope, task); err != nil {
+				if err := itemstore.SaveItem(ctx, tx, scope, task); err != nil {
 					return err
 				}
 				if err := artifactTx(ctx, tx, scope, run.ID, task.ID, "task", task.ID, line); err != nil {
@@ -451,7 +452,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 func verifyRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
 	var item *workspace.Item
 	if run.ThingID != "" {
-		current, err := getItem(ctx, tx, scope, run.ThingID)
+		current, err := itemstore.GetItem(ctx, tx, scope, run.ThingID)
 		if err != nil {
 			return err
 		}
@@ -626,7 +627,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	ctx, persistCancel := context.WithDeadline(ctx, started.Add(secretary.TurnTimeout))
 	defer persistCancel()
 	s.pendingPaid.Range(func(key, value any) bool {
-		var snap reviseSnapshot
+		var snap deputy.Snapshot
 		paid, ok := value.(*paidModelResult)
 		if !ok || json.Unmarshal(paid.Prompt, &snap) != nil || snap.Run.Kind != "revise" {
 			return true
@@ -660,7 +661,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	var scope memory.Scope
 	var token string
 	var savedRow *interactiveCallRow
-	var savedInput *reviseSnapshot
+	var savedInput *deputy.Snapshot
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var ownerID, id string
 		var data []byte
@@ -681,7 +682,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 				return err
 			}
 			if cached != nil {
-				var original reviseSnapshot
+				var original deputy.Snapshot
 				if json.Unmarshal(cached.Prompt, &original) != nil || original.Run.ID != run.ID || original.Run.CreatedAt != run.CreatedAt || original.Run.AgentID != run.AgentID || original.Run.ThingID != run.ThingID {
 					cached = nil
 				}
@@ -783,7 +784,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	generationErr := verifyErr
 	var mainPaid *modelcall.PaidResult
 	var mainInvocation memory.ID
-	request := deputyAnswerRequest(scope.OwnerID, token, reviseSnapshot{Run: run, RawPrompt: run.Brief, Coverage: u.Coverage, MemoryReady: u.Ready})
+	request := deputyAnswerRequest(scope.OwnerID, token, deputy.Snapshot{Run: run, RawPrompt: run.Brief, Coverage: u.Coverage, MemoryReady: u.Ready})
 	if savedRow != nil && savedInput == nil {
 		mainInvocation = savedRow.ID
 		generationErr = &modelcall.Failure{Code: savedRow.ErrorCode, InvocationID: savedRow.ID}
@@ -1054,7 +1055,7 @@ func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if run.SmokeID != "" {
 		ctx = withSmoke(ctx, run.SmokeID)
 	}
-	item, err := getItem(ctx, tx, scope, run.ThingID)
+	item, err := itemstore.GetItem(ctx, tx, scope, run.ThingID)
 	if err != nil {
 		return err
 	}

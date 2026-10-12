@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -146,7 +147,7 @@ func phase3LoadFixture(t *testing.T) *phase3LoadedFixture {
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		for _, p := range f.Gold.Projects {
 			project := workspace.Item{ID: p.ID, Kind: "project", Version: 1, Title: p.Name, Name: p.Name, Status: "active", Goal: "完成虚构青湾展览", CreatedAt: f.Gold.Base.Now.AddDate(0, 0, -14).Format(time.RFC3339), UpdatedAt: f.Gold.Base.Now.Format(time.RFC3339)}
-			if err := saveItem(ctx, tx, scope, project); err != nil {
+			if err := itemstore.SaveItem(ctx, tx, scope, project); err != nil {
 				return err
 			}
 			if _, err := tx.Exec(ctx, `UPDATE entity_versions SET disambiguation=disambiguation || jsonb_build_object('work_item_id',$3::text) WHERE owner_id=$1 AND entity_id=$2`, scope.OwnerID, f.Entities[p.Entity], p.ID); err != nil {
@@ -172,7 +173,7 @@ func phase3LoadFixture(t *testing.T) *phase3LoadedFixture {
 				return err
 			}
 			for _, it := range p.Items {
-				if err := saveItem(ctx, tx, scope, it); err != nil {
+				if err := itemstore.SaveItem(ctx, tx, scope, it); err != nil {
 					return err
 				}
 			}

@@ -15,8 +15,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 )
 
-type reviseSnapshot = deputy.Snapshot
-
 func validateReviseTargetTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
 	var valid bool
 	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM revise_run_targets t JOIN work_documents d ON(d.owner_id,d.id)=(t.owner_id,t.document_id) WHERE t.owner_id=$1 AND t.run_id=$2 AND (d.document->>'version')::integer=t.target_version)`, string(scope.OwnerID), run.ID).Scan(&valid)
@@ -69,7 +67,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 			return kernel.StageEvent(retryCtx, tx, scope.OwnerID, "deputy", "failure", "revise_result_write_"+backgroundFailureReason(resultErr), 1)
 		})
 	}()
-	var snapshot reviseSnapshot
+	var snapshot deputy.Snapshot
 	if err := json.Unmarshal(paid.Prompt, &snapshot); err != nil {
 		return err
 	}

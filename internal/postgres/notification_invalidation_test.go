@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -21,12 +22,12 @@ func TestRescheduledNoticeIsInvalidated(t *testing.T) {
 			changeItem := func() {
 				if change == "due-command" {
 					err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-						item, err := getItem(context.Background(), tx, scope, notice.ThingID)
+						item, err := itemstore.GetItem(context.Background(), tx, scope, notice.ThingID)
 						if err != nil {
 							return err
 						}
 						item.Triggers[0].Offset = "at"
-						return saveItem(context.Background(), tx, scope, item)
+						return itemstore.SaveItem(context.Background(), tx, scope, item)
 					})
 					if err != nil {
 						t.Fatal(err)
@@ -35,7 +36,7 @@ func TestRescheduledNoticeIsInvalidated(t *testing.T) {
 					return
 				}
 				err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-					item, err := getItem(context.Background(), tx, scope, notice.ThingID)
+					item, err := itemstore.GetItem(context.Background(), tx, scope, notice.ThingID)
 					if err != nil {
 						return err
 					}
@@ -49,7 +50,7 @@ func TestRescheduledNoticeIsInvalidated(t *testing.T) {
 					default:
 						item.Triggers[0].NextAt = now.Add(24 * time.Hour).UTC().Format(time.RFC3339)
 					}
-					return saveItem(context.Background(), tx, scope, item)
+					return itemstore.SaveItem(context.Background(), tx, scope, item)
 				})
 				if err != nil {
 					t.Fatal(err)
@@ -134,7 +135,7 @@ func TestEquivalentInstantKeepsCurrentNotice(t *testing.T) {
 	now := time.Now().Add(time.Second)
 	notice := dueNotice(t, s, scope, now)
 	err := pgx.BeginFunc(context.Background(), s.Pool, func(tx pgx.Tx) error {
-		item, err := getItem(context.Background(), tx, scope, notice.ThingID)
+		item, err := itemstore.GetItem(context.Background(), tx, scope, notice.ThingID)
 		if err != nil {
 			return err
 		}
@@ -143,7 +144,7 @@ func TestEquivalentInstantKeepsCurrentNotice(t *testing.T) {
 			return err
 		}
 		item.Triggers[0].NextAt = at.In(time.FixedZone("Test", 2*3600)).Format(time.RFC3339)
-		return saveItem(context.Background(), tx, scope, item)
+		return itemstore.SaveItem(context.Background(), tx, scope, item)
 	})
 	if err != nil {
 		t.Fatal(err)

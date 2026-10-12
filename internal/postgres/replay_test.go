@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -219,7 +220,7 @@ func TestExplicitTimeReminderIsIdempotent(t *testing.T) {
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "跟进"})
 	item := st.Tasks[0]
 	item.Triggers = []workspace.Trigger{{ID: string(memory.NewID()), Kind: "time", NextAt: time.Now().Add(-time.Hour).UTC().Format(time.RFC3339), Active: true, Description: "到时间跟进", Guard: "todo"}}
-	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return saveItem(ctx, tx, scope, item) }); err != nil {
+	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error { return itemstore.SaveItem(ctx, tx, scope, item) }); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {

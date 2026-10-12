@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -104,7 +105,7 @@ func TestCompareTrustAtEveryMemoryConsumer(t *testing.T) {
 					if _, err = tx.Exec(ctx, `INSERT INTO adopted_artifacts(owner_id,run_id,thing_id,kind,artifact_id,body) VALUES($1,$2,$3,'notes','fictional','虚构采纳文本')`, string(scope.OwnerID), run.ID, task); err != nil {
 						return err
 					}
-					item, err := getItem(ctx, tx, scope, task)
+					item, err := itemstore.GetItem(ctx, tx, scope, task)
 					if err != nil {
 						return err
 					}

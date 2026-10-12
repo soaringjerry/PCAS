@@ -1286,7 +1286,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 				}
 				receiptText = "已记下原话；这轮操作未完成，为避免覆盖后续改动，请重新说明要做的事"
 			} else if text != "" {
-				if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "capture", RequestID: req.RequestID, Text: req.Text}); err != nil {
+				if err := s.CommandTx(ctx, tx, scope, workspace.Command{Type: "capture", RequestID: req.RequestID, Text: req.Text}); err != nil {
 					return err
 				}
 			}

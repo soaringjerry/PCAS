@@ -1,4 +1,4 @@
-package postgres
+package commandstore
 
 import (
 	"context"
@@ -83,7 +83,7 @@ func restoreMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id stri
 	return nil
 }
 
-func (s *Store) undoEntityCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
+func (s *Commands) undoEntityCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
 	if !memory.ID(id).Valid() {
 		return memory.ErrInvalid
 	}
@@ -97,7 +97,7 @@ func (s *Store) undoEntityCommandTx(ctx context.Context, tx pgx.Tx, scope memory
 	if err != nil {
 		return err
 	}
-	return s.undoActionTx(ctx, tx, scope, actionID)
+	return s.UndoActionTx(ctx, tx, scope, actionID)
 }
 
 // The existing action ledger owns request replay, expiry and permission checks.

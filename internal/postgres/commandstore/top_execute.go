@@ -1,4 +1,4 @@
-package postgres
+package commandstore
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ import (
 
 // ExecuteWith executes one workspace command. A command that queues a run
 // searches memory first; embed gives that search the vector of its query.
-func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspace.Command, embed retrieval.QueryEmbed) (workspace.State, error) {
+func (s *Commands) ExecuteWith(ctx context.Context, scope memory.Scope, in workspace.Command, embed retrieval.QueryEmbed) (workspace.State, error) {
 	var out workspace.State
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -102,7 +102,7 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 				return err
 			}
 		}
-		if err := s.commandTx(ctx, tx, scope, in); err != nil {
+		if err := s.CommandTx(ctx, tx, scope, in); err != nil {
 			return err
 		}
 		if err := actionlog.FlushActionLog(ctx, tx, scope); err != nil {

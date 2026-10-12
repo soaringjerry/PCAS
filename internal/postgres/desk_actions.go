@@ -62,7 +62,7 @@ func (s *Store) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.
 		if err = actionlog.BeginActionLogTx(projectCtx, tx); err != nil {
 			return "", err
 		}
-		if err = s.commandTx(projectCtx, tx, scope, workspace.Command{Type: "addProject", ID: id, Name: name}); err != nil {
+		if err = s.CommandTx(projectCtx, tx, scope, workspace.Command{Type: "addProject", ID: id, Name: name}); err != nil {
 			return "", err
 		}
 		if err = actionlog.FlushActionLog(projectCtx, tx, scope); err != nil {
@@ -109,7 +109,7 @@ func (w *secretaryWorkspace) collecting(ctx context.Context) context.Context {
 }
 
 func (w *secretaryWorkspace) Command(ctx context.Context, c workspace.Command) error {
-	return w.store.commandTx(w.collecting(ctx), w.tx, w.scope, c)
+	return w.store.CommandTx(w.collecting(ctx), w.tx, w.scope, c)
 }
 
 func (w *secretaryWorkspace) Item(ctx context.Context, id string) (workspace.Item, error) {

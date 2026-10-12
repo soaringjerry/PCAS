@@ -27,10 +27,10 @@ func TestSaveActionPersistsContextActor(t *testing.T) {
 			}
 			id := string(memory.NewID())
 			err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-				if err := s.commandTx(actionCtx, tx, scope, workspace.Command{Type: "addIdea", ID: id, Title: "记录修改者"}); err != nil {
+				if err := s.CommandTx(actionCtx, tx, scope, workspace.Command{Type: "addIdea", ID: id, Title: "记录修改者"}); err != nil {
 					return err
 				}
-				return s.commandTx(actionCtx, tx, scope, workspace.Command{Type: "setNotes", ID: id, Text: "记录内容"})
+				return s.CommandTx(actionCtx, tx, scope, workspace.Command{Type: "setNotes", ID: id, Text: "记录内容"})
 			})
 			if err != nil {
 				t.Fatal(err)

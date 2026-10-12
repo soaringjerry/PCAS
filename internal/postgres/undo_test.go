@@ -87,10 +87,10 @@ func TestUndoDocumentsAndFirstBefore(t *testing.T) {
 		if err := actionlog.BeginActionLogTx(logCtx, tx); err != nil {
 			return err
 		}
-		if err := s.commandTx(logCtx, tx, scope, workspace.Command{Type: "renameThing", ID: thing, Title: "第一次"}); err != nil {
+		if err := s.CommandTx(logCtx, tx, scope, workspace.Command{Type: "renameThing", ID: thing, Title: "第一次"}); err != nil {
 			return err
 		}
-		if err := s.commandTx(logCtx, tx, scope, workspace.Command{Type: "renameThing", ID: thing, Title: "第二次"}); err != nil {
+		if err := s.CommandTx(logCtx, tx, scope, workspace.Command{Type: "renameThing", ID: thing, Title: "第二次"}); err != nil {
 			return err
 		}
 		return actionlog.FlushActionLog(logCtx, tx, scope)
@@ -137,7 +137,7 @@ func TestUndoQueuedDelegationAndStartedWork(t *testing.T) {
 			if err := actionlog.BeginActionLogTx(logged, tx); err != nil {
 				return err
 			}
-			if err := s.commandTx(logged, tx, scope, workspace.Command{Type: "delegateTask", ID: id, Title: "写方案", Prompt: "写方案", AgentID: "model"}); err != nil {
+			if err := s.CommandTx(logged, tx, scope, workspace.Command{Type: "delegateTask", ID: id, Title: "写方案", Prompt: "写方案", AgentID: "model"}); err != nil {
 				return err
 			}
 			return actionlog.FlushActionLog(logged, tx, scope)

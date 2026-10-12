@@ -1,4 +1,4 @@
-package postgres
+package commandstore
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
+func (s *Commands) UndoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
 	if handled, err := s.UndoTopicProjectTx(ctx, tx, scope, id); handled {
 		return err
 	}
@@ -246,7 +246,7 @@ func (s *Store) undoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	return s.DeleteUndoneTurnMemoriesTx(ctx, tx, scope, *turnID)
 }
 
-func (s *Store) Undo(ctx context.Context, scope memory.Scope, actionID string) (workspace.State, error) {
+func (s *Commands) Undo(ctx context.Context, scope memory.Scope, actionID string) (workspace.State, error) {
 	var out workspace.State
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -258,7 +258,7 @@ func (s *Store) Undo(ctx context.Context, scope memory.Scope, actionID string) (
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
 			return err
 		}
-		if err := s.undoActionTx(ctx, tx, scope, actionID); err != nil {
+		if err := s.UndoActionTx(ctx, tx, scope, actionID); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "UPDATE workspace_owners SET revision=revision+1 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {

@@ -81,7 +81,7 @@ func TestApprovedUndoRecordedSources(t *testing.T) {
 				if err := actionlog.BeginActionLogTx(ctx, tx); err != nil {
 					return err
 				}
-				if err := s.commandTx(ctx, tx, scope, workspace.Command{Type: "renameThing", ID: id, Title: "later"}); err != nil {
+				if err := s.CommandTx(ctx, tx, scope, workspace.Command{Type: "renameThing", ID: id, Title: "later"}); err != nil {
 					return err
 				}
 				return actionlog.FlushActionLog(ctx, tx, scope)
@@ -134,7 +134,7 @@ func TestApprovedUndoSameTransactionOrder(t *testing.T) {
 			if err := actionlog.BeginActionLogTx(logged, tx); err != nil {
 				return err
 			}
-			if err := s.commandTx(logged, tx, scope, workspace.Command{Type: "renameThing", ID: id, Title: title}); err != nil {
+			if err := s.CommandTx(logged, tx, scope, workspace.Command{Type: "renameThing", ID: id, Title: title}); err != nil {
 				return err
 			}
 			if err := actionlog.FlushActionLog(logged, tx, scope); err != nil {
@@ -281,7 +281,7 @@ func TestApprovedUndoProtectionPriority(t *testing.T) {
 		if err := actionlog.BeginActionLogTx(logged, tx); err != nil {
 			return err
 		}
-		if err := s.commandTx(logged, tx, scope, workspace.Command{Type: "delegateTask", ID: id, Title: "original", Prompt: "fixture", AgentID: "model"}); err != nil {
+		if err := s.CommandTx(logged, tx, scope, workspace.Command{Type: "delegateTask", ID: id, Title: "original", Prompt: "fixture", AgentID: "model"}); err != nil {
 			return err
 		}
 		return actionlog.FlushActionLog(logged, tx, scope)

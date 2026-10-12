@@ -1,4 +1,4 @@
-package postgres
+package commandstore
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
+func (s *Commands) CommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	switch c.Type {
 	case "completeDeadline":
 		if !memory.ID(c.ID).Valid() {
@@ -49,7 +49,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 	case "undoEntityMerge":
 		return s.undoEntityCommandTx(ctx, tx, scope, c.ID)
 	case "undoAction":
-		return s.undoActionTx(ctx, tx, scope, c.ID)
+		return s.UndoActionTx(ctx, tx, scope, c.ID)
 	case "delegateTask":
 		// One explicit delegation atomically creates the work and queues its run.
 		// Execute's request receipt fences retries; a stable item ID also fences
@@ -64,7 +64,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		create := c
 		create.Type = "addTask"
 		create.Text = c.Prompt
-		if err := s.commandTx(ctx, tx, scope, create); err != nil {
+		if err := s.CommandTx(ctx, tx, scope, create); err != nil {
 			return err
 		}
 		run := c
@@ -128,7 +128,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 			return err
 		}
 		for _, next := range commands {
-			if err := s.commandTx(ctx, tx, scope, next); err != nil {
+			if err := s.CommandTx(ctx, tx, scope, next); err != nil {
 				return err
 			}
 		}
@@ -282,7 +282,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 
 // candidateWrites gives the review of a candidate its writes.
 type candidateWrites struct {
-	store *Store
+	store *Commands
 	tx    pgx.Tx
 	scope memory.Scope
 }
@@ -333,7 +333,7 @@ func (e itemEffects) PromoteIdea(ctx context.Context, ideaID string, task worksp
 // reminders, documents and agent runs go with it, other to-dos stop depending
 // on it, and the receipts memory kept of its changes are deleted like any
 // other material. It is confirmed in the interface and cannot be undone.
-func (s *Store) deleteThingTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
+func (s *Commands) deleteThingTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
 	item, err := itemstore.GetItem(ctx, tx, scope, id)
 	if err != nil {
 		return err

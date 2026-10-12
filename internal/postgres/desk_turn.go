@@ -619,7 +619,7 @@ func (t *secretarySession) KeepSentence(ctx context.Context, unordered bool) err
 	if unordered {
 		return s.store.captureIncompleteSecretaryTurn(ctx, s.tx, s.scope, s.req.RequestID, s.req.Text)
 	}
-	return s.store.commandTx(ctx, s.tx, s.scope, workspace.Command{Type: "capture", RequestID: s.req.RequestID, Text: s.req.Text})
+	return s.store.CommandTx(ctx, s.tx, s.scope, workspace.Command{Type: "capture", RequestID: s.req.RequestID, Text: s.req.Text})
 }
 
 func (t *secretarySession) SaveSentence(ctx context.Context) error {

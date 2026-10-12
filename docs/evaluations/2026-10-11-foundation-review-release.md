@@ -269,6 +269,19 @@ The cleanup succeeded and the record counts are equal. Neither log has an error,
 
 The storage package has 24,625 lines without tests at this revision. It had 28,355 lines at the review.
 
+## Nineteenth Release
+
+Released revision: `d0af154409862153b027acab7dc43f1a0ed73a0a`, on 2026-10-12 UTC. Earlier revision: `f5a5fd6`.
+Pull requests #372, #374, #375, and #376 give the changes: a secretary turn is conducted outside the storage package, and the PostgreSQL slices of CI are balanced by time.
+
+The release had no database migration. The backup was validated, and the record counts are equal before and after the start: 5,253 claims and 29 work items.
+The live check on the real default Codex channel passed with four turns: an answer, an arrangement (`create_task`, done), a change (`update`, done), and a delegation (`delegate`, done) whose deputy run finished as done with a settled call.
+Each of the four turns ran through `secretary.Conduct`. The cleanup succeeded and the record counts are equal. Neither log has an error, and no container restarted.
+
+The full CI run of #376 was the first with the new slices: the slowest PostgreSQL slice took 12 minutes 36 seconds. It took 24 minutes 21 seconds on #371.
+
+The storage package has 24,636 lines without tests at this revision. It had 28,355 lines at the review.
+
 ## Host Cleanup
 
 The owner approved removal of leftover data on 2026-10-11.

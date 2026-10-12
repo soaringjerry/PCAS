@@ -19,7 +19,7 @@ var domainPackages = []string{
 	"./internal/currentstate/...",
 	"./internal/interpretation/...",
 	"./internal/input/...",
-	"./internal/contextbuilder",
+	"./internal/contextbuilder/...",
 	"./internal/retrieval",
 	"./internal/modelcall/...",
 	"./internal/prompts",

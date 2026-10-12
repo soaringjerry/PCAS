@@ -117,9 +117,13 @@ The chunk, index, and summary jobs stay in storage. They hold no interpretation 
 
 ## Model Calls Outside the Storage Package
 
-A storage package must not make a model call. The domain package owns the request, the call, and the meaning of each failure. Storage keeps the records of the call and the job's writes.
+A storage package must not make a model call. The domain package owns the request, the call, and the meaning of each failure. Storage keeps the records of the call and the writes of the flow.
+The test `TestStoragePackagesDoNotMakeModelCalls` in `internal/app/boundaries_test.go` enforces this rule: a storage package cannot refer to the gateway type or its constructor, and cannot call a method that submits a model call.
+`internal/app.Gateway` builds the gateway over the store's call records (`Store.CallRecords`, `Store.DirectCallRecords`) and the configured models. The store holds no gateway.
 
-| Call | Owner since 2026-10-12 |
+All ten calls that were in the storage package on 2026-10-12 have an owner outside it.
+
+| Call | Owner |
 |---|---|
 | The generation of each background job | `internal/modelcall/jobcall` (`Generator`). It maps each gateway result to the queue's failure. The storage adapter `Store.JobCallStore` keeps the paid results and the reservations. |
 | The rejudge of a superseded pair | `comparison.Service`. Storage gives the pair and applies the verdict. |
@@ -129,21 +133,22 @@ A storage package must not make a model call. The domain package owns the reques
 | The secretary's answer with its retry, and its self-check | `secretary.Asker`. Storage verifies the turn's context before a second answer call and before the check. |
 | The memory readers of the secretary and the deputy | `internal/contextbuilder/reader` (`Service`). Storage gives the members and the memories of a group. |
 | One stage call of an admitted execution | `internal/modelcall/stagecall` (`Caller`). The readers and the self-check use it. |
+| The query embedding of a recall | `retrieval.Recaller`. `Store.RecallWith` checks the request first and then asks for the vector once. |
+| The transcription and the image reading of an attachment | `attachment.Reader`. Storage keeps the lock of one original and the receipts of paid readings. |
+| The deputy's answer and its self-check | `deputy.Calls`, with the requests from `deputy.AnswerRequest` and `deputy.SelfcheckRequest`. |
 
-The secretary's turn is `secretary.Service.DeskTurn`. The storage adapter `Store.DeskStore` admits the request, places the turn in its conversation, and calls the service once in the transaction of the turn. The service composes the asker for that transaction.
-The deputy's run is still ordered in storage. It gets the reader as a step (`deputy.Steps`) from the application.
-`internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary and the deputy.
+The accounting recovery of an interactive call submits nothing. It settles a verified receipt with `modelcall.SettleReceipt` over the store's own records.
 
-Four calls are still made in `internal/postgres`. Each moves with the flow that holds it.
+Three flows keep their order in storage and get their model steps from the application. Storage calls each step at its place; it does not build the request and does not see the gateway.
 
-| Call | File | Moves with |
+| Flow | Entry in storage | Steps |
 |---|---|---|
-| The transcription and the image reading of an attachment | `attachments.go` | The attachment job and the secretary's turn, which read an attachment under the lock of one original. |
-| The query embedding of a recall | `retrieval.go` | The secretary's context read and the deputy's run commands, which start a recall. |
-| The deputy's answer and its self-check | `runs.go` | The deputy's run. This is the last step. |
-| The accounting recovery of an interactive call | `model_calls_interactive_recovery.go` | The call journals. |
+| The secretary's turn | `Store.DeskStore().Turn` admits the request, places the turn in its conversation, and calls the service once in the transaction of the turn. | `secretary.Steps`: the reading of an attachment, and `Conduct` with the asker and the recall. |
+| A workspace command that queues a run | `Store.ExecuteWith` searches memory before it takes the owner lock. | The query embedding. |
+| The deputy's run | `Store.RunAgentJobs` and `Store.RunDeputy` hold the leases, the recovery, and the selection of a result. | `deputy.Steps`: the reader and the two calls. The order of the run leaves storage when the deputy's storage is split. That is the last step of the split. |
 
-When the last call has moved, an architecture test in `internal/app` forbids a call of the gateway from a storage package.
+`internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. Compose it after the store has its models.
+Tests in the storage package compose the same services in `internal/postgres/compose_test.go`, at each call.
 
 ## Pattern for the Next Paths
 
@@ -173,7 +178,6 @@ The saved input record keeps its form, so a result that was paid before the rele
 
 | Part | Callers | Removal condition |
 |---|---|---|
-| `Store.Gateway` in `internal/postgres` | The application's composition, and the four model calls that are still in storage. Compose a service after the store has its models: the store builds a new gateway when its models are set. |
 | `deputy.Steps` given to `Store.RunAgentJobs` and `Store.RunDeputy` | The deputy's run, whose order is in storage. | The deputy's run leaves the storage package. | The last model call leaves the storage package. The application then builds the gateway from the store's call records. |
 | `maintainTaskPlanTx` and the scheduler query `enqueueEffortTx` in `internal/postgres/effort.go` | Item saves and the status scheduler. | The workspace item commands and the scheduler leave the storage package. |
 | `workspace.ContentHash` used by storage code | Deputy and secretary input checks. | Those paths leave the storage package. |

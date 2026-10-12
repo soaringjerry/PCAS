@@ -31,6 +31,7 @@ flowchart LR
 
 `Recall` keeps its query normalization, provider prefix, estimate, and retrieval rules.
 The gateway entry `CallEmbedding` is the only caller of the embedding provider for queries.
+Since 2026-10-12 `retrieval.Recaller` in `internal/retrieval` makes this call. The storage method `Store.RecallWith` checks the request, asks the recaller for the vector once, and searches.
 
 | Step | Record |
 |---|---|

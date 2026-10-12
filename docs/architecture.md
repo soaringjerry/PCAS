@@ -39,7 +39,7 @@ These findings come from repository revision `6b62f27`. They are code observatio
 | Finding | Evidence | Required architecture result |
 |---|---|---|
 | Storage also owns business orchestration and providers. | [Store](../internal/postgres/database.go), [application setup](../cmd/pcas/main.go). | Domains own workflows. Storage owns persistence. Application setup connects their interfaces. |
-| Model calls use different accounting and recovery paths. | [Background calls](../internal/postgres/background_model.go), [memory use](../internal/postgres/memory_use_model.go), [secretary retries](../internal/postgres/desk_model_retry.go). | One gateway covers calls while keeping applicable recovery and retry policies. |
+| Model calls use different accounting and recovery paths. | Found in the storage package. Since 2026-10-12 the calls are outside it: [background calls](../internal/modelcall/jobcall/generator.go), [stage calls](../internal/modelcall/stagecall/stagecall.go), [secretary answer and retries](../internal/workspace/secretary/asker.go). | One gateway covers calls while keeping applicable recovery and retry policies. |
 | Deputy generation, saved results, revision, and review share a large workflow. | [Deputy](../internal/postgres/runs.go), [revision recovery](../internal/postgres/document_revise.go). | A deputy execution links its stages, calls, results, and final writes. |
 | Telegram transcription bypassed application accounting. | Corrected on 2026-10-11: the gateway entry `CallTranscription`, which `voice.Transcriber` uses. | Channel adapters use the gateway. Every attempted call has an outcome and accounting status. |
 | Legacy routing and legacy answer handling stayed callable without a client. | Removed on 2026-10-10: the Jev adapter, `/v1/desk/route`, `/v1/desk/answer`, their settings form, and their prompt. | Retired. No current client called them. |
@@ -559,7 +559,7 @@ Passing CI alone does not close the phase.
 | Condition | Required proof |
 |---|---|
 | Whole-system coverage | Every existing production workflow has a responsible domain, an entry point, and declared dependencies. Include calls outside `internal/postgres`. |
-| Storage boundary | Production business orchestration and prompts have left `internal/postgres`. Storage implements persistence and transactions without provider calls. |
+| Storage boundary | Production business orchestration and prompts have left `internal/postgres`. Storage implements persistence and transactions without provider calls. A test forbids a model call from a storage package since 2026-10-12; see [Model Calls Outside the Storage Package](tasks/foundation-domain-pilot.md#model-calls-outside-the-storage-package). |
 | Data ownership | Each business object has one owner. Cross-domain changes use owner commands and receipts. Home and timeline reads cannot mutate their underlying business data. |
 | Gateway coverage | All production application model invocations use the gateway. Explicit checks cover adapters, connection tests, and permitted evaluation paths. |
 | Prompt identity | Calls resolve registered instructions and templates with hashes. Schema identity and context builder version are available. |

@@ -204,3 +204,32 @@ func (b *Brief) Request(prompt, kind, recallDates string) {
 	}
 	b.WriteString(OutputFormat(kind))
 }
+
+// HeavyTask is what the heavy reader of a run is asked about: the request,
+// and the brief before its memory part.
+func HeavyTask(run workspace.Run) string {
+	task := run.Prompt
+	if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[0] <= len(run.Brief) {
+		task += "\n" + run.Brief[:bounds[0]]
+	}
+	return task
+}
+
+// RefreshMemory puts the current state that the run reads now in the place
+// of the memory part that the brief got when the run was requested. The
+// place is a byte range that the brief's builder recorded: the task, the
+// discussion, and a memory can hold the same headings, so the part is never
+// found by its text. A brief without a range gets the part at its end.
+func RefreshMemory(run *workspace.Run, u contextbuilder.UseContext) {
+	var section strings.Builder
+	contextbuilder.WriteUse(&section, u, u.Location, func(m workspace.Memory) {
+		fmt.Fprintf(&section, "[%s@%d / trust=%s] %s\n", m.ID, m.Version, m.Trust, m.Text+contextbuilder.MemorySuffix(m, u.Location))
+	})
+	if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[1] >= bounds[0] && bounds[1] <= len(run.Brief) {
+		run.Brief = run.Brief[:bounds[0]] + section.String() + run.Brief[bounds[1]:]
+		run.MemoryContextRange = &[2]int{bounds[0], bounds[0] + section.Len()}
+		return
+	}
+	// A run that was queued before the range existed has the earlier layout.
+	run.Brief += section.String()
+}

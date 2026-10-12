@@ -770,10 +770,7 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 				run.ProjectHandoverWrittenAt = u.ProjectHandover.WrittenAt
 			}
 			if run.MemoryTier == "heavy" {
-				taskText := run.Prompt
-				if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[0] <= len(run.Brief) {
-					taskText += "\n" + run.Brief[:bounds[0]]
-				}
+				taskText := deputy.HeavyTask(run)
 				readerCtx, readerCancel := context.WithDeadline(workCtx, started.Add(heavyReaderBudget))
 				picked, refs, keys := s.heavyUse(readerCtx, ctx, scope, agent, &run.ThingID, taskText, u, "", run.ID, "reader:prepare")
 				readerCancel()
@@ -783,20 +780,7 @@ func (s *Store) runAgentOnce(ctx context.Context) (resultErr error) {
 				u.Supplemental = picked
 			}
 			run.ContextVersions = uniqueRefs(append(run.ContextVersions, u.Dependencies...))
-			var section strings.Builder
-			contextbuilder.WriteUse(&section, u, u.Location, func(m workspace.Memory) {
-				fmt.Fprintf(&section, "[%s@%d / trust=%s] %s\n", m.ID, m.Version, m.Trust, m.Text+contextbuilder.MemorySuffix(m, u.Location))
-			})
-			// Use server-owned byte boundaries. Task text, discussion and memory
-			// values may contain the same headings, so never locate them by text.
-			if bounds := run.MemoryContextRange; bounds != nil && bounds[0] >= 0 && bounds[1] >= bounds[0] && bounds[1] <= len(run.Brief) {
-				run.Brief = run.Brief[:bounds[0]] + section.String() + run.Brief[bounds[1]:]
-				run.MemoryContextRange = &[2]int{bounds[0], bounds[0] + section.Len()}
-			} else {
-				// A job queued before cards existed has the legacy interleaved
-				// discussion layout. Preserve it when adding reader results.
-				run.Brief += section.String()
-			}
+			deputy.RefreshMemory(&run, u)
 		}
 	}
 	verifyErr := useErr

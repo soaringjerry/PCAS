@@ -1,10 +1,11 @@
 package postgres
 
 import (
-	"github.com/soaringjerry/PCAS/internal/contextbuilder"
-	"github.com/soaringjerry/PCAS/internal/workspace"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func TestMemoryPromptSuffix(t *testing.T) {

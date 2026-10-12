@@ -3,9 +3,10 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"

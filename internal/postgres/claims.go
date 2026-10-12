@@ -8,6 +8,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/claim"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -193,7 +194,7 @@ func (s *Store) rememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	if err := kernel.Enqueue(ctx, tx, scope.OwnerID, id, 1, "memory.index"); err != nil {
 		return result, err
 	}
-	if err := refreshSummaryJobsTx(ctx, tx, scope.OwnerID, in.Source.ID); err != nil {
+	if err := memorystore.RefreshSummaryJobsTx(ctx, tx, scope.OwnerID, in.Source.ID); err != nil {
 		return result, err
 	}
 	return memory.Ref{ID: id, Version: 1, Kind: memory.ClaimKind}, nil

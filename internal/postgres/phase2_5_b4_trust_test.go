@@ -2,11 +2,12 @@ package postgres_test
 
 import (
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/workspace"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func TestPhase25B4_LiveMemoryContextUsesTrustAndAgentInferredSetting(t *testing.T) {

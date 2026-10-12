@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/prompts"
 )
 
 // A provider that constrains output to a schema writes each object's keys in
@@ -12,7 +14,7 @@ import (
 // first, or the forms cannot be told apart from their first key. This reads
 // the schema as text on purpose: decoding it into a map would hide the order.
 func TestSecretarySchemasListOpFirstInEveryAction(t *testing.T) {
-	for name, schema := range map[string]json.RawMessage{"answer": secretaryOutputSchema, "selfcheck": secretaryCheckSchema} {
+	for name, schema := range map[string]json.RawMessage{"answer": secretaryOutputSchema, "selfcheck": prompts.MustSchema("secretary-check").Bytes()} {
 		if !json.Valid(schema) {
 			t.Fatalf("%s schema is not valid JSON", name)
 		}

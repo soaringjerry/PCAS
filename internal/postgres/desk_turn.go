@@ -387,11 +387,11 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 	ctx = requestCtx
 	defer s.finishExecutionTiming(ctx, scope.OwnerID, timing)
 	// The answer model may request heavy reading after its first response.
-	persistTimeout := heavyUseTimeout
+	persistTimeout := secretary.TurnTimeout
 	if memoryTier(ctx, req.Text, "light") == "heavy" {
-		persistTimeout = heavyUseTimeout
+		persistTimeout = secretary.TurnTimeout
 		var generationCancel context.CancelFunc
-		requestCtx, generationCancel = context.WithDeadline(requestCtx, turnStarted.Add(heavyUseTimeout-10*time.Second))
+		requestCtx, generationCancel = context.WithDeadline(requestCtx, turnStarted.Add(secretary.TurnTimeout-10*time.Second))
 		defer generationCancel()
 	}
 	ctx, persistCancel := context.WithTimeout(context.WithoutCancel(ctx), persistTimeout)

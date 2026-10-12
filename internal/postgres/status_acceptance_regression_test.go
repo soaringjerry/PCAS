@@ -3,10 +3,11 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 )
 
 func statusRegressionInput(t *testing.T, r *http.Request) (string, []cardMemory) {

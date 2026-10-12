@@ -1,4 +1,4 @@
-package postgres
+package memorystore
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 // said to the secretary is one entry, each import is one entry, and a document
 // stands on its own. Records the system writes about its own actions are not
 // material and stay out.
-func sourceGroupsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) ([]workspace.Source, error) {
+func SourceGroupsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) ([]workspace.Source, error) {
 	// An import is counted from its archive's listing, in one pass; only the
 	// material outside archives, which stays small, is read row by row.
 	rows, err := tx.Query(ctx, `WITH bad AS (SELECT DISTINCT record_id FROM memory_jobs WHERE owner_id=$1 AND state IN ('failed','blocked')),
@@ -93,7 +93,7 @@ FROM (SELECT * FROM imports UNION ALL SELECT * FROM others) g ORDER BY g.at DESC
 // SourceGroupItems pages through one library entry, newest first. Each item
 // is one stored original; the page opens it by ID like any other original.
 // find keeps only the originals whose words or title contain it.
-func (s *Store) SourceGroupItems(ctx context.Context, scope memory.Scope, key, find, cursor string, limit int) (workspace.SourceItems, error) {
+func (s *Memory) SourceGroupItems(ctx context.Context, scope memory.Scope, key, find, cursor string, limit int) (workspace.SourceItems, error) {
 	out := workspace.SourceItems{Items: []workspace.SourceItem{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err

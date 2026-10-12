@@ -12,6 +12,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -506,11 +507,11 @@ func TestRuleScopeRequiresModelAndUsagePlansRemainReadable(t *testing.T) {
 	if ruleRelevance("起草邮件", "帮我写一封邮件") != 0 || ruleRelevance("", "虚构杂事") == 0 || ruleRelevance("盆栽浇水", "起草邮件") != 0 {
 		t.Fatal("rule applicability")
 	}
-	raw := safeUsePlan(json.RawMessage(`{"groups":["secret text","self:rule"],"question":"private text"}`))
+	raw := usagelog.SafeUsePlan(json.RawMessage(`{"groups":["secret text","self:rule"],"question":"private text"}`))
 	if strings.Contains(string(kernel.JSON(raw)), "private") || strings.Contains(string(kernel.JSON(raw)), "secret") {
 		t.Fatal("usage plan leaked text")
 	}
-	var plan usePlan
+	var plan usagelog.UsePlan
 	if err := json.Unmarshal(kernel.JSON(raw), &plan); err != nil || len(plan.Groups) != 1 || plan.Groups[0] != "self:rule" {
 		t.Fatal("safe plan must remain a readable group object", plan, err)
 	}

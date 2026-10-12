@@ -1,4 +1,4 @@
-package postgres
+package usagelog
 
 import (
 	"context"
@@ -17,19 +17,19 @@ import (
 )
 
 // modelUsage mirrors model_usage. References contain identity only, never text.
-type modelUsage = modelcall.Usage
+type ModelUsage = modelcall.Usage
 
 // A returned model call has already incurred usage. Persist it independently
 // before validating or committing its result, even during caller cancellation.
-func (s *Store) recordUsage(ctx context.Context, usage modelUsage) error {
+func (s *Usage) RecordUsage(ctx context.Context, usage ModelUsage) error {
 	usageCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	return pgx.BeginFunc(usageCtx, s.Pool, func(tx pgx.Tx) error {
-		return recordUsageTx(usageCtx, tx, usage)
+		return RecordUsageTx(usageCtx, tx, usage)
 	})
 }
 
-func recordUsageTx(ctx context.Context, tx pgx.Tx, usage modelUsage) error {
+func RecordUsageTx(ctx context.Context, tx pgx.Tx, usage ModelUsage) error {
 	refs := usage.MemoryRefs
 	if refs == nil {
 		refs = []memory.Ref{}
@@ -46,7 +46,7 @@ func recordUsageTx(ctx context.Context, tx pgx.Tx, usage modelUsage) error {
  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
  ON CONFLICT (owner_id,id) DO NOTHING`, string(usage.OwnerID), string(usage.ID), usage.At,
 		usage.Purpose, kernel.NullString(usage.AgentID), usage.Model, usage.InputTokens, usage.OutputTokens,
-		usage.Cost, kernel.NullString(usage.TurnID), kernel.NullString(usage.RunID), kernel.NullString(usage.JobID), kernel.JSON(refs), usage.Tier, safeUsePlan(usage.Plan), usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated)
+		usage.Cost, kernel.NullString(usage.TurnID), kernel.NullString(usage.RunID), kernel.NullString(usage.JobID), kernel.JSON(refs), usage.Tier, SafeUsePlan(usage.Plan), usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated)
 	if err != nil || tag.RowsAffected() == 0 || usage.DurationMS == nil {
 		return err
 	}
@@ -70,7 +70,7 @@ func recordUsageTx(ctx context.Context, tx pgx.Tx, usage modelUsage) error {
 
 // UsageSummary groups calls using calendar dates in the owner's stored zone.
 // Date boundaries are constructed separately, so DST days can be 23 or 25 hours.
-func (s *Store) UsageSummary(ctx context.Context, scope memory.Scope, from, to string) (json.RawMessage, error) {
+func (s *Usage) UsageSummary(ctx context.Context, scope memory.Scope, from, to string) (json.RawMessage, error) {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (s *Store) UsageSummary(ctx context.Context, scope memory.Scope, from, to s
 		if err != nil {
 			return workspace.ErrTimezone
 		}
-		start, end, err := usageDates(from, to, loc, time.Now())
+		start, end, err := UsageDates(from, to, loc, time.Now())
 		if err != nil {
 			return err
 		}
@@ -131,7 +131,7 @@ percentile_cont(0.5) WITHIN GROUP(ORDER BY other_ms) AS other_median, max(other_
 	return out, err
 }
 
-func usageDates(from, to string, loc *time.Location, now time.Time) (time.Time, time.Time, error) {
+func UsageDates(from, to string, loc *time.Location, now time.Time) (time.Time, time.Time, error) {
 	today := now.In(loc)
 	end := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, loc)
 	start := end.AddDate(0, 0, -29)
@@ -154,7 +154,7 @@ func usageDates(from, to string, loc *time.Location, now time.Time) (time.Time, 
 	return start, end.AddDate(0, 0, 1), nil
 }
 
-type usageCursor struct {
+type UsageCursor struct {
 	At time.Time `json:"at"`
 	ID memory.ID `json:"id"`
 }
@@ -187,8 +187,8 @@ type usageCall struct {
 	Refs            []usageCallRef  `json:"refs"`
 }
 
-func parseUsageCursor(before string) (usageCursor, error) {
-	var cursor usageCursor
+func ParseUsageCursor(before string) (UsageCursor, error) {
+	var cursor UsageCursor
 	if before == "" {
 		return cursor, nil
 	}
@@ -201,7 +201,7 @@ func parseUsageCursor(before string) (usageCursor, error) {
 
 // UsageCalls resolves all reference previews with one set query. The logged
 // version stays unchanged, while text comes from the record's current version.
-func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, before string) (json.RawMessage, error) {
+func (s *Usage) UsageCalls(ctx context.Context, scope memory.Scope, limit int, before string) (json.RawMessage, error) {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return nil, err
 	}
@@ -214,7 +214,7 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 	if limit > 100 {
 		limit = 100
 	}
-	cursor, err := parseUsageCursor(before)
+	cursor, err := ParseUsageCursor(before)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +255,7 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 		if len(items) > limit {
 			items = items[:limit]
 			last := items[len(items)-1]
-			next = base64.RawURLEncoding.EncodeToString(kernel.JSON(usageCursor{At: last.At, ID: last.ID}))
+			next = base64.RawURLEncoding.EncodeToString(kernel.JSON(UsageCursor{At: last.At, ID: last.ID}))
 		}
 		if len(ids) == 0 {
 			return nil
@@ -305,7 +305,7 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 	}{Items: items, Next: next})
 }
 
-func usageBefore(cursor usageCursor) any {
+func usageBefore(cursor UsageCursor) any {
 	if cursor.At.IsZero() {
 		return nil
 	}

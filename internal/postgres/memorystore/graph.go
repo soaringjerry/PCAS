@@ -1,4 +1,4 @@
-package postgres
+package memorystore
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 // Graph traversal requires explicit grants on the relationship and both ends.
 // Similarity scores never become persistent semantic relationships.
-func graphTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, seeds []memory.Ref, b memory.Budget, history bool, temporal memory.WorkingContext) ([]memory.Relation, []memory.Ref, error) {
+func GraphTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, seeds []memory.Ref, b memory.Budget, history bool, temporal memory.WorkingContext) ([]memory.Relation, []memory.Ref, error) {
 	relations := []memory.Relation{}
 	added := []memory.Ref{}
 	frontier := []string{}

@@ -3,9 +3,10 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 )

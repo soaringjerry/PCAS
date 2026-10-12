@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/jackc/pgx/v5"
 
 	"strings"

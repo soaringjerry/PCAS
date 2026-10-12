@@ -1,4 +1,4 @@
-package postgres
+package memorystore
 
 import (
 	"context"
@@ -17,7 +17,7 @@ const (
 // BackfillExtractions serializes schedulers in PostgreSQL. Only root jobs carry
 // the enqueue timestamp: an archive import or a long-source window consumes no
 // additional backfill slot.
-func (s *Store) BackfillExtractions(ctx context.Context, now time.Time) (int, error) {
+func (s *Memory) BackfillExtractions(ctx context.Context, now time.Time) (int, error) {
 	if now.IsZero() {
 		return 0, memory.ErrInvalid
 	}

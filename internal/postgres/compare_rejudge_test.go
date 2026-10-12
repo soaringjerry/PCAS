@@ -3,11 +3,12 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
-	"testing"
-	"time"
 )
 
 func p3RejudgeJob(t *testing.T, s *Store) worker.Job {

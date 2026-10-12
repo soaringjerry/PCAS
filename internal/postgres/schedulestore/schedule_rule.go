@@ -1,21 +1,22 @@
-package postgres
+package schedulestore
 
 import (
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 )
 
-type scheduleRule = organize.ScheduleRule
+type ScheduleRule = organize.ScheduleRule
 
 // Compatibility decodes only complete, fixed calendar expressions already
 // stored by old models. It never inspects titles/originals or guesses meaning.
 var legacyScheduleGrammar = regexp.MustCompile(`^每(天|日|周[一二三四五六日天]|星期[一二三四五六日天]|月[0-9]{1,2}[日号])(?:\s*([0-9]{1,2}):([0-9]{2}))?$`)
 
-func legacyScheduleRule(raw string, expressed time.Time, loc *time.Location) (scheduleRule, bool) {
-	r := scheduleRule{Interval: 1, Anchor: "0001-01-01"}
+func LegacyScheduleRule(raw string, expressed time.Time, loc *time.Location) (ScheduleRule, bool) {
+	r := ScheduleRule{Interval: 1, Anchor: "0001-01-01"}
 	p := legacyScheduleGrammar.FindStringSubmatch(strings.TrimSpace(raw))
 	if p == nil {
 		return r, false

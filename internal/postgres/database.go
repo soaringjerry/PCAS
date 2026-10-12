@@ -15,8 +15,12 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/activitystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
+	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
+	"github.com/soaringjerry/PCAS/internal/postgres/schedulestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 )
 
 //go:embed migrations/*.sql
@@ -26,6 +30,10 @@ var migrations embed.FS
 // storage packages share.
 type Store struct {
 	*kernel.DB
+	*activitystore.Activity
+	*schedulestore.Schedules
+	*usagelog.Usage
+	*memorystore.Memory
 	*memoryread.Reader
 	pendingPaid             sync.Map
 	pendingInteractive      sync.Map
@@ -74,7 +82,7 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		return nil, fmt.Errorf("database unavailable")
 	}
 	db := &kernel.DB{Pool: pool}
-	return &Store{DB: db, Reader: &memoryread.Reader{DB: db}, secretarySlots: make(chan struct{}, config.MaxConns-1)}, nil
+	return &Store{DB: db, Activity: &activitystore.Activity{DB: db}, Schedules: &schedulestore.Schedules{DB: db}, Usage: &usagelog.Usage{DB: db}, Memory: &memorystore.Memory{DB: db}, Reader: &memoryread.Reader{DB: db}, secretarySlots: make(chan struct{}, config.MaxConns-1)}, nil
 }
 
 func (s *Store) Close()                         { s.Pool.Close() }

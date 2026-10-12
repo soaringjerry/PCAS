@@ -1,10 +1,11 @@
 package postgres
 
 import (
-	"github.com/soaringjerry/PCAS/internal/contextbuilder"
-	"github.com/soaringjerry/PCAS/internal/memory"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
 func TestOrderTeamExcerpts(t *testing.T) {

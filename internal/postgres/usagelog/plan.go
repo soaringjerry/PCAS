@@ -1,21 +1,22 @@
-package postgres
+package usagelog
 
 import (
 	"encoding/json"
 	"strings"
 
-	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 )
 
-type usePlan = secretary.UsePlan
+// UsePlan is the plan of memory use that a usage record keeps.
+type UsePlan = secretary.UsePlan
 
-func safeUsePlan(raw json.RawMessage) any {
-	var p usePlan
+// SafeUsePlan keeps the validated group keys and depth of a plan. Arbitrary
+// plan text never reaches storage.
+func SafeUsePlan(raw json.RawMessage) any {
+	var p UsePlan
 	if json.Unmarshal(raw, &p) != nil {
 		return nil
 	}
@@ -30,12 +31,5 @@ func safeUsePlan(raw json.RawMessage) any {
 	if !kernel.OneOf(p.Depth, "light", "medium", "heavy") {
 		p.Depth = ""
 	}
-	return json.RawMessage(kernel.JSON(usePlan{Groups: keys, Depth: p.Depth}))
+	return json.RawMessage(kernel.JSON(UsePlan{Groups: keys, Depth: p.Depth}))
 }
-
-// The deputy run has the limits of a secretary turn with heavy reading.
-const heavyUseTimeout = secretary.TurnTimeout
-const heavyReaderBudget = reader.Budget
-
-// Registered bytes retain the skip-action slot and original field order.
-var secretaryCheckSchema = prompts.MustSchema("secretary-check").Bytes()

@@ -1,13 +1,14 @@
 package postgres_test
 
 import (
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
-	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres"
 )
 
 func TestPhase25B2_MalformedOrMissingArraysDoNotWriteResults(t *testing.T) {

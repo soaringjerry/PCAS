@@ -1,10 +1,11 @@
 package postgres
 
 import (
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 )
 
 func TestPhase26A3ClassificationClaimsBeforeAllOtherBackgroundStages(t *testing.T) {

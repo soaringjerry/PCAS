@@ -3,11 +3,12 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
-	"github.com/soaringjerry/PCAS/internal/memory"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
 func TestP3ReorganizeTenCasesOnlyRulesAndWithdrawalCounts(t *testing.T) {

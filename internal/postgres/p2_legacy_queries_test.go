@@ -22,6 +22,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
+	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -557,7 +559,7 @@ func (s *Store) p2LegacyRecallTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 		return err
 	}
 	out.Summary = summary.String()
-	relations, related, err := graphTx(ctx, tx, scope, out.Memories, b, in.Mode == memory.History, in.Context)
+	relations, related, err := memorystore.GraphTx(ctx, tx, scope, out.Memories, b, in.Mode == memory.History, in.Context)
 	if err != nil {
 		return err
 	}
@@ -709,7 +711,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if out.Samples, err = kernel.QueryDocuments[workspace.Sample](ctx, tx, "SELECT document || jsonb_build_object('stale',stale,'state',state) FROM training_samples WHERE owner_id=$1 ORDER BY document->>'createdAt' DESC,id", string(scope.OwnerID)); err != nil {
 		return out, err
 	}
-	if out.Sources, err = sourceGroupsTx(ctx, tx, scope); err != nil {
+	if out.Sources, err = memorystore.SourceGroupsTx(ctx, tx, scope); err != nil {
 		return out, err
 	}
 	rows, err := tx.Query(ctx, `SELECT j.id::text,j.stage,j.state,j.error_code,j.created_at,j.available_at,
@@ -1237,7 +1239,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 				contextErr = err
 				if contextErr == nil {
 					p, _ := s.Models.Get(c.Agent.ID)
-					if err := s.recordReturnedUsage(ctx, result.Text, modelUsage{
+					if err := s.recordReturnedUsage(ctx, result.Text, usagelog.ModelUsage{
 						OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
 						Purpose: "secretary", AgentID: c.Agent.ID, Model: p.Model,
 						InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,

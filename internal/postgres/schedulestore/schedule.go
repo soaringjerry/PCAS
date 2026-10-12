@@ -1,4 +1,4 @@
-package postgres
+package schedulestore
 
 import (
 	"context"
@@ -16,9 +16,9 @@ import (
 const scheduleRangeDays = 62
 const inProgressLimit = 12
 
-var _ workspace.ScheduleReader = (*Store)(nil)
+var _ workspace.ScheduleReader = (*Schedules)(nil)
 
-func (s *Store) ListSchedule(ctx context.Context, scope memory.Scope, q workspace.ScheduleQuery) (workspace.Schedule, error) {
+func (s *Schedules) ListSchedule(ctx context.Context, scope memory.Scope, q workspace.ScheduleQuery) (workspace.Schedule, error) {
 	out := workspace.Schedule{From: q.From, To: q.To, Days: []workspace.ScheduleDay{}, Unclear: []workspace.ScheduleEntry{}, Overdue: []workspace.ScheduleEntry{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -78,10 +78,10 @@ func (s *Store) ListSchedule(ctx context.Context, scope memory.Scope, q workspac
 			e.ID = e.Source.DeadlineID
 			e.Source.Kind = "deadline"
 			if e.Kind == "recurring" {
-				var rule scheduleRule
+				var rule ScheduleRule
 				valid := len(ruleJSON) > 0 && json.Unmarshal(ruleJSON, &rule) == nil && rule.Valid()
 				if !valid {
-					rule, valid = legacyScheduleRule(recurrence, expressed, loc)
+					rule, valid = LegacyScheduleRule(recurrence, expressed, loc)
 				}
 				if !valid {
 					e.At = nil
@@ -215,7 +215,7 @@ func (s *Store) ListSchedule(ctx context.Context, scope memory.Scope, q workspac
 	})
 	return out, err
 }
-func (s *Store) ListInProgress(ctx context.Context, scope memory.Scope) (workspace.InProgress, error) {
+func (s *Schedules) ListInProgress(ctx context.Context, scope memory.Scope) (workspace.InProgress, error) {
 	out := workspace.InProgress{Items: []workspace.Item{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err

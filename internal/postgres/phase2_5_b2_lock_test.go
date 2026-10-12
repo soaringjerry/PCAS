@@ -2,17 +2,18 @@ package postgres_test
 
 import (
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
-	"github.com/soaringjerry/PCAS/internal/postgres"
-	"github.com/soaringjerry/PCAS/internal/worker"
-	"github.com/soaringjerry/PCAS/internal/workspace"
 	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/worker"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func TestPhase25B2_CompareDoesNotCallModelDuringOrganize(t *testing.T) {

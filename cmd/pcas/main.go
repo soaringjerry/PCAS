@@ -21,6 +21,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
 	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
 	"github.com/soaringjerry/PCAS/internal/telegram"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -142,7 +143,7 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 		defer func() { stopBackfill(); <-backfillDone }()
 		go func() {
 			defer close(backfillDone)
-			timer := time.NewTicker(postgres.ExtractionBackfillInterval)
+			timer := time.NewTicker(memorystore.ExtractionBackfillInterval)
 			defer timer.Stop()
 			for {
 				if backfillCtx.Err() != nil {

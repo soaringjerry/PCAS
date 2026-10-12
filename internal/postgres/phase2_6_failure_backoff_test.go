@@ -1,10 +1,11 @@
 package postgres
 
 import (
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 )
 
 func TestPhase26G2A5ComparisonInvalidOutputKeepsSameBatchPending(t *testing.T) {

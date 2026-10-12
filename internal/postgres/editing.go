@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
+	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -235,7 +236,7 @@ func invalidateTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string)
 			return err
 		}
 	}
-	return refreshSummaryJobsTx(ctx, tx, scope.OwnerID, memory.ID(id))
+	return memorystore.RefreshSummaryJobsTx(ctx, tx, scope.OwnerID, memory.ID(id))
 }
 func (s *Store) RecordUse(ctx context.Context, scope memory.Scope, in memory.UseEvent) error {
 	if err := kernel.RequireOwner(scope); err != nil {

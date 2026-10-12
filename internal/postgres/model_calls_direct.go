@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 )
 
 // directCalls records embedding, image, and transcription invocations in the
@@ -69,12 +70,12 @@ func (a directCalls) Finish(ctx context.Context, r modelcall.DirectRequest, call
 		default:
 			if usage.InputTokens+usage.OutputTokens > 0 {
 				usageID = call.Reservation
-				record := modelUsage{OwnerID: r.OwnerID, ID: memory.ID(call.Reservation), Purpose: r.Function, AgentID: r.Provider.ID, Model: r.Provider.Model, DurationMS: usage.DurationMS, InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, InputEstimated: usage.InputEstimated, OutputEstimated: usage.OutputEstimated, Cost: usage.Cost, CostEstimated: usage.CostEstimated, MemoryRefs: r.Refs}
+				record := usagelog.ModelUsage{OwnerID: r.OwnerID, ID: memory.ID(call.Reservation), Purpose: r.Function, AgentID: r.Provider.ID, Model: r.Provider.Model, DurationMS: usage.DurationMS, InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, InputEstimated: usage.InputEstimated, OutputEstimated: usage.OutputEstimated, Cost: usage.Cost, CostEstimated: usage.CostEstimated, MemoryRefs: r.Refs}
 				record.JobID = string(r.UsageJob)
 				if r.Job != nil {
 					record.JobID = string(r.Job.ID)
 				}
-				if err := recordUsageTx(persist, tx, record); err != nil {
+				if err := usagelog.RecordUsageTx(persist, tx, record); err != nil {
 					return err
 				}
 			}

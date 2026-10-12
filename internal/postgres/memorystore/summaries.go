@@ -1,4 +1,4 @@
-package postgres
+package memorystore
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-func (s *Store) Summarize(ctx context.Context, scope memory.Scope, in memory.SummaryRequest) (memory.SummaryResult, error) {
+func (s *Memory) Summarize(ctx context.Context, scope memory.Scope, in memory.SummaryRequest) (memory.SummaryResult, error) {
 	out := memory.SummaryResult{}
 	if !scope.Valid() {
 		return out, memory.ErrForbidden
@@ -29,7 +29,7 @@ func (s *Store) Summarize(ctx context.Context, scope memory.Scope, in memory.Sum
 	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}, func(tx pgx.Tx) error { var err error; out, err = s.summarizeTx(ctx, tx, scope, in); return err })
 	return out, err
 }
-func (s *Store) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.SummaryRequest) (memory.SummaryResult, error) {
+func (s *Memory) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.SummaryRequest) (memory.SummaryResult, error) {
 	out := memory.SummaryResult{Coverage: retrieval.NewCoverage(), Dependencies: []memory.Ref{}}
 	out.Root.ID = in.ID
 	err := tx.QueryRow(ctx, `SELECT version,kind FROM memory_records r WHERE owner_id=$1 AND id=$2 AND state='active' AND kind IN ('source','entity','episode','claim') AND ($3 OR EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$4)) FOR SHARE`, string(scope.OwnerID), string(in.ID), scope.IsOwner, scope.PrincipalID).Scan(&out.Root.Version, &out.Root.Kind)
@@ -174,7 +174,7 @@ func (s *Store) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	}
 	return out, nil
 }
-func (s *Store) ProcessSummary(ctx context.Context, j worker.Job) error {
+func (s *Memory) ProcessSummary(ctx context.Context, j worker.Job) error {
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
@@ -186,7 +186,7 @@ func (s *Store) ProcessSummary(ctx context.Context, j worker.Job) error {
 		return kernel.Acknowledge(ctx, tx, j)
 	})
 }
-func (s *Store) ConfigureActivity(ctx context.Context, scope memory.Scope, in memory.ActivitySettings) error {
+func (s *Memory) ConfigureActivity(ctx context.Context, scope memory.Scope, in memory.ActivitySettings) error {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func (s *Store) ConfigureActivity(ctx context.Context, scope memory.Scope, in me
 	})
 }
 
-func refreshSummaryJobsTx(ctx context.Context, tx pgx.Tx, owner, id memory.ID) error {
+func RefreshSummaryJobsTx(ctx context.Context, tx pgx.Tx, owner, id memory.ID) error {
 	_, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage)
  SELECT gen_random_uuid(),r.owner_id,r.id,r.version,'memory.summary' FROM memory_records r WHERE r.owner_id=$1 AND r.state='active' AND r.kind IN ('source','claim','entity','episode') AND (r.id=$2 OR r.id IN (SELECT k.root_id FROM summary_keys k JOIN derived_dependencies d ON(d.owner_id,d.view_id)=(k.owner_id,k.summary_id) WHERE k.owner_id=$1 AND d.dependency_id=$2))
  ON CONFLICT(owner_id,record_id,record_version,stage) DO UPDATE SET state='queued',attempts=0,available_at=now(),error_code='',lease_token=NULL,lease_until=NULL WHERE memory_jobs.state!='leased'`, string(owner), string(id))

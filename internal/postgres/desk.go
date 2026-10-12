@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -15,14 +16,14 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func (s *Store) recordReturnedUsage(ctx context.Context, text string, usage modelUsage) error {
+func (s *Store) recordReturnedUsage(ctx context.Context, text string, usage usagelog.ModelUsage) error {
 	if strings.TrimSpace(text) == "" && usage.InputTokens+usage.OutputTokens == 0 && usage.DurationMS == nil {
 		return nil
 	}
 	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	return pgx.BeginFunc(persistCtx, s.Pool, func(tx pgx.Tx) error {
-		return recordUsageTx(persistCtx, tx, usage)
+		return usagelog.RecordUsageTx(persistCtx, tx, usage)
 	})
 }
 

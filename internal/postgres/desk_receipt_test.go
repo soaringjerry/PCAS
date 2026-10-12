@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -33,7 +34,7 @@ func TestSecretaryReceiptsOmitOnlyCurrentThingTitle(t *testing.T) {
 			currentID := st.Tasks[0].ID
 			workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "另一件安排"})
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
-				secretaryModelReply(w, secretaryOutput{Actions: []secretaryAction{
+				secretaryModelReply(w, deskstore.SecretaryOutput{Actions: []deskstore.SecretaryAction{
 					{Op: "add_steps", Ref: tc.ref, Steps: []string{"核对", "准备", "发送"}},
 					{Op: "update", Ref: tc.ref, Set: map[string]json.RawMessage{"due": kernel.JSON(testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Format("2006-01-02T15:04"))}},
 					{Op: "update", Ref: tc.ref, Set: map[string]json.RawMessage{"status": kernel.JSON("done")}},

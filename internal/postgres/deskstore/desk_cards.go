@@ -1,4 +1,4 @@
-package postgres
+package deskstore
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func (s *Store) secretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, answer secretaryOutput, sent map[string]workspace.Memory, sentSources map[string]workspace.DeskSourceItem, aliases map[string]workspace.Item, loc *time.Location, recall bool) ([]workspace.DeskCard, error) {
+func (s *Desk) SecretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, answer SecretaryOutput, sent map[string]workspace.Memory, sentSources map[string]workspace.DeskSourceItem, aliases map[string]workspace.Item, loc *time.Location, recall bool) ([]workspace.DeskCard, error) {
 	cards := []workspace.DeskCard{}
 	sources := []workspace.DeskSourceItem{}
 	timeline := []workspace.DeskTimelineItem{}
@@ -57,17 +57,17 @@ func (s *Store) secretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 		if len(m.Sources) > 0 {
 			source.SourceID = m.Sources[0].SourceID
 			source.SourceVersion = m.Sources[0].Version
-			source.At = stringPointer(m.Sources[0].At)
+			source.At = StringPointer(m.Sources[0].At)
 		}
 		sources = append(sources, source)
 		entry := workspace.DeskTimelineItem{
 			At: secretary.TimelineAt(meta.Memory.ExpressedAt, meta.Source), Text: m.Text,
-			Status: secretary.TimelineStatus(meta.Tasks, meta.Changed), MemoryID: stringPointer(m.ID),
+			Status: secretary.TimelineStatus(meta.Tasks, meta.Changed), MemoryID: StringPointer(m.ID),
 			EventFrom: meta.Memory.EventFrom, EventTo: meta.Memory.EventTo,
 			EventPrecision: meta.Memory.EventPrecision, Mentions: meta.Memory.Mentions,
 		}
 		if len(meta.Tasks) > 0 {
-			entry.ThingID = stringPointer(meta.Tasks[0].ID)
+			entry.ThingID = StringPointer(meta.Tasks[0].ID)
 		}
 		timeline = append(timeline, entry)
 	}
@@ -101,11 +101,11 @@ func (s *Store) secretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 			return nil, err
 		}
 		// The title was sanitized before generation; use the fresh due/status only.
-		task := workspace.DeskTaskItem{ThingID: item.ID, Title: item.Title, Due: stringPointer(current.Due), Status: current.Status}
+		task := workspace.DeskTaskItem{ThingID: item.ID, Title: item.Title, Due: StringPointer(current.Due), Status: current.Status}
 		if current.ProjectID != "" {
 			for _, p := range aliases {
 				if p.ID == current.ProjectID {
-					task.Project = stringPointer(p.Title)
+					task.Project = StringPointer(p.Title)
 					break
 				}
 			}

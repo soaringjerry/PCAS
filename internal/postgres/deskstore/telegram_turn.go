@@ -1,4 +1,4 @@
-package postgres
+package deskstore
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 // Telegram uses this before downloading/transcribing a redelivered voice.
 // It performs the same owner, dependency and live undo checks as DeskTurns;
 // erased responses remain erased and no additional response cache is written.
-func (s *Store) DeskTurnByRequest(ctx context.Context, scope memory.Scope, requestID string) (workspace.DeskTurnResponse, error) {
+func (s *Desk) DeskTurnByRequest(ctx context.Context, scope memory.Scope, requestID string) (workspace.DeskTurnResponse, error) {
 	var out workspace.DeskTurnResponse
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -37,7 +37,7 @@ func (s *Store) DeskTurnByRequest(ctx context.Context, scope memory.Scope, reque
 		if err != nil {
 			return err
 		}
-		var saved storedSecretaryResponse
+		var saved StoredSecretaryResponse
 		if err = json.Unmarshal(response, &saved); err != nil {
 			return err
 		}
@@ -46,8 +46,8 @@ func (s *Store) DeskTurnByRequest(ctx context.Context, scope memory.Scope, reque
 			return err
 		}
 		out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
-		refreshDeskTurnTx(ctx, tx, scope, &out.Turn, workspace.Run{AgentID: agent, ContextVersions: refs}, erased, originalDeleted)
-		if err = refreshDeskReceiptUndoTx(ctx, tx, scope, []workspace.SecretaryTurn{out.Turn}); err != nil {
+		RefreshDeskTurnTx(ctx, tx, scope, &out.Turn, workspace.Run{AgentID: agent, ContextVersions: refs}, erased, originalDeleted)
+		if err = RefreshDeskReceiptUndoTx(ctx, tx, scope, []workspace.SecretaryTurn{out.Turn}); err != nil {
 			return err
 		}
 		out.State, err = s.SnapshotTx(ctx, tx, scope)

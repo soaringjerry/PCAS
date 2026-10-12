@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -59,7 +60,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		tx = p2ReadOnlyTx{tx}
 		for _, principal := range []string{"model", "ungranted"} {
-			for _, thing := range []*string{nil, stringPointer(p2ID("task", 4))} {
+			for _, thing := range []*string{nil, deskstore.StringPointer(p2ID("task", 4))} {
 				read := func(predicate string) ([]byte, error) {
 					var out []byte
 					err := tx.QueryRow(ctx, "SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'allowed',"+predicate+") ORDER BY r.id),'[]') FROM memory_records r WHERE r.owner_id=$1 AND r.kind='source'", scope.OwnerID, principal, thing).Scan(&out)
@@ -153,7 +154,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 			if err != nil {
 				return err
 			}
-			newContext, err := s.secretaryContextTx(ctx, tx, scope, req, oldContext.ConversationID)
+			newContext, err := s.SecretaryContextTx(ctx, tx, scope, req, oldContext.ConversationID)
 			if err != nil {
 				return err
 			}
@@ -161,7 +162,7 @@ func p2AssertReads(t *testing.T, s *Store, scope memory.Scope) {
 			if err != nil {
 				return err
 			}
-			np, nm, err := s.secretaryPrompt(ctx, tx, scope, req, &newContext, s.Recall)
+			np, nm, err := s.SecretaryPrompt(ctx, tx, scope, req, &newContext, s.Recall)
 			if err != nil {
 				return err
 			}

@@ -19,6 +19,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/commandstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/deputystore"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
@@ -43,6 +44,7 @@ var migrations embed.FS
 // storage packages share.
 type Store struct {
 	*kernel.DB
+	*deskstore.Desk
 	*commandstore.Commands
 	*deputystore.Deputy
 	*usestore.Use
@@ -196,6 +198,7 @@ func newStore(db *kernel.DB) *Store {
 	workspacePart := &workspacestore.Workspace{DB: db, Claims: claimsPart, Intake: intakePart, Reader: readerPart, Owners: ownersPart, Sources: sourcesPart, State: statePart}
 	deputyPart := &deputystore.Deputy{DB: db, Budgets: budgetsPart, Intake: intakePart, Reader: readerPart, Usage: usagePart, Use: usePart, Workspace: workspacePart}
 	commandsPart := &commandstore.Commands{DB: db, Claims: claimsPart, Owners: ownersPart, Deputy: deputyPart, Intake: intakePart, Sources: sourcesPart, Workspace: workspacePart}
+	deskPart := &deskstore.Desk{DB: db, Budgets: budgetsPart, Commands: commandsPart, Intake: intakePart, Reader: readerPart, Sources: sourcesPart, Use: usePart, Workspace: workspacePart}
 	evidencePart := &evidencestore.Evidence{DB: db}
 	interpPart := &interpstore.Interp{DB: db, Budgets: budgetsPart, Owners: ownersPart}
 	itemsPart := &itemstore.Items{DB: db}
@@ -203,6 +206,7 @@ func newStore(db *kernel.DB) *Store {
 	schedulesPart := &schedulestore.Schedules{DB: db}
 	return &Store{
 		DB:        db,
+		Desk:      deskPart,
 		Commands:  commandsPart,
 		Deputy:    deputyPart,
 		Use:       usePart,

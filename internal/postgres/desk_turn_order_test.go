@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -340,7 +341,7 @@ func TestSecretaryOrderQueuedCancellationAndCaptureRecovery(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer tx.Rollback(context.Background())
-				if err := secretaryTryLock(context.Background(), tx, secretaryConversationKey(string(scope.OwnerID), conversation)); err != nil {
+				if err := deskstore.SecretaryTryLock(context.Background(), tx, deskstore.SecretaryConversationKey(string(scope.OwnerID), conversation)); err != nil {
 					t.Fatal(err)
 				}
 				defer tx.Rollback(context.Background())
@@ -441,7 +442,7 @@ func TestSecretaryOrderRecoveryDoesNotDeletePublishedCaptureJob(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	hash := sha256.Sum256(kernel.JSON(req))
-	if _, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, conversation, hash[:]); err != nil {
+	if _, err := s.AdmitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, conversation, hash[:]); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Pool.Exec(context.Background(), "UPDATE desk_turn_order SET status='failed' WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID); err != nil {
@@ -469,7 +470,7 @@ func TestSecretaryOrderRecoveryDuplicateDoesNotSuppressPublishedJobs(t *testing.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	hash := sha256.Sum256(kernel.JSON(req))
-	if _, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, conversation, hash[:]); err != nil {
+	if _, err := s.AdmitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, conversation, hash[:]); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Pool.Exec(context.Background(), "UPDATE desk_turn_order SET status='failed' WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID); err != nil {
@@ -519,7 +520,7 @@ func TestSecretaryOrderConnectionLossThenNewStoreContinues(t *testing.T) {
 		t.Fatal("first model never entered")
 	}
 	var pid int
-	if err := peer.Pool.QueryRow(context.Background(), `SELECT pid FROM pg_locks WHERE locktype='advisory' AND granted AND ((classid::bigint<<32)|objid::bigint)=hashtextextended($1,0)`, secretaryConversationKey(string(scope.OwnerID), conversation)).Scan(&pid); err != nil {
+	if err := peer.Pool.QueryRow(context.Background(), `SELECT pid FROM pg_locks WHERE locktype='advisory' AND granted AND ((classid::bigint<<32)|objid::bigint)=hashtextextended($1,0)`, deskstore.SecretaryConversationKey(string(scope.OwnerID), conversation)).Scan(&pid); err != nil {
 		t.Fatal(err)
 	}
 	var terminated bool
@@ -567,8 +568,8 @@ func TestSecretaryOrderExpiredAdmissionSurvivesStoreRestart(t *testing.T) {
 	// completed turn or relying on an actual two-minute wall-clock pause.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	ticket, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, conversation, hash[:])
-	if err != nil || !ticket.own {
+	ticket, err := s.AdmitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, conversation, hash[:])
+	if err != nil || !ticket.Own {
 		t.Fatal(err, ticket)
 	}
 	var expires time.Time
@@ -598,10 +599,10 @@ func TestSecretaryOrderExpiredAdmissionSurvivesStoreRestart(t *testing.T) {
 		conn.Release()
 		t.Fatal(err)
 	}
-	if err := secretaryTryLock(context.Background(), tx, secretaryConversationKey(string(scope.OwnerID), conversation)); err != nil {
+	if err := deskstore.SecretaryTryLock(context.Background(), tx, deskstore.SecretaryConversationKey(string(scope.OwnerID), conversation)); err != nil {
 		t.Fatal(err)
 	}
-	if err := restarted.expireSecretaryTickets(context.Background(), string(scope.OwnerID), conversation); err != nil {
+	if err := restarted.ExpireSecretaryTickets(context.Background(), string(scope.OwnerID), conversation); err != nil {
 		t.Fatal(err)
 	}
 	orderedTicketStatus(t, s, scope, req.RequestID, "pending")

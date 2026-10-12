@@ -1,4 +1,4 @@
-package postgres
+package deskstore
 
 import (
 	"context"
@@ -18,8 +18,8 @@ import (
 )
 
 type (
-	secretaryAction = secretary.Action
-	secretaryOutput = secretary.Output
+	SecretaryAction = secretary.Action
+	SecretaryOutput = secretary.Output
 )
 
 // The memories this turn's prompt showed, by their M* alias; close_date
@@ -28,7 +28,7 @@ type secretaryMemoriesKey struct{}
 
 type secretaryProjectReceiptsKey struct{}
 
-func (s *Store) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, value string, aliases map[string]workspace.Item) (string, error) {
+func (s *Desk) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, value string, aliases map[string]workspace.Item) (string, error) {
 	if value == "" || value == "none" {
 		return "", nil
 	}
@@ -81,7 +81,7 @@ func (s *Store) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.
 
 // executeSecretaryActionTx does one action of the answer in the action's
 // transaction. The rules of each action are in the secretary package.
-func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a secretaryAction, aliases map[string]workspace.Item, agent workspace.Agent, loc *time.Location, currentThingID string) (workspace.DeskReceipt, error) {
+func (s *Desk) ExecuteSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a SecretaryAction, aliases map[string]workspace.Item, agent workspace.Agent, loc *time.Location, currentThingID string) (workspace.DeskReceipt, error) {
 	w := &secretaryWorkspace{store: s, tx: tx, scope: scope, history: &intakestore.SecretaryHistory{Summaries: map[string]string{}}}
 	// The documents and the delegate history of the turn travel in its context.
 	w.documents, _ = ctx.Value(secretaryDocumentsKey{}).(map[string]workspace.Doc)
@@ -95,7 +95,7 @@ func (s *Store) executeSecretaryActionTx(ctx context.Context, tx pgx.Tx, scope m
 // transaction. Internal commands still persist in order for validation and
 // undo collection; their history is collected here and published at the end.
 type secretaryWorkspace struct {
-	store         *Store
+	store         *Desk
 	tx            pgx.Tx
 	scope         memory.Scope
 	history       *intakestore.SecretaryHistory
@@ -158,7 +158,7 @@ func (w *secretaryWorkspace) ResolveProject(ctx context.Context, value string, a
 	return w.store.secretaryProjectTx(w.collecting(ctx), w.tx, w.scope, value, aliases)
 }
 
-func (w *secretaryWorkspace) CloseDate(ctx context.Context, a secretaryAction) (workspace.DeskReceipt, error) {
+func (w *secretaryWorkspace) CloseDate(ctx context.Context, a SecretaryAction) (workspace.DeskReceipt, error) {
 	return w.store.closeDateActionTx(w.collecting(ctx), w.tx, w.scope, a)
 }
 
@@ -169,7 +169,7 @@ func (w *secretaryWorkspace) Document(alias string) (workspace.Doc, bool) {
 
 func (w *secretaryWorkspace) DelegateTurns() []string { return w.delegateTurns }
 
-func (s *Store) closeDateActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a secretaryAction) (workspace.DeskReceipt, error) {
+func (s *Desk) closeDateActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a SecretaryAction) (workspace.DeskReceipt, error) {
 	receipt := workspace.DeskReceipt{Op: a.Op, Status: "done"}
 	if actionlog.SmokeID(ctx) != "" {
 		// A check-only turn is cleaned up by restoring item documents; a mark on

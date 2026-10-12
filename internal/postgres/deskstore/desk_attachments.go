@@ -1,4 +1,4 @@
-package postgres
+package deskstore
 
 import (
 	"context"
@@ -17,14 +17,14 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-type deskAttachment struct {
+type DeskAttachment struct {
 	Ref                     memory.Ref
 	Media, Context, Warning string
 }
 
 // Both Telegram and the web submit stored source references to DeskTurn.
-func (s *Store) prepareDeskAttachments(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest, read attachment.Read) ([]deskAttachment, error) {
-	out := []deskAttachment{}
+func (s *Desk) PrepareDeskAttachments(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest, read attachment.Read) ([]DeskAttachment, error) {
+	out := []DeskAttachment{}
 	for _, ref := range req.Attachments {
 		original, err := s.GetSource(ctx, scope, ref.ID, ref.Version)
 		if err != nil {
@@ -50,7 +50,7 @@ func (s *Store) prepareDeskAttachments(ctx context.Context, scope memory.Scope, 
 		if err != nil {
 			return nil, err
 		}
-		a := deskAttachment{Ref: ref, Media: original.Source.MediaType}
+		a := DeskAttachment{Ref: ref, Media: original.Source.MediaType}
 		parsed, parseErr := s.ReadAttachmentWith(ctx, scope, ref, nil, read)
 		image := strings.HasPrefix(a.Media, "image/")
 		if parseErr != nil || image && parsed.Representation != "vision" {
@@ -68,7 +68,7 @@ func (s *Store) prepareDeskAttachments(ctx context.Context, scope memory.Scope, 
 	return out, nil
 }
 
-func (s *Store) deskAttachmentReceiptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn string, a deskAttachment) (workspace.DeskReceipt, error) {
+func (s *Desk) DeskAttachmentReceiptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn string, a DeskAttachment) (workspace.DeskReceipt, error) {
 	text := "存了一份文件"
 	if strings.HasPrefix(a.Media, "image/") {
 		text = "存了一张图片"

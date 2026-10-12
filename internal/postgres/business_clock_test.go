@@ -55,11 +55,11 @@ func TestSecretaryUsesBusinessDateAndActualUsageTime(t *testing.T) {
 	req.ConversationID = &conversationID
 	ctx := context.Background()
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		c, err := s.secretaryContextTx(ctx, tx, scope, req, conversationID)
+		c, err := s.SecretaryContextTx(ctx, tx, scope, req, conversationID)
 		if err != nil {
 			return err
 		}
-		if _, _, err := s.secretaryPrompt(ctx, tx, scope, req, &c, s.Recall); err != nil {
+		if _, _, err := s.SecretaryPrompt(ctx, tx, scope, req, &c, s.Recall); err != nil {
 			return err
 		}
 		loc := kernel.Location(c.Settings)

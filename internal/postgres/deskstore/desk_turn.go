@@ -1,4 +1,4 @@
-package postgres
+package deskstore
 
 import (
 	"bytes"
@@ -31,16 +31,16 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-var secretaryInstructions = prompts.Must("secretary").Text()
+var SecretaryInstructions = prompts.Must("secretary").Text()
 
 // Persist only the exchange. Workspace state is always read at response time.
-type storedSecretaryResponse struct {
+type StoredSecretaryResponse struct {
 	ConversationID    string                  `json:"conversationId"`
 	AttachmentContext string                  `json:"attachmentContext,omitempty"`
 	Turn              workspace.SecretaryTurn `json:"turn"`
 }
 
-type secretaryContext struct {
+type SecretaryContext struct {
 	Documents         map[string]workspace.Doc
 	TargetItems       map[string]workspace.Item
 	ConversationID    string
@@ -63,21 +63,21 @@ type secretaryContext struct {
 	Tier              string
 }
 
-func stringPointer(v string) *string {
+func StringPointer(v string) *string {
 	if v == "" {
 		return nil
 	}
 	return &v
 }
-func pointerValue(v *string) string {
+func PointerValue(v *string) string {
 	if v == nil {
 		return ""
 	}
 	return *v
 }
 
-func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, conversationID string) (secretaryContext, error) {
-	out := secretaryContext{TargetItems: map[string]workspace.Item{}, ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
+func (s *Desk) SecretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, conversationID string) (SecretaryContext, error) {
+	out := SecretaryContext{TargetItems: map[string]workspace.Item{}, ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
 	agentID := req.AgentID
 	if agentID == "" {
 		agentID = s.Models.ExtractionID()
@@ -184,7 +184,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if err = rows.Err(); err != nil {
 		return out, err
 	}
-	stored, err := s.deskTurnsTx(ctx, tx, scope, conversationID, 6, out.Agent.ID, req.ThingID, &out.Dependencies)
+	stored, err := s.DeskTurnsTx(ctx, tx, scope, conversationID, 6, out.Agent.ID, req.ThingID, &out.Dependencies)
 	if err != nil {
 		return out, err
 	}
@@ -194,7 +194,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	out.History = stored.Turns
 	return out, nil
 }
-func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent string, dependencies []memory.Ref, items []workspace.Item, full bool) error {
+func (s *Desk) CheckDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent string, dependencies []memory.Ref, items []workspace.Item, full bool) error {
 	if err := accessstore.VerifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent, ContextVersions: dependencies}); err != nil {
 		return err
 	}
@@ -217,7 +217,7 @@ func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	}
 	return nil
 }
-func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretaryContext, search secretary.Recall) (string, map[string]workspace.Memory, error) {
+func (s *Desk) SecretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *SecretaryContext, search secretary.Recall) (string, map[string]workspace.Memory, error) {
 	var prompt strings.Builder
 	loc := kernel.Location(c.Settings)
 	c.Plan = memory.PlanQuery(req.Text, s.BusinessNow(), loc)
@@ -370,9 +370,9 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 // Owner row locks are acquired only for the short budget/commit transactions.
 // Contended callers release their connection before waiting to retry.
 // DeskStore gives the secretary service the storage of its turns.
-func (s *Store) DeskStore() secretary.TurnStore { return deskStore{s} }
+func (s *Desk) DeskStore() secretary.TurnStore { return deskStore{s} }
 
-type deskStore struct{ store *Store }
+type deskStore struct{ store *Desk }
 
 func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest, steps secretary.Steps) (workspace.DeskTurnResponse, error) {
 	s := a.store
@@ -418,32 +418,32 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 	}
 	timing.AddPrepare(time.Since(ownerPrepStarted))
 	if req.SmokeID != "" {
-		if err := s.registerSmokeRequest(ctx, scope, req); err != nil {
+		if err := s.RegisterSmokeRequest(ctx, scope, req); err != nil {
 			return out, err
 		}
 	}
-	conversationID := pointerValue(req.ConversationID)
+	conversationID := PointerValue(req.ConversationID)
 	if conversationID == "" {
 		conversationID = string(memory.NewID())
 	}
-	ticket, err := s.admitSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, conversationID, hash[:])
+	ticket, err := s.AdmitSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, conversationID, hash[:])
 	if err != nil {
 		return out, err
 	}
-	conversationID = ticket.conversation
-	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(req.RequestID), RootExecutionID: memory.ID(req.RequestID), Function: "secretary", Policy: callstore.InteractiveCallPolicy{Kind: "secretary", Token: ticket.creator, Origin: fmt.Sprintf("%x", hash), RequestHash: hash[:], ThingID: pointerValue(req.ThingID)}}
+	conversationID = ticket.Conversation
+	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(req.RequestID), RootExecutionID: memory.ID(req.RequestID), Function: "secretary", Policy: callstore.InteractiveCallPolicy{Kind: "secretary", Token: ticket.Creator, Origin: fmt.Sprintf("%x", hash), RequestHash: hash[:], ThingID: PointerValue(req.ThingID)}}
 	requestCtx = modelcall.WithExecution(requestCtx, execution)
 	ctx = modelcall.WithExecution(ctx, execution)
-	var attachments []deskAttachment
-	if !ticket.legacy && len(req.Attachments) > 0 {
+	var attachments []DeskAttachment
+	if !ticket.Legacy && len(req.Attachments) > 0 {
 		attachmentStarted := time.Now()
-		attachments, err = s.prepareDeskAttachments(requestCtx, scope, req, steps.ReadAttachment)
+		attachments, err = s.PrepareDeskAttachments(requestCtx, scope, req, steps.ReadAttachment)
 		timing.AddPrepare(time.Since(attachmentStarted))
 		if err != nil {
 			return out, err
 		}
 	}
-	err = s.withOrderedSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, ticket, func(tx pgx.Tx, captureOnly bool) error {
+	err = s.WithOrderedSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, ticket, func(tx pgx.Tx, captureOnly bool) error {
 		var priorHash, prior []byte
 		var refs []memory.Ref
 		var priorAgent string
@@ -453,20 +453,20 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 			if !bytes.Equal(hash[:], priorHash) {
 				return memory.ErrConflict
 			}
-			var saved storedSecretaryResponse
+			var saved StoredSecretaryResponse
 			if err := json.Unmarshal(prior, &saved); err != nil {
 				return err
 			}
 			out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
 			// Deleted request replays retain the already scrubbed response.
 			if !erased {
-				refreshDeskTurnTx(ctx, tx, scope, &out.Turn, workspace.Run{AgentID: priorAgent, ContextVersions: refs}, false, false)
+				RefreshDeskTurnTx(ctx, tx, scope, &out.Turn, workspace.Run{AgentID: priorAgent, ContextVersions: refs}, false, false)
 			}
 			out.State, err = s.SnapshotTx(ctx, tx, scope)
 			if err != nil {
 				return err
 			}
-			return refreshDeskReceiptUndoTx(ctx, tx, scope, []workspace.SecretaryTurn{out.Turn})
+			return RefreshDeskReceiptUndoTx(ctx, tx, scope, []workspace.SecretaryTurn{out.Turn})
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
@@ -498,7 +498,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 			dependencies = c.Dependencies
 		}
 		for _, a := range attachments {
-			receipt, err := s.deskAttachmentReceiptTx(ctx, tx, scope, out.Turn.ID, a)
+			receipt, err := s.DeskAttachmentReceiptTx(ctx, tx, scope, out.Turn.ID, a)
 			if err != nil {
 				return err
 			}
@@ -517,7 +517,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,conversation_id,thing_id,request_id,request_hash,response,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", string(scope.OwnerID), out.Turn.ID, c.Agent.ID, req.Text, out.Turn.Reply, kernel.JSON(dependencies), conversationID, pointerValueOrNull(req.ThingID), req.RequestID, hash[:], kernel.JSON(storedSecretaryResponse{ConversationID: out.ConversationID, Turn: out.Turn, AttachmentContext: c.AttachmentContext}), out.Turn.CreatedAt)
+		_, err = tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,conversation_id,thing_id,request_id,request_hash,response,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", string(scope.OwnerID), out.Turn.ID, c.Agent.ID, req.Text, out.Turn.Reply, kernel.JSON(dependencies), conversationID, PointerValueOrNull(req.ThingID), req.RequestID, hash[:], kernel.JSON(StoredSecretaryResponse{ConversationID: out.ConversationID, Turn: out.Turn, AttachmentContext: c.AttachmentContext}), out.Turn.CreatedAt)
 		return err
 	})
 	if req.SmokeID != "" && errors.Is(err, pgx.ErrNoRows) {
@@ -526,9 +526,9 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 	return out, err
 }
 
-func secretaryReply(reply string) string { return strings.TrimSpace(reply) }
+func SecretaryReply(reply string) string { return strings.TrimSpace(reply) }
 
-func pointerValueOrNull(v *string) any {
+func PointerValueOrNull(v *string) any {
 	if v == nil {
 		return nil
 	}
@@ -541,9 +541,9 @@ func pointerValueOrNull(v *string) any {
 type secretarySession struct {
 	*secretaryAsk
 	*secretaryTurn
-	c            *secretaryContext
+	c            *SecretaryContext
 	conversation string
-	attachments  []deskAttachment
+	attachments  []DeskAttachment
 	text         string
 	started      time.Time
 	input        string
@@ -552,7 +552,7 @@ type secretarySession struct {
 func (t *secretarySession) Context(ctx context.Context) (secretary.View, error) {
 	s := t.secretaryAsk
 	s.timing.BeginPrepare()
-	c, err := s.store.secretaryContextTx(ctx, s.tx, s.scope, s.req, t.conversation)
+	c, err := s.store.SecretaryContextTx(ctx, s.tx, s.scope, s.req, t.conversation)
 	s.timing.Tier = c.Tier
 	for _, a := range t.attachments {
 		if a.Context != "" {
@@ -571,7 +571,7 @@ func (t *secretarySession) Context(ctx context.Context) (secretary.View, error) 
 
 func (t *secretarySession) Input(ctx context.Context, recall secretary.Recall) (*secretary.Asking, string, error) {
 	s, c := t.secretaryAsk, t.c
-	prompt, sent, err := s.store.secretaryPrompt(ctx, s.tx, s.scope, s.req, c, recall)
+	prompt, sent, err := s.store.SecretaryPrompt(ctx, s.tx, s.scope, s.req, c, recall)
 	if err != nil {
 		return nil, "context", err
 	}
@@ -595,7 +595,7 @@ func (t *secretarySession) BeginWrite(ctx context.Context) error {
 	return err
 }
 
-func (t *secretarySession) VerifyTargets(ctx context.Context, answer secretaryOutput) error {
+func (t *secretarySession) VerifyTargets(ctx context.Context, answer SecretaryOutput) error {
 	s := t.secretaryAsk
 	return s.store.checkSecretaryActionTargetsTx(ctx, s.tx, s.scope, *t.c, answer)
 }
@@ -617,7 +617,7 @@ func (t *secretarySession) KeepSentence(ctx context.Context, unordered bool) err
 		return nil
 	}
 	if unordered {
-		return s.store.captureIncompleteSecretaryTurn(ctx, s.tx, s.scope, s.req.RequestID, s.req.Text)
+		return s.store.CaptureIncompleteSecretaryTurn(ctx, s.tx, s.scope, s.req.RequestID, s.req.Text)
 	}
 	return s.store.CommandTx(ctx, s.tx, s.scope, workspace.Command{Type: "capture", RequestID: s.req.RequestID, Text: s.req.Text})
 }
@@ -640,11 +640,11 @@ func (t *secretarySession) SaveSentence(ctx context.Context) error {
 // secretaryAsk is what the asking of one turn reads and records. The
 // secretary service makes the model calls.
 type secretaryAsk struct {
-	store      *Store
+	store      *Desk
 	tx         pgx.Tx
 	scope      memory.Scope
 	req        workspace.DeskTurnRequest
-	c          *secretaryContext
+	c          *SecretaryContext
 	turnID     string
 	requestCtx context.Context
 	timing     *budgetstore.ExecutionTimer
@@ -682,11 +682,11 @@ func (m *secretaryAsk) SetTier(ctx context.Context, tier string) error {
 // secretaryTurn is the unit of work in which the answer of one turn is
 // applied. Its writes are in the transaction of the turn.
 type secretaryTurn struct {
-	store    *Store
+	store    *Desk
 	tx       pgx.Tx
 	scope    memory.Scope
 	req      workspace.DeskTurnRequest
-	c        *secretaryContext
+	c        *SecretaryContext
 	turnID   string
 	original workspace.SourceRef
 	sent     map[string]workspace.Memory
@@ -711,13 +711,13 @@ func (t *secretaryTurn) Item(ctx context.Context, id string) (workspace.Item, er
 	return itemstore.GetItem(ctx, t.tx, t.scope, id)
 }
 
-func (t *secretaryTurn) Cards(ctx context.Context, answer secretaryOutput, sent map[string]workspace.Memory) ([]workspace.DeskCard, error) {
-	return t.store.secretaryCardsTx(ctx, t.tx, t.scope, answer, sent, t.c.Sources, t.c.Aliases, kernel.Location(t.c.Settings), t.c.Plan.Recall)
+func (t *secretaryTurn) Cards(ctx context.Context, answer SecretaryOutput, sent map[string]workspace.Memory) ([]workspace.DeskCard, error) {
+	return t.store.SecretaryCardsTx(ctx, t.tx, t.scope, answer, sent, t.c.Sources, t.c.Aliases, kernel.Location(t.c.Settings), t.c.Plan.Recall)
 }
 
 // Act does one action in a transaction of its own inside the turn, with its
 // own action record, so that the owner can undo it alone.
-func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[string]workspace.Item) (secretary.ActionOutcome, error) {
+func (t *secretaryTurn) Act(ctx context.Context, a SecretaryAction, aliases map[string]workspace.Item) (secretary.ActionOutcome, error) {
 	s, c := t.store, t.c
 	out := secretary.ActionOutcome{ActionID: string(memory.NewID())}
 	actionCtx := actionlog.WithActionLog(kernel.WithActor(usestore.WithMemoryTier(ctx, c.Tier), "secretary"), out.ActionID, "desk", t.turnID, "秘书："+a.Op)
@@ -739,7 +739,7 @@ func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[
 		_ = actionTx.Rollback(ctx)
 		return out, err
 	}
-	out.Receipt, out.Err = s.executeSecretaryActionTx(actionCtx, actionTx, t.scope, a, aliases, c.Agent, kernel.Location(c.Settings), pointerValue(t.req.ThingID))
+	out.Receipt, out.Err = s.ExecuteSecretaryActionTx(actionCtx, actionTx, t.scope, a, aliases, c.Agent, kernel.Location(c.Settings), PointerValue(t.req.ThingID))
 	if !secretary.Done(out.Receipt, out.Err) {
 		return out, actionTx.Rollback(ctx)
 	}
@@ -761,7 +761,7 @@ func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[
 	return out, nil
 }
 
-func (s *Store) DeskTurns(ctx context.Context, scope memory.Scope, conversationID string) (workspace.DeskTurnsResponse, error) {
+func (s *Desk) DeskTurns(ctx context.Context, scope memory.Scope, conversationID string) (workspace.DeskTurnsResponse, error) {
 	out := workspace.DeskTurnsResponse{ConversationID: conversationID, Turns: []workspace.SecretaryTurn{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -771,15 +771,15 @@ func (s *Store) DeskTurns(ctx context.Context, scope memory.Scope, conversationI
 	}
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
-		out, err = s.deskTurnsTx(ctx, tx, scope, conversationID, 50, "", nil, nil)
+		out, err = s.DeskTurnsTx(ctx, tx, scope, conversationID, 50, "", nil, nil)
 		return err
 	})
 	return out, err
 }
-func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, conversationID string, limit int, agentOverride string, thingID *string, dependencies *[]memory.Ref) (workspace.DeskTurnsResponse, error) {
+func (s *Desk) DeskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, conversationID string, limit int, agentOverride string, thingID *string, dependencies *[]memory.Ref) (workspace.DeskTurnsResponse, error) {
 	out := workspace.DeskTurnsResponse{ConversationID: conversationID, Turns: []workspace.SecretaryTurn{}}
 	type storedTurn struct {
-		Response     storedSecretaryResponse `json:"response"`
+		Response     StoredSecretaryResponse `json:"response"`
 		Dependencies []memory.Ref            `json:"dependencies"`
 		AgentID      string                  `json:"agentId"`
 		Erased       bool                    `json:"erased"`
@@ -803,13 +803,13 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		if thingID != nil {
 			run.ThingID = *thingID
 		}
-		refreshDeskTurnTx(ctx, tx, scope, &turn, run, stored.Erased, stored.OriginalDeleted)
+		RefreshDeskTurnTx(ctx, tx, scope, &turn, run, stored.Erased, stored.OriginalDeleted)
 		if !stored.Erased && !turn.Outdated && dependencies != nil {
 			*dependencies = append(*dependencies, stored.Dependencies...)
 		}
 		out.Turns = append(out.Turns, turn)
 	}
-	if err := refreshDeskReceiptUndoTx(ctx, tx, scope, out.Turns); err != nil {
+	if err := RefreshDeskReceiptUndoTx(ctx, tx, scope, out.Turns); err != nil {
 		return out, err
 	}
 	return out, nil
@@ -817,7 +817,7 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 
 // Erasure keeps its existing placeholders; changed dependencies preserve the
 // owner's exchange and are replaced only when assembling model history.
-func refreshDeskTurnTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn *workspace.SecretaryTurn, run workspace.Run, erased, originalDeleted bool) {
+func RefreshDeskTurnTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn *workspace.SecretaryTurn, run workspace.Run, erased, originalDeleted bool) {
 	turn.Outdated = false
 	if erased {
 		turn.Reply = "（这条回答依据的记忆已变更）"
@@ -832,7 +832,7 @@ func refreshDeskTurnTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn 
 
 // Receipts retain their original action metadata in storage. Undo is a live
 // workspace property, resolved in one owner-scoped query for the whole read.
-func refreshDeskReceiptUndoTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turns []workspace.SecretaryTurn) error {
+func RefreshDeskReceiptUndoTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turns []workspace.SecretaryTurn) error {
 	ids := []string{}
 	seen := map[string]bool{}
 	for _, turn := range turns {
@@ -867,7 +867,7 @@ func refreshDeskReceiptUndoTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	return nil
 }
 
-func recordSecretaryOverflowTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c secretaryContext) error {
+func recordSecretaryOverflowTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c SecretaryContext) error {
 	rows, err := tx.Query(ctx, `SELECT kind,count(*) FROM work_items WHERE owner_id=$1 AND ((kind='task' AND status IN ('todo','doing','waiting')) OR (kind='project' AND status='active') OR kind='idea') GROUP BY kind`, string(scope.OwnerID))
 	if err != nil {
 		return err

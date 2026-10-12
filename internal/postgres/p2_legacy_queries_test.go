@@ -22,6 +22,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
@@ -819,8 +820,8 @@ func (s *Store) p2LegacyDeskContextTx(ctx context.Context, tx pgx.Tx, scope memo
 	return memories, tasks, settings, dependencies, err
 }
 
-func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, conversationID string) (secretaryContext, error) {
-	out := secretaryContext{ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
+func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, conversationID string) (deskstore.SecretaryContext, error) {
+	out := deskstore.SecretaryContext{ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
 	agentID := req.AgentID
 	if agentID == "" {
 		agentID = s.Models.ExtractionID()
@@ -909,7 +910,7 @@ func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope
 	if err = rows.Err(); err != nil {
 		return out, err
 	}
-	stored, err := s.deskTurnsTx(ctx, tx, scope, conversationID, 6, out.Agent.ID, req.ThingID, &out.Dependencies)
+	stored, err := s.DeskTurnsTx(ctx, tx, scope, conversationID, 6, out.Agent.ID, req.ThingID, &out.Dependencies)
 	if err != nil {
 		return out, err
 	}
@@ -922,7 +923,7 @@ func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope
 	return out, nil
 }
 
-func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretaryContext) (string, map[string]workspace.Memory, error) {
+func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *deskstore.SecretaryContext) (string, map[string]workspace.Memory, error) {
 	var prompt strings.Builder
 	loc := kernel.Location(c.Settings)
 	c.Plan = memory.PlanQuery(req.Text, time.Now(), loc)
@@ -1054,7 +1055,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 		// The prompt's UUID redaction must also be reflected in its cited text.
 		excerpt.Text = deskUUID.ReplaceAllString(excerpt.Text, "（标识已隐藏）")
 		fmt.Fprintf(&prompt, "[%s / %s / %s %s%s] %s\n", alias, excerpt.Title, label, at.In(loc).Format("2006-01-02"), role, excerpt.Text)
-		c.Sources[alias] = workspace.DeskSourceItem{Kind: "source", MemoryID: string(excerpt.ID), Version: excerpt.Version, Text: excerpt.Text, SourceID: string(excerpt.ID), SourceVersion: excerpt.Version, At: stringPointer(at.Format(time.RFC3339))}
+		c.Sources[alias] = workspace.DeskSourceItem{Kind: "source", MemoryID: string(excerpt.ID), Version: excerpt.Version, Text: excerpt.Text, SourceID: string(excerpt.ID), SourceVersion: excerpt.Version, At: deskstore.StringPointer(at.Format(time.RFC3339))}
 		c.Dependencies = append(c.Dependencies, excerpt.Ref)
 	}
 	if len(excerpts) == 0 {
@@ -1077,7 +1078,7 @@ func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope me
 			if message.ExpressedAt != nil {
 				at = *message.ExpressedAt
 			}
-			c.Sources[alias] = workspace.DeskSourceItem{Kind: "source", MemoryID: string(message.ID), Version: message.Version, Text: message.Text, SourceID: string(message.ID), SourceVersion: message.Version, At: stringPointer(at.Format(time.RFC3339))}
+			c.Sources[alias] = workspace.DeskSourceItem{Kind: "source", MemoryID: string(message.ID), Version: message.Version, Text: message.Text, SourceID: string(message.ID), SourceVersion: message.Version, At: deskstore.StringPointer(at.Format(time.RFC3339))}
 			c.Dependencies = append(c.Dependencies, message.Ref)
 		}
 		contextbuilder.WriteGaps(&prompt, group.Label, group.Window.Gaps)
@@ -1147,23 +1148,23 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 	if _, err := s.p2LegacySnapshot(ctx, scope); err != nil {
 		return out, err
 	}
-	conversationID := pointerValue(req.ConversationID)
+	conversationID := deskstore.PointerValue(req.ConversationID)
 	if conversationID == "" {
 		conversationID = string(memory.NewID())
 	}
-	ticket, err := s.admitSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, conversationID, hash[:])
+	ticket, err := s.AdmitSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, conversationID, hash[:])
 	if err != nil {
 		return out, err
 	}
-	conversationID = ticket.conversation
-	var attachments []deskAttachment
-	if !ticket.legacy && len(req.Attachments) > 0 {
-		attachments, err = s.prepareDeskAttachments(requestCtx, scope, req, s.attachmentReader().Read)
+	conversationID = ticket.Conversation
+	var attachments []deskstore.DeskAttachment
+	if !ticket.Legacy && len(req.Attachments) > 0 {
+		attachments, err = s.PrepareDeskAttachments(requestCtx, scope, req, s.attachmentReader().Read)
 		if err != nil {
 			return out, err
 		}
 	}
-	err = s.withOrderedSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, ticket, func(tx pgx.Tx, captureOnly bool) error {
+	err = s.WithOrderedSecretaryTurn(ctx, requestCtx, string(scope.OwnerID), req.RequestID, ticket, func(tx pgx.Tx, captureOnly bool) error {
 		tx = p2LegacySQLTx{tx}
 		var priorHash, prior []byte
 		var refs []memory.Ref
@@ -1174,20 +1175,20 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			if !bytes.Equal(hash[:], priorHash) {
 				return memory.ErrConflict
 			}
-			var saved storedSecretaryResponse
+			var saved deskstore.StoredSecretaryResponse
 			if err := json.Unmarshal(prior, &saved); err != nil {
 				return err
 			}
 			out.ConversationID, out.Turn = saved.ConversationID, saved.Turn
 			// Deleted request replays retain the already scrubbed response.
 			if !erased {
-				refreshDeskTurnTx(ctx, tx, scope, &out.Turn, workspace.Run{AgentID: priorAgent, ContextVersions: refs}, false, false)
+				deskstore.RefreshDeskTurnTx(ctx, tx, scope, &out.Turn, workspace.Run{AgentID: priorAgent, ContextVersions: refs}, false, false)
 			}
 			out.State, err = s.p2LegacySnapshotTx(ctx, tx, scope)
 			if err != nil {
 				return err
 			}
-			return refreshDeskReceiptUndoTx(ctx, tx, scope, []workspace.SecretaryTurn{out.Turn})
+			return deskstore.RefreshDeskReceiptUndoTx(ctx, tx, scope, []workspace.SecretaryTurn{out.Turn})
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
@@ -1212,25 +1213,25 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			failureStage = "order"
 		}
 		out.Turn.Agent = c.Agent.Name
-		var answer secretaryOutput
+		var answer deskstore.SecretaryOutput
 		sent := map[string]workspace.Memory{}
 		if contextErr == nil {
 			var prompt string
 			prompt, sent, contextErr = s.p2LegacySecretaryPrompt(ctx, tx, scope, req, &c)
 			if contextErr == nil {
 				failureStage = "verify"
-				contextErr = s.checkDeskContextTx(ctx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
+				contextErr = s.CheckDeskContextTx(ctx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
 			}
 			var reservationID string
 			if contextErr == nil {
 				failureStage = "budget"
 				p, _ := s.Models.Get(c.Agent.ID)
-				reservationID, contextErr = s.ReserveModelCostID(ctx, scope.OwnerID, p.Reserve(secretaryInstructions+prompt), nil)
+				reservationID, contextErr = s.ReserveModelCostID(ctx, scope.OwnerID, p.Reserve(deskstore.SecretaryInstructions+prompt), nil)
 			}
 			if contextErr == nil {
 				failureStage = "model"
 				workCtx, cancel := context.WithTimeout(requestCtx, 90*time.Second)
-				result, err := s.Models.GenerateWithSearchSchema(workCtx, c.Agent.ID, secretaryInstructions, prompt, secretaryOutputSchema)
+				result, err := s.Models.GenerateWithSearchSchema(workCtx, c.Agent.ID, deskstore.SecretaryInstructions, prompt, deskstore.SecretaryOutputSchema)
 				// HTTP providers may hide cancellation behind an unreachable error.
 				if err != nil && workCtx.Err() != nil {
 					err = workCtx.Err()
@@ -1260,7 +1261,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 						slog.WarnContext(ctx, "secretary output fallback", "stage", "parse", "error_type", secretary.ErrorType("parse", parseErr))
 						// A completed model call still answered. Keep it as text, with
 						// no actions, citations or questions from a partial decode.
-						answer = secretaryOutput{Reply: strings.TrimSpace(result.Text)}
+						answer = deskstore.SecretaryOutput{Reply: strings.TrimSpace(result.Text)}
 					} else {
 						slog.InfoContext(ctx, "secretary output parsed", "stage", "parse", "error_type", "none")
 					}
@@ -1272,7 +1273,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 		}
 		if contextErr == nil {
 			failureStage = "verify"
-			contextErr = s.checkDeskContextTx(ctx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
+			contextErr = s.CheckDeskContextTx(ctx, tx, scope, c.Agent.ID, c.Dependencies, c.Items, true)
 		}
 		dependencies := []memory.Ref{}
 		if contextErr != nil {
@@ -1280,7 +1281,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			receiptText := secretary.CaptureText(failureStage, contextErr)
 			if captureOnly {
 				if text != "" {
-					if err := s.captureIncompleteSecretaryTurn(ctx, tx, scope, req.RequestID, req.Text); err != nil {
+					if err := s.CaptureIncompleteSecretaryTurn(ctx, tx, scope, req.RequestID, req.Text); err != nil {
 						return err
 					}
 				}
@@ -1301,7 +1302,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 					return err
 				}
 			}
-			out.Turn.Reply = secretaryReply(answer.Reply)
+			out.Turn.Reply = deskstore.SecretaryReply(answer.Reply)
 			out.Turn.Ask = answer.Ask
 			if out.Turn.Ask != nil && out.Turn.Ask.Options == nil {
 				out.Turn.Ask.Options = []string{}
@@ -1332,7 +1333,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 					_ = actionTx.Rollback(ctx)
 					return err
 				}
-				receipt, actionErr := s.executeSecretaryActionTx(actionCtx, actionTx, scope, a, actionAliases, c.Agent, kernel.Location(c.Settings), pointerValue(req.ThingID))
+				receipt, actionErr := s.ExecuteSecretaryActionTx(actionCtx, actionTx, scope, a, actionAliases, c.Agent, kernel.Location(c.Settings), deskstore.PointerValue(req.ThingID))
 				if actionErr != nil || receipt.Status == "skipped" {
 					if err = actionTx.Rollback(ctx); err != nil {
 						return err
@@ -1376,13 +1377,13 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			if answer.Remember && text != "" {
 				out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "remember", Text: "记下了，会整理进记忆", Status: "done"})
 			}
-			out.Turn.Cards, err = s.secretaryCardsTx(ctx, tx, scope, answer, sent, c.Sources, c.Aliases, kernel.Location(c.Settings), c.Plan.Recall)
+			out.Turn.Cards, err = s.SecretaryCardsTx(ctx, tx, scope, answer, sent, c.Sources, c.Aliases, kernel.Location(c.Settings), c.Plan.Recall)
 			if err != nil {
 				return err
 			}
 		}
 		for _, a := range attachments {
-			receipt, err := s.deskAttachmentReceiptTx(ctx, tx, scope, out.Turn.ID, a)
+			receipt, err := s.DeskAttachmentReceiptTx(ctx, tx, scope, out.Turn.ID, a)
 			if err != nil {
 				return err
 			}
@@ -1401,7 +1402,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,conversation_id,thing_id,request_id,request_hash,response,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", string(scope.OwnerID), out.Turn.ID, c.Agent.ID, req.Text, out.Turn.Reply, kernel.JSON(dependencies), conversationID, pointerValueOrNull(req.ThingID), req.RequestID, hash[:], kernel.JSON(storedSecretaryResponse{ConversationID: out.ConversationID, Turn: out.Turn, AttachmentContext: c.AttachmentContext}), out.Turn.CreatedAt)
+		_, err = tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,conversation_id,thing_id,request_id,request_hash,response,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", string(scope.OwnerID), out.Turn.ID, c.Agent.ID, req.Text, out.Turn.Reply, kernel.JSON(dependencies), conversationID, deskstore.PointerValueOrNull(req.ThingID), req.RequestID, hash[:], kernel.JSON(deskstore.StoredSecretaryResponse{ConversationID: out.ConversationID, Turn: out.Turn, AttachmentContext: c.AttachmentContext}), out.Turn.CreatedAt)
 		return err
 	})
 	return out, err

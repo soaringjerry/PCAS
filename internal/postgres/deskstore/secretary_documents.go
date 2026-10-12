@@ -1,4 +1,4 @@
-package postgres
+package deskstore
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 
 type secretaryDocumentsKey struct{}
 
-func (s *Store) secretaryDocumentsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretaryContext) (string, error) {
+func (s *Desk) secretaryDocumentsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *SecretaryContext) (string, error) {
 	installed, err := workspacestore.StudioInstalledTx(ctx, tx)
 	if err != nil || !installed {
 		return "", err

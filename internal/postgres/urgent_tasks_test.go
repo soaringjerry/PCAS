@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -47,7 +48,7 @@ func TestSecretaryMarksAndClearsUrgentTasks(t *testing.T) {
 	// A time or a null leaves the mark as it was.
 	due := testsupport.DateFromToday(t, "Asia/Shanghai", 1, 15, 0).Format("2006-01-02T15:04")
 	output = `{"reply":"改好了。","actions":[{"op":"update","ref":"T1","set":{"due":"` + due + `","urgent":null}}]}`
-	timed := mustTurn(t, s, scope, workspace.DeskTurnRequest{RequestID: turnRequest("").RequestID, AgentID: "model", Text: "推广那件事定在明天下午三点", ThingID: stringPointer(urgentTask(t, created.State, "开始推广").ID)})
+	timed := mustTurn(t, s, scope, workspace.DeskTurnRequest{RequestID: turnRequest("").RequestID, AgentID: "model", Text: "推广那件事定在明天下午三点", ThingID: deskstore.StringPointer(urgentTask(t, created.State, "开始推广").ID)})
 	if got := urgentTask(t, timed.State, "开始推广"); !got.Urgent || got.Due == "" {
 		t.Fatalf("time changed the mark: %+v", got)
 	}
@@ -55,7 +56,7 @@ func TestSecretaryMarksAndClearsUrgentTasks(t *testing.T) {
 	// Marking, then undoing the change, returns to the earlier value.
 	report := urgentTask(t, timed.State, "交报告")
 	output = `{"reply":"好。","actions":[{"op":"update","ref":"THIS","set":{"urgent":true}}]}`
-	marked := mustTurn(t, s, scope, workspace.DeskTurnRequest{RequestID: turnRequest("").RequestID, AgentID: "model", Text: "这个要赶紧", ThingID: stringPointer(report.ID)})
+	marked := mustTurn(t, s, scope, workspace.DeskTurnRequest{RequestID: turnRequest("").RequestID, AgentID: "model", Text: "这个要赶紧", ThingID: deskstore.StringPointer(report.ID)})
 	if !urgentTask(t, marked.State, "交报告").Urgent || marked.Turn.Receipts[0].ActionID == nil {
 		t.Fatalf("update did not mark: %+v", marked.Turn.Receipts)
 	}
@@ -65,7 +66,7 @@ func TestSecretaryMarksAndClearsUrgentTasks(t *testing.T) {
 	}
 
 	output = `{"reply":"好，不急了。","actions":[{"op":"update","ref":"THIS","set":{"urgent":false}}]}`
-	cleared := mustTurn(t, s, scope, workspace.DeskTurnRequest{RequestID: turnRequest("").RequestID, AgentID: "model", Text: "这件事不急了", ThingID: stringPointer(urgentTask(t, undone, "开始推广").ID)})
+	cleared := mustTurn(t, s, scope, workspace.DeskTurnRequest{RequestID: turnRequest("").RequestID, AgentID: "model", Text: "这件事不急了", ThingID: deskstore.StringPointer(urgentTask(t, undone, "开始推广").ID)})
 	if urgentTask(t, cleared.State, "开始推广").Urgent {
 		t.Fatal("urgent false did not clear the mark")
 	}
@@ -98,10 +99,10 @@ func TestUrgentIsATaskPatch(t *testing.T) {
 
 // The model is told when to set the mark, and the schema lets it.
 func TestSecretaryIsToldAboutUrgent(t *testing.T) {
-	if !strings.Contains(secretaryInstructions, "urgent：") || !strings.Contains(secretaryInstructions, "只说了一个具体时间不算着急") {
+	if !strings.Contains(deskstore.SecretaryInstructions, "urgent：") || !strings.Contains(deskstore.SecretaryInstructions, "只说了一个具体时间不算着急") {
 		t.Fatal("instructions do not explain urgent")
 	}
-	if strings.Count(string(secretaryOutputSchema), `"urgent"`) != 4 {
+	if strings.Count(string(deskstore.SecretaryOutputSchema), `"urgent"`) != 4 {
 		t.Fatal("schema must declare and require urgent for create_task and update.set")
 	}
 }

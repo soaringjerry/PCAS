@@ -1,4 +1,4 @@
-package postgres
+package deskstore
 
 import (
 	"context"
@@ -17,11 +17,11 @@ import (
 )
 
 func smokeLockTx(ctx context.Context, tx pgx.Tx, owner, id string) error {
-	return secretaryTryLock(ctx, tx, "desk-smoke:"+owner+":"+id)
+	return SecretaryTryLock(ctx, tx, "desk-smoke:"+owner+":"+id)
 }
 
 // Release the pool connection between retries, including while a model runs.
-func (s *Store) smokeTransaction(ctx context.Context, work func(pgx.Tx) error) error {
+func (s *Desk) smokeTransaction(ctx context.Context, work func(pgx.Tx) error) error {
 	for {
 		err := pgx.BeginFunc(ctx, s.Pool, work)
 		if !errors.Is(err, errSecretaryBusy) {
@@ -35,16 +35,16 @@ func (s *Store) smokeTransaction(ctx context.Context, work func(pgx.Tx) error) e
 
 // Registration precedes admission; it also covers failed or pending turns.
 // The group lock is taken before ordering/owner locks in both turn and cleanup.
-func (s *Store) registerSmokeRequest(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest) error {
+func (s *Desk) RegisterSmokeRequest(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest) error {
 	return s.smokeTransaction(ctx, func(tx pgx.Tx) error {
 		owner := string(scope.OwnerID)
 		if err := smokeLockTx(ctx, tx, owner, req.SmokeID); err != nil {
 			return err
 		}
-		if err := secretaryTryLock(ctx, tx, "secretary-admission-request:"+owner+":"+req.RequestID); err != nil {
+		if err := SecretaryTryLock(ctx, tx, "secretary-admission-request:"+owner+":"+req.RequestID); err != nil {
 			return err
 		}
-		if err := secretaryTryLock(ctx, tx, "secretary-admission-conversation:"+owner+":"+req.SmokeID); err != nil {
+		if err := SecretaryTryLock(ctx, tx, "secretary-admission-conversation:"+owner+":"+req.SmokeID); err != nil {
 			return err
 		}
 		var normal bool
@@ -99,7 +99,7 @@ func lockSmokeTurnTx(ctx context.Context, tx pgx.Tx, owner string) error {
 // Cleanup serializes with turns and completion/adoption through the group and
 // owner locks. It removes only this group's documents, or restores an untouched
 // ordinary document; genuine later edits make the whole operation conflict.
-func (s *Store) CleanupSmoke(ctx context.Context, scope memory.Scope, id string) error {
+func (s *Desk) CleanupSmoke(ctx context.Context, scope memory.Scope, id string) error {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}

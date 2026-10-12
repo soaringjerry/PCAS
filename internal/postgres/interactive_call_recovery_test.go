@@ -29,11 +29,11 @@ func admittedInteractiveRequest(t *testing.T, s *Store, scope memory.Scope, prov
 	hash := sha256.Sum256([]byte("Fictitious admitted request."))
 	ctx, cancel := context.WithTimeout(context.Background(), secretary.TurnTimeout)
 	defer cancel()
-	ticket, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), string(execution), string(memory.NewID()), hash[:])
-	if err != nil || !ticket.own {
+	ticket, err := s.AdmitSecretaryTurn(ctx, ctx, string(scope.OwnerID), string(execution), string(memory.NewID()), hash[:])
+	if err != nil || !ticket.Own {
 		t.Fatal(ticket, err)
 	}
-	policy := callstore.InteractiveCallPolicy{Kind: "secretary", Token: ticket.creator, Origin: fmt.Sprintf("%x", hash), RequestHash: hash[:], AgentID: provider, Usage: usagelog.ModelUsage{ID: memory.NewID(), Tier: "heavy", Purpose: "reader", TurnID: string(memory.NewID()), Plan: kernel.JSON(usagelog.UsePlan{Groups: []string{"self:rule"}})}}
+	policy := callstore.InteractiveCallPolicy{Kind: "secretary", Token: ticket.Creator, Origin: fmt.Sprintf("%x", hash), RequestHash: hash[:], AgentID: provider, Usage: usagelog.ModelUsage{ID: memory.NewID(), Tier: "heavy", Purpose: "reader", TurnID: string(memory.NewID()), Plan: kernel.JSON(usagelog.UsePlan{Groups: []string{"self:rule"}})}}
 	return modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: execution, RootExecutionID: execution, Function: "reader", Stage: "catalog", ProviderID: provider, Instructions: prompts.Must("memory-reader"), ContextBuilderVersion: "fictitious-reader-v1", Prompt: kernel.JSON(map[string]string{"rawPrompt": "Fictitious catalog input."}), Policy: policy}
 }
 

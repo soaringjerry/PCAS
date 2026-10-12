@@ -1,4 +1,4 @@
-package postgres
+package deskstore
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 
 // Input content may change during generation. Access revocation and deletion
 // remain fences; use current versions so unrelated edits do not abort a reply.
-func (s *Store) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c secretaryContext) error {
+func (s *Desk) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c SecretaryContext) error {
 	agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.Agent.ID)
 	if err != nil {
 		return err
@@ -35,7 +35,7 @@ func (s *Store) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope
 	return nil
 }
 
-func (s *Store) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c secretaryContext, out secretaryOutput) error {
+func (s *Desk) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c SecretaryContext, out SecretaryOutput) error {
 	if err := s.checkSecretaryUseContextTx(ctx, tx, scope, c); err != nil {
 		return err
 	}
@@ -45,7 +45,7 @@ func (s *Store) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, sc
 			continue
 		}
 		if action.Op == "delegate" && action.Kind == "revise" {
-			doc, ok := c.Documents[pointerValue(action.DocumentID)]
+			doc, ok := c.Documents[PointerValue(action.DocumentID)]
 			if ok {
 				current, e := kernel.QueryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), doc.ID)
 				if e != nil || current.Version != doc.Version {

@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
@@ -136,11 +137,11 @@ func TestSecretarySchedulesAndUpdatesRecentTask(t *testing.T) {
 func TestSecretaryRejectsUntrustedRefsAndLimitsActions(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
-	var payload secretaryOutput
+	var payload deskstore.SecretaryOutput
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { secretaryModelReply(w, payload) })
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "原事项"})
 	id := st.Tasks[0].ID
-	payload = secretaryOutput{Actions: []secretaryAction{{Op: "update", Ref: "T999", Set: map[string]json.RawMessage{"title": kernel.JSON("伪造")}}, {Op: "update", Ref: id, Set: map[string]json.RawMessage{"title": kernel.JSON("真实 UUID")}}, {Op: "update", Ref: "T1", Set: map[string]json.RawMessage{"status": kernel.JSON("evil"), "notesAppend": kernel.JSON("保留正常字段")}}, {Op: "create_task", Title: "新任务", Due: stringPointer("bad-date")}}}
+	payload = deskstore.SecretaryOutput{Actions: []deskstore.SecretaryAction{{Op: "update", Ref: "T999", Set: map[string]json.RawMessage{"title": kernel.JSON("伪造")}}, {Op: "update", Ref: id, Set: map[string]json.RawMessage{"title": kernel.JSON("真实 UUID")}}, {Op: "update", Ref: "T1", Set: map[string]json.RawMessage{"status": kernel.JSON("evil"), "notesAppend": kernel.JSON("保留正常字段")}}, {Op: "create_task", Title: "新任务", Due: deskstore.StringPointer("bad-date")}}}
 	out := mustTurn(t, s, scope, turnRequest("改事项"))
 	if len(out.State.Tasks) != 2 || out.Turn.Receipts[0].Status != "skipped" || out.Turn.Receipts[1].Status != "skipped" {
 		t.Fatal(out)
@@ -153,9 +154,9 @@ func TestSecretaryRejectsUntrustedRefsAndLimitsActions(t *testing.T) {
 	if !strings.Contains(out.Turn.Receipts[3].Text, "时间没看懂") {
 		t.Fatal(out.Turn.Receipts)
 	}
-	payload = secretaryOutput{}
+	payload = deskstore.SecretaryOutput{}
 	for i := 0; i < 11; i++ {
-		payload.Actions = append(payload.Actions, secretaryAction{Op: "create_task", Title: "待办"})
+		payload.Actions = append(payload.Actions, deskstore.SecretaryAction{Op: "create_task", Title: "待办"})
 	}
 	out = mustTurn(t, s, scope, turnRequest("建十一件事"))
 	if len(out.State.Tasks) != 12 || len(out.Turn.Receipts) != 11 || out.Turn.Receipts[10].Reason != "一次太多了，只做了前 10 件" {
@@ -252,7 +253,7 @@ func TestSecretaryStablePrefixAndVisibility(t *testing.T) {
 	req := turnRequest("那今天有什么事")
 	req.ConversationID = &out.ConversationID
 	mustTurn(t, s, scope, req)
-	if len(systems) != 2 || systems[0] != systems[1] || systems[0] != secretaryInstructions {
+	if len(systems) != 2 || systems[0] != systems[1] || systems[0] != deskstore.SecretaryInstructions {
 		t.Fatal("system changed")
 	}
 	prefix := func(p string) string { return strings.Split(p, "本对话历史：")[0] }
@@ -725,7 +726,7 @@ func TestSecretaryReceiptUndoneIsLiveOnHistoryAndReplay(t *testing.T) {
 	}
 	// The initial false flag remains in the stored turn. Reads derive true from
 	// action_log without mutating the idempotency record.
-	var stored storedSecretaryResponse
+	var stored deskstore.StoredSecretaryResponse
 	if err = s.Pool.QueryRow(ctx, "SELECT response FROM desk_turns WHERE owner_id=$1 AND request_id=$2", string(scope.OwnerID), req.RequestID).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}

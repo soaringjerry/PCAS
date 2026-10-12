@@ -1,4 +1,4 @@
-package postgres
+package deskstore
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 // Supply current evidence behind the handover, including completed items that
 // are absent from the ordinary unfinished task list. Aliases remain server-owned;
 // the model decides which evidence the user's correction concerns.
-func (s *Store) secretaryHandoverEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c *secretaryContext, b *strings.Builder, sent map[string]workspace.Memory) error {
+func (s *Desk) secretaryHandoverEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c *SecretaryContext, b *strings.Builder, sent map[string]workspace.Memory) error {
 	h := c.Use.ProjectHandover
 	if h == nil || h.WrittenAt == nil {
 		return nil

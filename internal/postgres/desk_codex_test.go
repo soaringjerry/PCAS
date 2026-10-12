@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -108,18 +109,18 @@ func exerciseCodexFormats(t *testing.T, binary, home string, live bool) {
 	if live {
 		var prompt string
 		err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-			context, err := s.secretaryContextTx(ctx, tx, scope, req, string(memory.NewID()))
+			context, err := s.SecretaryContextTx(ctx, tx, scope, req, string(memory.NewID()))
 			if err != nil {
 				return err
 			}
-			prompt, _, err = s.secretaryPrompt(ctx, tx, scope, req, &context, s.Recall)
+			prompt, _, err = s.SecretaryPrompt(ctx, tx, scope, req, &context, s.Recall)
 			return err
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
 		start := time.Now()
-		raw, err := models.GenerateWithSearchSchema(ctx, "chatgpt", secretaryInstructions, prompt, secretaryOutputSchema)
+		raw, err := models.GenerateWithSearchSchema(ctx, "chatgpt", deskstore.SecretaryInstructions, prompt, deskstore.SecretaryOutputSchema)
 		if err != nil {
 			t.Fatal(err)
 		}

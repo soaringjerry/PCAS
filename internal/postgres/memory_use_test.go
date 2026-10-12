@@ -12,6 +12,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
@@ -198,8 +199,8 @@ func TestB4MediumCannotAddActionsAndFallsBack(t *testing.T) {
 	}
 }
 func TestB4SelfcheckPreservesSlotAuthority(t *testing.T) {
-	before := secretaryOutput{Actions: []secretaryAction{{Op: "create_task", Title: "原任务"}, {Op: "add_steps", Ref: "N1", Steps: []string{"原步骤"}}}}
-	after := secretaryOutput{Actions: []secretaryAction{{Op: "delete", Ref: "T1"}, {Op: "add_steps", Ref: "T2", Steps: []string{"别的目标"}}, {Op: "create_task", Title: "额外任务"}}}
+	before := deskstore.SecretaryOutput{Actions: []deskstore.SecretaryAction{{Op: "create_task", Title: "原任务"}, {Op: "add_steps", Ref: "N1", Steps: []string{"原步骤"}}}}
+	after := deskstore.SecretaryOutput{Actions: []deskstore.SecretaryAction{{Op: "delete", Ref: "T1"}, {Op: "add_steps", Ref: "T2", Steps: []string{"别的目标"}}, {Op: "create_task", Title: "额外任务"}}}
 	got := secretary.ConstrainCheck(before, after)
 	if string(kernel.JSON(got.Actions)) != string(kernel.JSON(before.Actions)) {
 		t.Fatal(got)

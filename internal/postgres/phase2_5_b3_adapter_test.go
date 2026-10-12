@@ -9,8 +9,8 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -44,9 +44,9 @@ func phase25B3DefaultAdapter(f *phase25B234Fixture) phase25B3Adapter {
 			return fmt.Errorf("unexpected status stage %s", j.Stage)
 		},
 		setVersions: func(c, h int) func() {
-			oldC, oldH := kernel.CardVersion, postgres.HandoverVersion
-			kernel.CardVersion, postgres.HandoverVersion = c, h
-			return func() { kernel.CardVersion, postgres.HandoverVersion = oldC, oldH }
+			oldC, oldH := kernel.CardVersion, statestore.HandoverVersion
+			kernel.CardVersion, statestore.HandoverVersion = c, h
+			return func() { kernel.CardVersion, statestore.HandoverVersion = oldC, oldH }
 		},
 		encodeCard: func(result phase25B3CardOutput, numbers map[memory.ID]int) (string, error) {
 			fields := map[string][]int{}

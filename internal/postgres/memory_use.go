@@ -55,7 +55,7 @@ func (s *Store) startUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if err != nil {
 		return u, err
 	}
-	groups, err := s.memoryGroupsTx(ctx, tx, scope)
+	groups, err := s.MemoryGroupsTx(ctx, tx, scope)
 	if err != nil {
 		return u, err
 	}
@@ -188,11 +188,11 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 			}
 		}
 	}
-	requirements, err := s.assistantRequirementsTx(ctx, tx, scope)
+	requirements, err := s.AssistantRequirementsTx(ctx, tx, scope)
 	if err != nil {
 		return err
 	}
-	deadlines, err := s.libraryDeadlinesTx(ctx, tx, scope, workspace.DeadlineQuery{})
+	deadlines, err := s.LibraryDeadlinesTx(ctx, tx, scope, workspace.DeadlineQuery{})
 	if err != nil {
 		return err
 	}

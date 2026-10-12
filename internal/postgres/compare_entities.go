@@ -172,7 +172,7 @@ func (a entityCompareStore) RetryLater(j worker.Job, code string) error {
 }
 
 func (a entityCompareStore) Session(ctx context.Context) (comparison.EntitySession, func(), error) {
-	conn, release, err := a.store.comparisonConnection(ctx)
+	conn, release, err := a.store.ComparisonConnection(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

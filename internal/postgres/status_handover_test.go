@@ -12,6 +12,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -39,7 +40,7 @@ func handoverFakeReply(t *testing.T, w http.ResponseWriter, r *http.Request) {
 		Messages []struct{ Role, Content string }
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
-	var prompt handoverInput
+	var prompt statestore.HandoverInput
 	for _, m := range req.Messages {
 		if m.Role == "user" {
 			if err := json.Unmarshal([]byte(m.Content), &prompt); err != nil {
@@ -52,9 +53,9 @@ func handoverFakeReply(t *testing.T, w http.ResponseWriter, r *http.Request) {
 			t.Error("inferred supplied to handover")
 		}
 	}
-	output := handoverOutput{}
-	for _, title := range handoverTitles {
-		section := handoverSection{Title: title, Body: "（暂无依据）", Refs: []int{}}
+	output := statestore.HandoverOutput{}
+	for _, title := range statestore.HandoverTitles {
+		section := statestore.HandoverSection{Title: title, Body: "（暂无依据）", Refs: []int{}}
 		if len(prompt.Memories) > 0 {
 			section.Body = prompt.Memories[0].Text
 			section.Refs = []int{1}
@@ -109,26 +110,26 @@ func TestStatusHandoverGroundingLimitsAndDeletion(t *testing.T) {
 }
 func TestStatusHandoverParser(t *testing.T) {
 	ms := []kernel.CardMemory{{N: 1, Text: "虚构规则", Category: "rule", Trust: "stated"}, {N: 2, Text: "可能参加一次活动", Category: "event", Trust: "tentative"}, {N: 3, Text: "推断", Trust: "inferred"}}
-	output := handoverOutput{}
-	for i, title := range handoverTitles {
+	output := statestore.HandoverOutput{}
+	for i, title := range statestore.HandoverTitles {
 		ref := 2
 		if i == 2 {
 			ref = 3
 		}
-		output.Sections = append(output.Sections, handoverSection{Title: title, Body: "可能参加一次活动", Refs: []int{ref}})
+		output.Sections = append(output.Sections, statestore.HandoverSection{Title: title, Body: "可能参加一次活动", Refs: []int{ref}})
 	}
-	body, valid := parseHandover(string(kernel.JSON(output)), ms)
+	body, valid := statestore.ParseHandover(string(kernel.JSON(output)), ms)
 	if valid || body != "" {
 		t.Fatal(body, valid)
 	}
 	output.Sections[0].Title = "不合法标题"
-	if _, valid := parseHandover(string(kernel.JSON(output)), ms); valid {
+	if _, valid := statestore.ParseHandover(string(kernel.JSON(output)), ms); valid {
 		t.Fatal("accepted unknown section")
 	}
-	output.Sections[0].Title = handoverTitles[0]
+	output.Sections[0].Title = statestore.HandoverTitles[0]
 	output.Sections[0].Refs = []int{1}
 	output.Sections[0].Body = strings.Repeat("字", 1800)
-	if _, valid := parseHandover(string(kernel.JSON(output)), ms); valid {
+	if _, valid := statestore.ParseHandover(string(kernel.JSON(output)), ms); valid {
 		t.Fatal("accepted overlong handover")
 	}
 }

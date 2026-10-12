@@ -87,7 +87,7 @@ func seedOrganizeGroupsTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (memo
 var organizeEligible = ` FROM claims cl JOIN memory_records r ON(r.owner_id,r.id)=(cl.owner_id,cl.id)
  JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version)
- WHERE r.state='active' AND rv.state='active' AND cl.organized<` + organizeRequiredSQL("c.category", "$1") + ` AND cl.organize_after<=now()
+ WHERE r.state='active' AND rv.state='active' AND cl.organized<` + kernel.OrganizeRequiredSQL("c.category", "$1") + ` AND cl.organize_after<=now()
  AND (coalesce(to_jsonb(cl)->>'retired','')='' OR ($1::int=3 AND c.category='rule' AND cl.organized>0))
  AND claim_source_is_current(r.owner_id,c.claim_id,c.version,now())`
 
@@ -227,7 +227,7 @@ type organizeStore struct{ store *Store }
 // Hold a dedicated session lock over generation, not the user's row lock:
 // corrections/deletions can proceed, but a recovered lease cannot race a call.
 func (a organizeStore) Session(ctx context.Context) (organize.Session, func(), error) {
-	conn, release, err := a.store.organizeCallConnection(ctx, "organize_busy", kernel.OrganizeInterval)
+	conn, release, err := a.store.OrganizeCallConnection(ctx, "organize_busy", kernel.OrganizeInterval)
 	if err != nil {
 		return nil, nil, err
 	}

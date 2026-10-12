@@ -39,7 +39,7 @@ var compareCurrent = ` FROM claims cl
  JOIN memory_records r ON (r.owner_id,r.id)=(cl.owner_id,cl.id)
  JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
  JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version)
- WHERE r.state='active' AND rv.state='active' AND cl.retired='' AND cl.organized >= ` + organizeRequiredSQL("c.category", "$1") + `
+ WHERE r.state='active' AND rv.state='active' AND cl.retired='' AND cl.organized >= ` + kernel.OrganizeRequiredSQL("c.category", "$1") + `
  AND claim_source_is_current(cl.owner_id,cl.id,r.version,now())`
 
 const compareGroupKeys = `SELECT key,kind,name FROM status_current_members
@@ -244,7 +244,7 @@ func (a compareStore) Reschedule(ctx context.Context) {
 }
 
 func (a compareStore) Session(ctx context.Context) (comparison.Session, func(), error) {
-	conn, release, err := a.store.comparisonConnection(ctx)
+	conn, release, err := a.store.ComparisonConnection(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

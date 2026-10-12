@@ -27,7 +27,7 @@ type projectInputPart = projecthandover.Part
 type projectHandoverInput = projecthandover.Input
 
 func (s *Store) ReadProjectHandover(ctx context.Context, scope memory.Scope, id string) (workspace.ProjectHandover, error) {
-	out := emptyProjectHandover(id)
+	out := kernel.EmptyProjectHandover(id)
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
@@ -82,7 +82,7 @@ func enqueueProjectHandoversTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	for _, c := range candidates {
 		due := now
 		if c.written != nil {
-			due = maxTime(due, c.written.Add(time.Hour))
+			due = kernel.MaxTime(due, c.written.Add(time.Hour))
 		}
 		if _, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, ProjectHandoverStage+":"+c.id+":"+string(memory.NewID()), kernel.HandoverPriority, due); err != nil {
 			return 0, err
@@ -158,7 +158,7 @@ func (s *Store) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope mem
 		out.Parts = append(out.Parts, projectInputPart{Evidence: workspace.ProjectEvidence{Kind: "memory", ID: m.ID, Version: m.Version}, Content: m})
 		refs = append(refs, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})
 	}
-	deadlines, err := s.libraryDeadlinesTx(ctx, tx, scope, workspace.DeadlineQuery{})
+	deadlines, err := s.LibraryDeadlinesTx(ctx, tx, scope, workspace.DeadlineQuery{})
 	if err != nil {
 		return out, nil, err
 	}
@@ -182,7 +182,7 @@ func (s *Store) ProjectHandoverStore() projecthandover.Store { return projectHan
 type projectHandoverStore struct{ store *Store }
 
 func (a projectHandoverStore) Exclusive(ctx context.Context) (func(), error) {
-	return statusCallLock(ctx, a.store)
+	return kernel.StatusCallLock(ctx, a.store.DB)
 }
 
 func (a projectHandoverStore) RetryLater(j worker.Job, code string) error {

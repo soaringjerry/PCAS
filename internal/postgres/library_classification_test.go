@@ -11,6 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -82,11 +83,11 @@ func TestLibraryDeadlinesUseModelDatesAndRetainUncertainty(t *testing.T) {
 
 func TestHandoverUsesIndependentRollingLimit(t *testing.T) {
 	s, scope, ctx := testStore(t), owner(), context.Background()
-	sections := []handoverSection{}
-	for _, title := range handoverTitles {
-		sections = append(sections, handoverSection{Title: title, Body: "虚构交接内容", Refs: []int{1}})
+	sections := []statestore.HandoverSection{}
+	for _, title := range statestore.HandoverTitles {
+		sections = append(sections, statestore.HandoverSection{Title: title, Body: "虚构交接内容", Refs: []int{1}})
 	}
-	fake := b1Model(t, s, string(kernel.JSON(handoverOutput{Sections: sections})))
+	fake := b1Model(t, s, string(kernel.JSON(statestore.HandoverOutput{Sections: sections})))
 	statusTestMemories(t, s, scope, 3)
 	job := handoverTestJob(t, s, scope)
 	seedStageUsage(t, s, scope, kernel.HandoverStage, 2)

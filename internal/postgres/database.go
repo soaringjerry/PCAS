@@ -171,30 +171,37 @@ var _ memory.Repository = (*Store)(nil)
 // newStore composes the store over its core. Each storage package works on
 // the same core; a package that needs another one holds it.
 func newStore(db *kernel.DB) *Store {
-	sources := &sourcestore.Sources{DB: db}
-	owners := &ownerstore.Owners{DB: db}
-	usage := &usagelog.Usage{DB: db}
-	budgets := &budgetstore.Budgets{DB: db, Owners: owners}
-	calls := &callstore.Calls{DB: db, Usage: usage, Budgets: budgets}
-	claims := &claimstore.Claims{DB: db, Sources: sources}
-	reader := &memoryread.Reader{DB: db}
-	work := &workstore.Work{DB: db}
+	activityPart := &activitystore.Activity{DB: db}
+	ownersPart := &ownerstore.Owners{DB: db}
+	budgetsPart := &budgetstore.Budgets{DB: db, Owners: ownersPart}
+	usagePart := &usagelog.Usage{DB: db}
+	callsPart := &callstore.Calls{DB: db, Usage: usagePart, Budgets: budgetsPart}
+	sourcesPart := &sourcestore.Sources{DB: db}
+	claimsPart := &claimstore.Claims{DB: db, Sources: sourcesPart}
+	evidencePart := &evidencestore.Evidence{DB: db}
+	readerPart := &memoryread.Reader{DB: db}
+	workPart := &workstore.Work{DB: db}
+	intakePart := &intakestore.Intake{DB: db, Sources: sourcesPart, Owners: ownersPart, Calls: callsPart, Claims: claimsPart, Reader: readerPart, Work: workPart}
+	itemsPart := &itemstore.Items{DB: db}
+	memoryPart := &memorystore.Memory{DB: db}
+	schedulesPart := &schedulestore.Schedules{DB: db}
+	statePart := &statestore.State{DB: db, Reader: readerPart}
 	return &Store{
 		DB:        db,
-		Intake:    &intakestore.Intake{DB: db, Sources: sources, Owners: owners, Calls: calls, Claims: claims, Reader: reader, Work: work},
-		Calls:     calls,
-		State:     &statestore.State{DB: db},
-		Evidence:  &evidencestore.Evidence{DB: db},
-		Work:      work,
-		Budgets:   budgets,
-		Claims:    claims,
-		Sources:   sources,
-		Items:     &itemstore.Items{DB: db},
-		Owners:    owners,
-		Activity:  &activitystore.Activity{DB: db},
-		Schedules: &schedulestore.Schedules{DB: db},
-		Usage:     usage,
-		Memory:    &memorystore.Memory{DB: db},
-		Reader:    reader,
+		Intake:    intakePart,
+		Calls:     callsPart,
+		State:     statePart,
+		Evidence:  evidencePart,
+		Work:      workPart,
+		Budgets:   budgetsPart,
+		Claims:    claimsPart,
+		Sources:   sourcesPart,
+		Items:     itemsPart,
+		Owners:    ownersPart,
+		Activity:  activityPart,
+		Schedules: schedulesPart,
+		Usage:     usagePart,
+		Memory:    memoryPart,
+		Reader:    readerPart,
 	}
 }

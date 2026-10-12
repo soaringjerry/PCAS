@@ -1,4 +1,4 @@
-package postgres
+package statestore
 
 import (
 	"context"
@@ -19,7 +19,7 @@ var statusFields = []string{"status", "deadline", "decided", "blocker", "next", 
 
 type statusNoRepairKey struct{}
 
-func (s *Store) HandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.Handover, error) {
+func (s *State) HandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.Handover, error) {
 	out := workspace.Handover{}
 	var built *time.Time
 	err := tx.QueryRow(ctx, `SELECT h.body,h.built_at,h.stale OR h.rule<$2 OR h.input_hash IS DISTINCT FROM library_handover_hash(h.owner_id)
@@ -41,8 +41,8 @@ const statusEligibleGroups = `SELECT owner_id,key,kind,entity_id,name,count(*) A
 const statusValidItems = `SELECT i.* FROM status_card_items i JOIN status_current_members m
  ON(m.owner_id,m.key,m.claim_id,m.claim_version)=(i.owner_id,i.key,i.claim_id,i.claim_version)`
 
-func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) ([]workspace.StatusCardRef, error) {
-	if _, ok := ctx.Value(useStatusReadKey{}).(useStatusRead); ok {
+func (s *State) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) ([]workspace.StatusCardRef, error) {
+	if _, ok := ctx.Value(UseStatusReadKey{}).(UseStatusRead); ok {
 		return s.useStatusIndexTx(ctx, tx, scope)
 	}
 	out := []workspace.StatusCardRef{}
@@ -76,8 +76,8 @@ func (s *Store) StatusCardIndexTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	return out, nil
 }
 
-func (s *Store) StatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, keys []string) ([]workspace.StatusCard, error) {
-	if opt, ok := ctx.Value(useStatusReadKey{}).(useStatusRead); ok {
+func (s *State) StatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, keys []string) ([]workspace.StatusCard, error) {
+	if opt, ok := ctx.Value(UseStatusReadKey{}).(UseStatusRead); ok {
 		return s.useStatusCardsTx(ctx, tx, scope, keys, opt.Index)
 	}
 	out := []workspace.StatusCard{}
@@ -158,7 +158,7 @@ func (s *Store) StatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	return out, nil
 }
 
-func (s *Store) DeadlinesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, now time.Time, limit int) ([]workspace.Deadline, error) {
+func (s *State) DeadlinesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, now time.Time, limit int) ([]workspace.Deadline, error) {
 	out := []workspace.Deadline{}
 	if limit <= 0 {
 		return out, nil
@@ -190,7 +190,7 @@ func (s *Store) DeadlinesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	return out, rows.Err()
 }
 
-func (s *Store) About(ctx context.Context, scope memory.Scope, key string) (workspace.About, error) {
+func (s *State) About(ctx context.Context, scope memory.Scope, key string) (workspace.About, error) {
 	out := workspace.About{Cards: []workspace.StatusCard{}, Deadlines: []workspace.Deadline{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -213,7 +213,7 @@ func (s *Store) About(ctx context.Context, scope memory.Scope, key string) (work
 		if err != nil {
 			return err
 		}
-		dates, err := s.libraryDeadlinesTx(ctx, tx, scope, workspace.DeadlineQuery{})
+		dates, err := s.LibraryDeadlinesTx(ctx, tx, scope, workspace.DeadlineQuery{})
 		if err != nil {
 			return err
 		}

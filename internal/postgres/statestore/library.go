@@ -1,4 +1,4 @@
-package postgres
+package statestore
 
 import (
 	"context"
@@ -15,9 +15,9 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-var _ workspace.LibraryReader = (*Store)(nil)
+var _ workspace.LibraryReader = (*State)(nil)
 
-func (s *Store) ReadHandover(ctx context.Context, scope memory.Scope) (workspace.Handover, error) {
+func (s *State) ReadHandover(ctx context.Context, scope memory.Scope) (workspace.Handover, error) {
 	out := workspace.Handover{}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -26,7 +26,7 @@ func (s *Store) ReadHandover(ctx context.Context, scope memory.Scope) (workspace
 	return out, err
 }
 
-func (s *Store) libraryDeadlinesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, q workspace.DeadlineQuery) (workspace.DeadlineList, error) {
+func (s *State) LibraryDeadlinesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, q workspace.DeadlineQuery) (workspace.DeadlineList, error) {
 	out := workspace.DeadlineList{Items: []workspace.LibraryDeadline{}}
 	// Fix display classification only on a diagnostic copy. Source validity
 	// keeps actual time, and production retains the transaction's now().
@@ -72,16 +72,16 @@ func (s *Store) libraryDeadlinesTx(ctx context.Context, tx pgx.Tx, scope memory.
 	return out, rows.Err()
 }
 
-func (s *Store) ListDeadlines(ctx context.Context, scope memory.Scope, q workspace.DeadlineQuery) (workspace.DeadlineList, error) {
+func (s *State) ListDeadlines(ctx context.Context, scope memory.Scope, q workspace.DeadlineQuery) (workspace.DeadlineList, error) {
 	out := workspace.DeadlineList{Items: []workspace.LibraryDeadline{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.libraryDeadlinesTx(ctx, tx, scope, q); return err })
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.LibraryDeadlinesTx(ctx, tx, scope, q); return err })
 	return out, err
 }
 
-func (s *Store) assistantRequirementsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.AssistantRequirementList, error) {
+func (s *State) AssistantRequirementsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.AssistantRequirementList, error) {
 	out := workspace.AssistantRequirementList{Items: []workspace.AssistantRequirement{}}
 	rows, err := tx.Query(ctx, `SELECT m.claim_id::text,c.value #>> '{}',coalesce(a.unrestricted,false),coalesce(a.scope,'适用范围待归类')
  FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
@@ -101,12 +101,12 @@ func (s *Store) assistantRequirementsTx(ctx context.Context, tx pgx.Tx, scope me
 	return out, rows.Err()
 }
 
-func (s *Store) ListAssistantRequirements(ctx context.Context, scope memory.Scope) (workspace.AssistantRequirementList, error) {
+func (s *State) ListAssistantRequirements(ctx context.Context, scope memory.Scope) (workspace.AssistantRequirementList, error) {
 	out := workspace.AssistantRequirementList{Items: []workspace.AssistantRequirement{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.assistantRequirementsTx(ctx, tx, scope); return err })
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.AssistantRequirementsTx(ctx, tx, scope); return err })
 	return out, err
 }
 
@@ -122,7 +122,7 @@ type groupMemoryCursor struct {
 	Key string `json:"key"`
 }
 
-func (s *Store) ListGroupMemories(ctx context.Context, scope memory.Scope, key string, q workspace.GroupMemoryQuery) (workspace.MemoryPage, error) {
+func (s *State) ListGroupMemories(ctx context.Context, scope memory.Scope, key string, q workspace.GroupMemoryQuery) (workspace.MemoryPage, error) {
 	out := workspace.MemoryPage{Items: []workspace.Memory{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
@@ -193,7 +193,7 @@ func (s *Store) ListGroupMemories(ctx context.Context, scope memory.Scope, key s
 	return out, err
 }
 
-func (s *Store) memoryGroupsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.MemoryGroupList, error) {
+func (s *State) MemoryGroupsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.MemoryGroupList, error) {
 	out := workspace.MemoryGroupList{Items: []workspace.LibraryMemoryGroup{}}
 	rows, err := tx.Query(ctx, `SELECT key,kind,name,count(*) FROM status_current_members WHERE owner_id=$1 GROUP BY key,kind,name
  ORDER BY CASE WHEN key='self:rule' THEN 0 WHEN kind='self' THEN 1 ELSE 2 END,kind,name,key`, string(scope.OwnerID))
@@ -211,11 +211,11 @@ func (s *Store) memoryGroupsTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	return out, rows.Err()
 }
 
-func (s *Store) ListMemoryGroups(ctx context.Context, scope memory.Scope) (workspace.MemoryGroupList, error) {
+func (s *State) ListMemoryGroups(ctx context.Context, scope memory.Scope) (workspace.MemoryGroupList, error) {
 	out := workspace.MemoryGroupList{Items: []workspace.LibraryMemoryGroup{}}
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.memoryGroupsTx(ctx, tx, scope); return err })
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { var err error; out, err = s.MemoryGroupsTx(ctx, tx, scope); return err })
 	return out, err
 }

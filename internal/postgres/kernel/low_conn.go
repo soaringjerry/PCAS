@@ -1,11 +1,10 @@
-package postgres
+package kernel
 
 import (
 	"context"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/projecthandover"
@@ -13,13 +12,13 @@ import (
 
 // Share the organizer's session lock across the model call. No owner lock is
 // held while generating, so corrections and deletions can still proceed.
-func (s *Store) comparisonConnection(ctx context.Context) (*pgxpool.Conn, func(), error) {
-	return s.organizeCallConnection(ctx, "compare_busy", kernel.CompareInterval)
+func (s *DB) ComparisonConnection(ctx context.Context) (*pgxpool.Conn, func(), error) {
+	return s.OrganizeCallConnection(ctx, "compare_busy", CompareInterval)
 }
 
 // One organize, comparison, or entity scan call runs at a time. busy is the
 // deferral code of the caller that finds the lock held.
-func (s *Store) organizeCallConnection(ctx context.Context, busy string, wait time.Duration) (*pgxpool.Conn, func(), error) {
+func (s *DB) OrganizeCallConnection(ctx context.Context, busy string, wait time.Duration) (*pgxpool.Conn, func(), error) {
 	conn, err := s.Pool.Acquire(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -44,18 +43,18 @@ func (s *Store) organizeCallConnection(ctx context.Context, busy string, wait ti
 
 // Preserve the classifications unaffected by v3; v1 still owes the v2 deadline
 // extraction. This comparison is used by scheduling, progress and consumers.
-func organizeRequiredSQL(category, version string) string {
+func OrganizeRequiredSQL(category, version string) string {
 	return "(CASE WHEN " + version + "::int=3 AND " + category + "<>'rule' THEN 2 ELSE " + version + "::int END)"
 }
 
-func emptyProjectHandover(id string) workspace.ProjectHandover { return projecthandover.Empty(id) }
+func EmptyProjectHandover(id string) workspace.ProjectHandover { return projecthandover.Empty(id) }
 
-func statusCallLock(ctx context.Context, s *Store) (func(), error) {
-	_, release, err := s.organizeCallConnection(ctx, "status_busy", kernel.StatusInterval)
+func StatusCallLock(ctx context.Context, s *DB) (func(), error) {
+	_, release, err := s.OrganizeCallConnection(ctx, "status_busy", StatusInterval)
 	return release, err
 }
 
-func maxTime(a, b time.Time) time.Time {
+func MaxTime(a, b time.Time) time.Time {
 	if a.After(b) {
 		return a
 	}

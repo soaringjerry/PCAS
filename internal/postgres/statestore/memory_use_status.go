@@ -1,4 +1,4 @@
-package postgres
+package statestore
 
 import (
 	"context"
@@ -14,8 +14,8 @@ import (
 // This opt-in path keeps the shared read contract, but resolves membership only
 // for built cards. The general status view also serves scheduling for unbuilt
 // groups; repeatedly expanding that directory during a turn is unnecessary.
-type useStatusReadKey struct{}
-type useStatusRead struct{ Index []workspace.StatusCardRef }
+type UseStatusReadKey struct{}
+type UseStatusRead struct{ Index []workspace.StatusCardRef }
 
 // Match status_current_members exactly: current stored version, live source,
 // active entity, subject OR mention membership, and the four self categories.
@@ -26,7 +26,7 @@ const useStatusMembers = `WITH members AS MATERIALIZED (
  WHERE m.owner_id=$1 AND sc.built_at IS NOT NULL
 ), eligible AS (SELECT owner_id,key FROM members GROUP BY owner_id,key HAVING count(*)>=3) `
 
-func (s *Store) useStatusIndexTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) ([]workspace.StatusCardRef, error) {
+func (s *State) useStatusIndexTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) ([]workspace.StatusCardRef, error) {
 	out := []workspace.StatusCardRef{}
 	rows, err := tx.Query(ctx, useStatusMembers+`SELECT sc.key,sc.kind,sc.name,count(m.claim_id),sc.built_at,
  sc.stale OR sc.rule<$2 OR count(i.claim_id)!=count(m.claim_id)
@@ -58,7 +58,7 @@ func (s *Store) useStatusIndexTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 	return out, nil
 }
 
-func (s *Store) useStatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, keys []string, index []workspace.StatusCardRef) ([]workspace.StatusCard, error) {
+func (s *State) useStatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, keys []string, index []workspace.StatusCardRef) ([]workspace.StatusCard, error) {
 	out := []workspace.StatusCard{}
 	if len(keys) == 0 {
 		return out, nil

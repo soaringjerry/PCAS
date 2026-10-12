@@ -1,4 +1,4 @@
-package postgres
+package statestore
 
 import (
 	"context"
@@ -17,11 +17,11 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-var handoverTitles = handover.Titles
+var HandoverTitles = handover.Titles
 
 // The input assembly below is the context builder of the global handover service.
-type handoverSection = handover.Section
-type handoverOutput = handover.Output
+type HandoverSection = handover.Section
+type HandoverOutput = handover.Output
 
 type handoverDependency struct {
 	Key     string `json:"key"`
@@ -37,7 +37,7 @@ type handoverCard struct {
 	Name   string              `json:"name"`
 	Fields []handoverCardField `json:"fields"`
 }
-type handoverInput struct {
+type HandoverInput struct {
 	Cards        []handoverCard                   `json:"cards"`
 	Memories     []kernel.CardMemory              `json:"memories"`
 	Deadlines    []workspace.LibraryDeadline      `json:"deadlines"`
@@ -45,7 +45,7 @@ type handoverInput struct {
 	InputHash    string                           `json:"inputHash"`
 }
 
-func enqueueStatusHandoversTx(ctx context.Context, tx pgx.Tx, anchors map[memory.ID]memory.Ref, now time.Time) (int, error) {
+func EnqueueStatusHandoversTx(ctx context.Context, tx pgx.Tx, anchors map[memory.ID]memory.Ref, now time.Time) (int, error) {
 	count := 0
 	for owner, anchor := range anchors {
 		var pending bool
@@ -72,7 +72,7 @@ func enqueueStatusHandoversTx(ctx context.Context, tx pgx.Tx, anchors map[memory
 		}
 		due := now
 		if built != nil {
-			due = maxTime(now, built.Add(time.Hour))
+			due = kernel.MaxTime(now, built.Add(time.Hour))
 		}
 		id := memory.NewID()
 		if _, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at)
@@ -120,8 +120,8 @@ func statusTrustTx(ctx context.Context, tx pgx.Tx, owner memory.ID, m workspace.
 	return "stated", nil
 }
 
-func (s *Store) handoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (handoverInput, []handoverDependency, []memory.Ref, error) {
-	out := handoverInput{Cards: []handoverCard{}, Memories: []kernel.CardMemory{}, Deadlines: []workspace.LibraryDeadline{}, Requirements: []workspace.AssistantRequirement{}}
+func (s *State) handoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (HandoverInput, []handoverDependency, []memory.Ref, error) {
+	out := HandoverInput{Cards: []handoverCard{}, Memories: []kernel.CardMemory{}, Deadlines: []workspace.LibraryDeadline{}, Requirements: []workspace.AssistantRequirement{}}
 	refs := []memory.Ref{}
 	if err := tx.QueryRow(ctx, "SELECT library_handover_hash($1)", string(scope.OwnerID)).Scan(&out.InputHash); err != nil {
 		return out, nil, refs, err
@@ -160,12 +160,12 @@ func (s *Store) handoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		refs = append(refs, ref)
 		out.Memories = append(out.Memories, kernel.CardMemory{N: len(out.Memories) + 1, Text: m.Text, Category: m.Category, Durable: m.Durable, Trust: trust, ExpressedAt: m.ExpressedAt, Ref: ref})
 	}
-	deadlines, err := s.libraryDeadlinesTx(ctx, tx, scope, workspace.DeadlineQuery{})
+	deadlines, err := s.LibraryDeadlinesTx(ctx, tx, scope, workspace.DeadlineQuery{})
 	if err != nil {
 		return out, nil, refs, err
 	}
 	out.Deadlines = deadlines.Items
-	requirements, err := s.assistantRequirementsTx(ctx, tx, scope)
+	requirements, err := s.AssistantRequirementsTx(ctx, tx, scope)
 	if err != nil {
 		return out, nil, refs, err
 	}
@@ -173,7 +173,7 @@ func (s *Store) handoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	return out, []handoverDependency{}, refs, nil
 }
 
-func parseHandover(text string, memories []kernel.CardMemory) (string, bool) {
+func ParseHandover(text string, memories []kernel.CardMemory) (string, bool) {
 	trusts := make([]string, len(memories))
 	for i, m := range memories {
 		trusts[i] = m.Trust
@@ -183,12 +183,12 @@ func parseHandover(text string, memories []kernel.CardMemory) (string, bool) {
 func emptyHandover() string { return handover.Empty() }
 
 // HandoverStore gives the global handover service its reads and writes.
-func (s *Store) HandoverStore() handover.Store { return handoverStore{s} }
+func (s *State) HandoverStore() handover.Store { return handoverStore{s} }
 
-type handoverStore struct{ store *Store }
+type handoverStore struct{ store *State }
 
 func (a handoverStore) Exclusive(ctx context.Context) (func(), error) {
-	return statusCallLock(ctx, a.store)
+	return kernel.StatusCallLock(ctx, a.store.DB)
 }
 
 func (a handoverStore) Read(ctx context.Context, j worker.Job, fn func(handover.Reader) error) error {
@@ -221,7 +221,7 @@ type handoverUnit struct {
 	ctx   context.Context
 	tx    pgx.Tx
 	job   worker.Job
-	store *Store
+	store *State
 }
 
 func (u handoverUnit) WrittenAt() (*time.Time, error) {

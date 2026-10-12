@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
-	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 )
 
 func TestTierPreparationAndRestoreValidateLibraryState(t *testing.T) {
@@ -66,7 +66,7 @@ func TestTierPreparationAndRestoreValidateLibraryState(t *testing.T) {
 		if _, err = pool.Exec(ctx, "UPDATE claims SET organized=$2 WHERE owner_id=$1", owner, kernel.OrganizeVersion); err != nil {
 			t.Fatal(err)
 		}
-		if _, err = pool.Exec(ctx, "UPDATE handovers SET input_hash=library_handover_hash($1),rule=$2 WHERE owner_id=$1", owner, postgres.HandoverVersion); err != nil {
+		if _, err = pool.Exec(ctx, "UPDATE handovers SET input_hash=library_handover_hash($1),rule=$2 WHERE owner_id=$1", owner, statestore.HandoverVersion); err != nil {
 			t.Fatal(err)
 		}
 	}

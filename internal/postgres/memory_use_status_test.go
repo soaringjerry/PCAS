@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -45,7 +46,7 @@ func TestB4StatusFastReadMatchesSharedContract(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			fastCtx := context.WithValue(ctx, useStatusReadKey{}, useStatusRead{})
+			fastCtx := context.WithValue(ctx, statestore.UseStatusReadKey{}, statestore.UseStatusRead{})
 			optimized, err := s.StatusCardIndexTx(fastCtx, tx, scope)
 			if err != nil {
 				return err
@@ -78,7 +79,7 @@ func TestB4StatusFastReadMatchesSharedContract(t *testing.T) {
 				t.Fatalf("card mismatch: original=%+v fast=%+v", a, b)
 			}
 			// The cached turn index cannot resurrect a group reduced below three.
-			cachedCtx := context.WithValue(ctx, useStatusReadKey{}, useStatusRead{Index: optimized})
+			cachedCtx := context.WithValue(ctx, statestore.UseStatusReadKey{}, statestore.UseStatusRead{Index: optimized})
 			cached, err := s.StatusCardsTx(cachedCtx, tx, scope, keys)
 			if err != nil {
 				return err

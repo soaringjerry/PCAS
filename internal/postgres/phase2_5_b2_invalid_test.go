@@ -29,7 +29,7 @@ func TestPhase25B2_MalformedOrMissingArraysDoNotWriteResults(t *testing.T) {
 			}
 			// Handler acknowledgement style is not part of the contract. The
 			// observable requirement is no derived results or compared advancement.
-			_ = (comparison.Service{Store: f.store.CompareStore(), Generator: f.store, Version: postgres.CompareVersion}).Process(f.ctx, *j)
+			_ = (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: postgres.CompareVersion}).Process(f.ctx, *j)
 			for _, r := range refs {
 				f.assertRetirement(t, r, "", memory.Ref{})
 			}

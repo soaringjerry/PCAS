@@ -2,13 +2,11 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
@@ -48,24 +46,6 @@ func (s *Store) EffortStore() effort.Store { return effortStore{s} }
 
 // BusinessNow is the business clock that model input uses.
 func (s *Store) BusinessNow() time.Time { return s.businessNow() }
-
-// HasSavedResult reports whether the job already has a paid result to apply.
-func (s *Store) HasSavedResult(ctx context.Context, j worker.Job) (bool, error) {
-	saved, err := s.paidModelResult(ctx, j)
-	return saved != nil, err
-}
-
-// GenerateForJob submits a background job's model call with the queue's
-// failure policy. A saved result returns without another call.
-// Temporary adapter for extracted background domains. Callers: the effort
-// service. Remove it when background coordination owns this policy.
-func (s *Store) GenerateForJob(ctx context.Context, j worker.Job, purpose string, instructions prompts.Definition, modelInput string, record json.RawMessage, refs []memory.Ref) (json.RawMessage, string, error) {
-	paid, err := s.generatePaidInput(ctx, j, purpose, instructions.Text(), modelInput, record, refs)
-	if err != nil {
-		return nil, "", err
-	}
-	return paid.Prompt, paid.Output, nil
-}
 
 type effortStore struct{ store *Store }
 

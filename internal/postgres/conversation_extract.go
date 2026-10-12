@@ -10,15 +10,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 const conversationExtractionPrefix = extraction.ConversationPrefix
 const conversationExtractorVersion = extraction.ConversationVersion
-
-var conversationExtractionInstructions = prompts.Must("conversation-extraction").Text()
 
 type (
 	conversationMessage = extraction.ConversationMessage
@@ -62,7 +59,56 @@ func earlierConversationMemoriesTx(ctx context.Context, tx pgx.Tx, owner memory.
 	return out, rows.Err()
 }
 
-func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job, conversation string) error {
+// conversationWork is one prepared segment of an imported conversation. The
+// extraction service asks the model between its preparation and Apply.
+type conversationWork struct {
+	store            *Store
+	job              worker.Job
+	scope            memory.Scope
+	conversation     string
+	run              string
+	sources, current []memory.SourceResult
+	segments         []conversationSegment
+	earlier          []earlierConversationMemory
+	settings         workspace.Settings
+	ordinal, next    int
+}
+
+func (w *conversationWork) segment() conversationSegment { return w.segments[w.ordinal] }
+
+func (w *conversationWork) Prompt() string {
+	segment := w.segment()
+	input := map[string]any{"messages": segment.Messages, "context_messages": segment.Context, "timezone": w.settings.Timezone}
+	if w.ordinal > 0 {
+		input["earlier_memories"] = w.earlier
+	}
+	return string(asJSON(input))
+}
+
+func (w *conversationWork) HasOwnerText() bool {
+	for _, message := range w.segment().Messages {
+		if message.Role == "user" && strings.TrimSpace(message.Text) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *conversationWork) Refs() []memory.Ref {
+	segment := w.segment()
+	refs := []memory.Ref{}
+	for _, message := range append(append([]conversationMessage{}, segment.Context...), segment.Messages...) {
+		refs = append(refs, w.current[message.Index-1].Source.Ref)
+	}
+	for _, item := range w.earlier {
+		refs = append(refs, item.Claim)
+	}
+	return refs
+}
+
+// prepareConversation reads the job's segment under the job's lease. It
+// returns nil when the job finished without a segment to extract.
+func (s *Store) prepareConversation(ctx context.Context, j worker.Job, conversation string) (*conversationWork, error) {
 	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
 	var sources, current []memory.SourceResult
 	var segments []conversationSegment
@@ -143,51 +189,17 @@ func (s *Store) processConversationExtraction(ctx context.Context, j worker.Job,
 		return err
 	})
 	if err != nil || !prepared {
-		return err
+		return nil, err
 	}
-	segment := segments[ordinal]
-	input := map[string]any{"messages": segment.Messages, "context_messages": segment.Context, "timezone": settings.Timezone}
-	if ordinal > 0 {
-		input["earlier_memories"] = earlier
-	}
-	prompt := string(asJSON(input))
-	output := conversationOutput{}
-	hasUser := false
-	for _, message := range segment.Messages {
-		hasUser = hasUser || message.Role == "user" && strings.TrimSpace(message.Text) != ""
-	}
-	if hasUser {
-		if s.models == nil || s.models.ExtractionID() == "" {
-			return &worker.JobError{Code: "provider_not_configured"}
-		}
-		provider, ok := s.models.Get(s.models.ExtractionID())
-		if !ok || provider.Embedding || provider.Transcription {
-			return &worker.JobError{Code: "provider_not_configured"}
-		}
-		if !s.models.Available(provider.ID) {
-			return &worker.JobError{Code: "provider_unavailable", Retry: true}
-		}
-		refs := []memory.Ref{}
-		for _, message := range append(append([]conversationMessage{}, segment.Context...), segment.Messages...) {
-			refs = append(refs, current[message.Index-1].Source.Ref)
-		}
-		for _, item := range earlier {
-			refs = append(refs, item.Claim)
-		}
-		result, err := s.generatePaidInput(ctx, j, "extraction", conversationExtractionInstructions, prompt, asJSON(map[string]any{"rawPrompt": prompt}), refs)
-		if err != nil {
-			return err
-		}
-		reserve := provider.Reserve(conversationExtractionInstructions + prompt)
-		var valid bool
-		if output, valid = extraction.ParseConversationOutput(result.Output); !valid {
-			if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return discardPaidResultTx(ctx, tx, j) }); err != nil {
-				return err
-			}
-			return &worker.JobError{Code: "model_output_invalid", Retry: reserve == 0}
-		}
-	}
-	loc, err := time.LoadLocation(settings.Timezone)
+	return &conversationWork{store: s, job: j, scope: scope, conversation: conversation, run: run, sources: sources, current: current, segments: segments, earlier: earlier, settings: settings, ordinal: ordinal, next: next}, nil
+}
+
+// Apply writes the statements of the segment, queues the next segment, and
+// finishes the job. The output is empty for a segment that needed no call.
+func (w *conversationWork) Apply(ctx context.Context, output conversationOutput) error {
+	s, j, scope, conversation, run := w.store, w.job, w.scope, w.conversation, w.run
+	sources, current, segments, segment, ordinal, next := w.sources, w.current, w.segments, w.segment(), w.ordinal, w.next
+	loc, err := time.LoadLocation(w.settings.Timezone)
 	if err != nil {
 		return err
 	}

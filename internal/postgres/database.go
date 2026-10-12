@@ -57,6 +57,9 @@ func (s *Store) SetModels(models *ai.Registry) {
 		s.calls.WithDirectCalls(models, directCalls{store: s})
 	}
 }
+
+// Models is the configured model registry, or nil.
+func (s *Store) Models() *ai.Registry            { return s.models }
 func (s *Store) SetBlobs(blobs memory.BlobStore) { s.blobs = blobs }
 
 func Open(ctx context.Context, url string) (*Store, error) {

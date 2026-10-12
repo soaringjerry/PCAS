@@ -41,7 +41,7 @@ These findings come from repository revision `6b62f27`. They are code observatio
 | Storage also owns business orchestration and providers. | [Store](../internal/postgres/database.go), [application setup](../cmd/pcas/main.go). | Domains own workflows. Storage owns persistence. Application setup connects their interfaces. |
 | Model calls use different accounting and recovery paths. | [Background calls](../internal/postgres/background_model.go), [memory use](../internal/postgres/memory_use_model.go), [secretary retries](../internal/postgres/desk_model_retry.go). | One gateway covers calls while keeping applicable recovery and retry policies. |
 | Deputy generation, saved results, revision, and review share a large workflow. | [Deputy](../internal/postgres/runs.go), [revision recovery](../internal/postgres/document_revise.go). | A deputy execution links its stages, calls, results, and final writes. |
-| Telegram transcription bypassed application accounting. | Corrected on 2026-10-11: `Store.TranscribeVoice` and the gateway entry `CallTranscription`. | Channel adapters use the gateway. Every attempted call has an outcome and accounting status. |
+| Telegram transcription bypassed application accounting. | Corrected on 2026-10-11: the gateway entry `CallTranscription`, which `voice.Transcriber` uses. | Channel adapters use the gateway. Every attempted call has an outcome and accounting status. |
 | Legacy routing and legacy answer handling stayed callable without a client. | Removed on 2026-10-10: the Jev adapter, `/v1/desk/route`, `/v1/desk/answer`, their settings form, and their prompt. | Retired. No current client called them. |
 | Removed cards leave unused generation code. | `statusGenerate` and `cardInstructions` in [status code](../internal/postgres/status_build.go). | Remove unused generation. Keep necessary current-state scheduling and upgrade handling. |
 | Non-Codex schema calls return to ordinary generation. | [Provider adapter](../internal/ai/provider.go). | Give capability information and record the selected output mode. Necessary capabilities cannot silently disappear. |
@@ -175,7 +175,7 @@ Keep provider-specific capabilities and output schema structure explicit.
 If a capability is necessary for a function, an unsupported provider returns a clear error before the call.
 A function can permit a weaker mode only through an explicit contract that records the mode and validates the output.
 
-Use the applicable mechanics in `generatePaid` as a migration reference: reservation, saved input/output, idempotent usage, and settlement.
+Use the applicable mechanics of the background generator (`internal/modelcall/jobcall`) as a migration reference: reservation, saved input/output, idempotent usage, and settlement.
 Do not copy its job-specific cache key and queue policy into every call type.
 The gateway must also cover interactive calls, several stages in one execution, embeddings, images, and audio.
 

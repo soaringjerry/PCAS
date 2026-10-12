@@ -39,11 +39,13 @@ flowchart LR
 | Project handover | `internal/workspace/projecthandover` | `internal/postgres/project_handover.go` | The input assembly, the evidence check queries, the scheduler, and the reader for the project page. |
 | Global handover | `internal/currentstate/handover` | `internal/postgres/status_handover.go` | The input assembly, the scheduler, and the stale rule in SQL. |
 | Alias scan | `internal/interpretation/aliasscan` | `internal/postgres/entity_candidates.go` | The batch selection, the name checks of a proposed pair, and the scheduler. |
-| Statement comparison | `internal/interpretation/comparison` | `internal/postgres/compare.go` | The batch plan, the write of accepted edges with its eligibility checks, the receipt, the scheduler, and the rejudge path. |
+| Statement comparison | `internal/interpretation/comparison` | `internal/postgres/compare.go` | The batch plan, the write of accepted edges with its eligibility checks, the receipt, the scheduler, and the reads and the write of a rejudged pair. |
 | Entity comparison | `internal/interpretation/comparison` | `internal/postgres/compare_entities.go` | The pair selection, the name and evidence checks, the merge, the receipt, and the scheduler. |
 | Organize | `internal/interpretation/organize` | `internal/postgres/organize.go` | The batch selection, the write of labels, groups, dates and rule scope for each statement that is still current, and the scheduler. |
 | Attachment parsing | `internal/input/attachment` | `internal/postgres/attachments.go` | The job, the lock of one original, the write of the derived text, and the receipts of paid readings. The archive import is not moved. |
-| Extraction | `internal/interpretation/extraction` | `internal/postgres/processing.go` | The reads for the model input, the write of each decided item, the state of the source, and the conversation path of an import. |
+| Vector index | `internal/retrieval` (`Indexer`) | `internal/postgres/processing.go` | The choice of the texts that have no vector yet, and the write of the vectors under the job's lease. |
+| Voice transcription | `internal/input/voice` | None. | Nothing. The call is recorded by the gateway. |
+| Extraction | `internal/interpretation/extraction` | `internal/postgres/processing.go` | The reads for the model input, the write of each decided item, the state of the source, and the preparation and the write of one segment of an imported conversation. |
 
 The topic project service holds the proposal rules: a match must name a project that the model saw, a new project waits until the model has seen every project, an existing name attaches instead of creating, the user's own name for a project is kept, and four projects are created in one local day at most.
 Its input assembly reads memory and clips evidence in one function with SQL. That function stays in storage until memory retrieval has its own interface.
@@ -111,7 +113,31 @@ The rules of a statement that is about to be written as a memory are in `interna
 
 The memory retrieval rules that need no storage are in `internal/retrieval`: the budget of a recall with its defaults and limits, and the choice of the part of a source text that answers a query. The recall itself, with its structured, lexical, and vector reads and its access rules, is SQL and stays in `internal/postgres/retrieval.go`.
 
-The chunk, index, embedding, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, the embedding call is the gateway's, and the summary is a memory read. The card job only acknowledges queue slots from before an upgrade.
+The chunk, index, and summary jobs stay in storage. They hold no interpretation rule: the text split is `memory.SplitText`, and the summary is a memory read. The embedding job left storage with its model call: `retrieval.Indexer` chooses the provider, makes the call, and decides what a failed call becomes for the queue. The card job only acknowledges queue slots from before an upgrade.
+
+## Model Calls Outside the Storage Package
+
+A storage package must not make a model call. The domain package owns the request, the call, and the meaning of each failure. Storage keeps the records of the call and the job's writes.
+
+| Call | Owner since 2026-10-12 |
+|---|---|
+| The generation of each background job | `internal/modelcall/jobcall` (`Generator`). It maps each gateway result to the queue's failure. The storage adapter `Store.JobCallStore` keeps the paid results and the reservations. |
+| The rejudge of a superseded pair | `comparison.Service`. Storage gives the pair and applies the verdict. |
+| One segment of an imported conversation | `extraction.Service`. Storage prepares the segment and applies the answer. |
+| The embedding of a source or a memory | `retrieval.Indexer`. |
+| The transcription of a channel's voice message | `voice.Transcriber`. |
+
+Five calls are still made in `internal/postgres`. Each moves with the flow that holds it.
+
+| Call | File | Moves with |
+|---|---|---|
+| The transcription and the image reading of an attachment | `attachments.go` | The secretary's turn, which reads an attachment under the lock of one original. |
+| The query embedding of a recall | `retrieval.go` | The secretary's and the deputy's context reads, which start a recall. |
+| The secretary's answer, and the reader and the self-check | `desk_model_retry.go`, `memory_use_model.go` | The secretary's turn. |
+| The deputy's answer and its self-check | `runs.go` | The deputy's run. This is the last step. |
+| The accounting recovery of an interactive call | `model_calls_interactive_recovery.go` | The call journals. |
+
+When the last call has moved, an architecture test in `internal/app` forbids a call of the gateway from a storage package.
 
 ## Pattern for the Next Paths
 
@@ -141,7 +167,7 @@ The saved input record keeps its form, so a result that was paid before the rele
 
 | Part | Callers | Removal condition |
 |---|---|---|
-| `Store.GenerateForJob` and `Store.HasSavedResult` in `internal/postgres` | The effort service. | Background coordination owns the queue's failure policy and the saved-result interface. |
+| `Store.Gateway` in `internal/postgres` | The application's composition, and the five model calls that are still in storage. | The last model call leaves the storage package. The application then builds the gateway from the store's call records. |
 | `maintainTaskPlanTx` and the scheduler query `enqueueEffortTx` in `internal/postgres/effort.go` | Item saves and the status scheduler. | The workspace item commands and the scheduler leave the storage package. |
 | `workspace.ContentHash` used by storage code | Deputy and secretary input checks. | Those paths leave the storage package. |
 

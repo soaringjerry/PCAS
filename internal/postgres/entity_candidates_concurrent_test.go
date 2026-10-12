@@ -251,11 +251,11 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 			}
 			switch {
 			case strings.HasPrefix(job.Stage, "memory.entity_candidates:"):
-				err = (aliasscan.Service{Store: f.store.AliasScanStore(), Generator: f.store}).Process(runCtx, *job)
+				err = (aliasscan.Service{Store: f.store.AliasScanStore(), Generator: jobCalls(f.store)}).Process(runCtx, *job)
 			case strings.HasPrefix(job.Stage, "memory.compare:"):
-				err = (comparison.Service{Store: f.store.CompareStore(), Generator: f.store, Version: postgres.CompareVersion}).Process(runCtx, *job)
+				err = (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: postgres.CompareVersion}).Process(runCtx, *job)
 			case strings.HasPrefix(job.Stage, "memory.entity_compare:"):
-				err = (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: f.store, Version: postgres.EntityCompareVersion}).Process(runCtx, *job)
+				err = (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: jobCalls(f.store), Version: postgres.EntityCompareVersion}).Process(runCtx, *job)
 			case job.Stage == "memory.index":
 				err = f.store.ProcessIndex(runCtx, *job)
 			default:

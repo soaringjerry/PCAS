@@ -16,7 +16,7 @@ var domainPackages = []string{
 	"./internal/input/...",
 	"./internal/contextbuilder",
 	"./internal/retrieval",
-	"./internal/modelcall",
+	"./internal/modelcall/...",
 	"./internal/prompts",
 }
 

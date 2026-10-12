@@ -57,10 +57,10 @@ func TestEmbeddingModelSwitchBackfillsAndRetainsOldVectors(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, "SELECT stage FROM memory_jobs WHERE record_id=$1 AND stage LIKE 'memory.embed:%'", string(ref.ID)).Scan(&stage); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ProcessEmbedding(ctx, leaseStage(t, s, scope, ref, stage)); err != nil {
+	if err := indexer(s).Process(ctx, leaseStage(t, s, scope, ref, stage)); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ProcessEmbedding(ctx, leaseStage(t, s, scope, ref, "source.embed")); err != nil {
+	if err := indexer(s).Process(ctx, leaseStage(t, s, scope, ref, "source.embed")); err != nil {
 		t.Fatal(err)
 	}
 	if calls.Load() != 1 {
@@ -91,7 +91,7 @@ func TestMissingEmbeddingKeyDoesNotReserveBudget(t *testing.T) {
 	t.Setenv("PCAS_TEST_MISSING_VECTOR_KEY", "")
 	s.SetModels(&ai.Registry{Config: ai.Configuration{Embedding: "openai-embedding", Providers: []ai.Provider{{ID: "openai-embedding", Model: "text-embedding-3-small", Protocol: "openai", KeyEnv: "PCAS_TEST_MISSING_VECTOR_KEY", Embedding: true, InputPerMillion: 1}}}})
 	ref := mustIngest(t, s, scope, input()).Ref
-	if err := s.ProcessEmbedding(ctx, leaseStage(t, s, scope, ref, "source.embed")); !errors.Is(err, memory.ErrUnavailable) {
+	if err := indexer(s).Process(ctx, leaseStage(t, s, scope, ref, "source.embed")); !errors.Is(err, memory.ErrUnavailable) {
 		t.Fatal(err)
 	}
 	if _, err := s.Recall(ctx, scope, memory.RecallRequest{Query: "书店", Mode: memory.Remember}); err != nil {

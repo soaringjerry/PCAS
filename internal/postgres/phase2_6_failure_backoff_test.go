@@ -27,7 +27,7 @@ func TestPhase26G2A5ComparisonInvalidOutputKeepsSameBatchPending(t *testing.T) {
 		}
 		phase26Isolate(t, f, CompareStage)
 		j := phase26ClaimStage(t, f, CompareStage)
-		if err := (comparison.Service{Store: f.Store.CompareStore(), Generator: f.Store, Version: CompareVersion}).Process(f.Context, j); err != nil {
+		if err := (comparison.Service{Store: f.Store.CompareStore(), Generator: jobCalls(f.Store), Version: CompareVersion}).Process(f.Context, j); err != nil {
 			t.Fatal(err)
 		}
 		var attempts, completed int

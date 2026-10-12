@@ -306,7 +306,7 @@ func b4bLegacyExtract(t *testing.T, s *Store, scope memory.Scope, f *b1Fake, sou
 	root := b4bEnableSourceImport(t, s, scope, source)
 	b4bOnlyArchiveJobs(t, s, scope, root)
 	f.set(map[string]any{"items": items})
-	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, source, "source.extract")); err != nil {
+	if err := (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(context.Background(), leaseStage(t, s, scope, source, "source.extract")); err != nil {
 		t.Fatal(err)
 	}
 	b4bDrain(t, s)

@@ -77,7 +77,7 @@ func nextEmbeddingAttempt(t *testing.T, s *Store, job worker.Job) worker.Job {
 func TestBackgroundEmbeddingRecordsOneSettledCallForAJob(t *testing.T) {
 	s, scope, ctx := testStore(t), owner(), context.Background()
 	job, chunks, calls := largeEmbeddingJob(t, s, scope, 2)
-	if err := s.ProcessEmbedding(ctx, job); err != nil {
+	if err := indexer(s).Process(ctx, job); err != nil {
 		t.Fatal(err)
 	}
 	requests := int32((chunks + 31) / 32)
@@ -104,12 +104,12 @@ func TestPaidEmbeddingJobIsNotSubmittedAgainAfterItsVectorWriteFails(t *testing.
 	s, scope, ctx := testStore(t), owner(), context.Background()
 	job, _, calls := largeEmbeddingJob(t, s, scope, 2)
 	restore := rejectEmbeddingWrites(t, s)
-	if err := s.ProcessEmbedding(ctx, job); err == nil || !strings.Contains(err.Error(), "embedding_storage_fixture") {
+	if err := indexer(s).Process(ctx, job); err == nil || !strings.Contains(err.Error(), "embedding_storage_fixture") {
 		t.Fatal("expected the vector write to fail after the provider returned", err)
 	}
 	first := calls.Load()
 	restore()
-	err := s.ProcessEmbedding(ctx, nextEmbeddingAttempt(t, s, job))
+	err := indexer(s).Process(ctx, nextEmbeddingAttempt(t, s, job))
 	var stopped *worker.JobError
 	if !errors.As(err, &stopped) || stopped.Code != "model_call_failed" || stopped.Retry || calls.Load() != first {
 		t.Fatal("a paid job was submitted again", err, first, calls.Load())
@@ -120,12 +120,12 @@ func TestFreeEmbeddingJobRetriesAfterItsVectorWriteFails(t *testing.T) {
 	s, scope, ctx := testStore(t), owner(), context.Background()
 	job, chunks, calls := largeEmbeddingJob(t, s, scope, 0)
 	restore := rejectEmbeddingWrites(t, s)
-	if err := s.ProcessEmbedding(ctx, job); err == nil {
+	if err := indexer(s).Process(ctx, job); err == nil {
 		t.Fatal("expected the vector write to fail")
 	}
 	first := calls.Load()
 	restore()
-	if err := s.ProcessEmbedding(ctx, nextEmbeddingAttempt(t, s, job)); err != nil {
+	if err := indexer(s).Process(ctx, nextEmbeddingAttempt(t, s, job)); err != nil {
 		t.Fatal(err)
 	}
 	var vectors int

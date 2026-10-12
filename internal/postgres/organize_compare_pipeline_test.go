@@ -56,7 +56,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 	}
 	for i := range 40 {
 		organizeTestMemory(t, s, scope, fmt.Sprintf("虚构分期整理便签%03d。", i))
-		if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, claim(OrganizeStage)); err != nil {
+		if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, claim(OrganizeStage)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -64,7 +64,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 	for i := range 40 {
 		compareFixture(t, s, scope, fmt.Sprintf("虚构分期比较便签%03d甲。", i))
 		compareFixture(t, s, scope, fmt.Sprintf("虚构分期比较便签%03d乙。", i))
-		if err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, claim(CompareStage)); err != nil {
+		if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, claim(CompareStage)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -74,7 +74,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 		a, _ := compareEntityFixture(t, s, scope, name, "虚构人物在海岚工坊负责文具")
 		b, _ := compareEntityFixture(t, s, scope, name, "虚构人物在杉木实验室负责器材")
 		aliasProposalFixture(t, s, scope, a, b, EntityCompareVersion)
-		if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(ctx, claim(EntityCompareStage)); err != nil {
+		if err := (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, claim(EntityCompareStage)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -105,7 +105,7 @@ func TestOrganizeCompareHourlyPipelineRetainsCompletedHistory(t *testing.T) {
 		if err := s.Defer(ctx, job, "", time.Now(), true); err != nil {
 			t.Fatal(err)
 		}
-		runner := worker.New(s, map[string]worker.Handler{OrganizeStage: (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process, CompareStage: (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process, EntityCompareStage: (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		runner := worker.New(s, map[string]worker.Handler{OrganizeStage: (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process, CompareStage: (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process, EntityCompareStage: (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if ran, err := runner.RunOnce(ctx); err != nil || !ran {
 			t.Fatal("quota worker", stage, ran, err)
 		}

@@ -2,14 +2,12 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
-	"github.com/soaringjerry/PCAS/internal/prompts"
+	"github.com/soaringjerry/PCAS/internal/modelcall/jobcall"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -38,55 +36,34 @@ func (s *Store) paidModelResult(ctx context.Context, j worker.Job) (*paidModelRe
 	return r, err
 }
 
-// Temporary adapter for the existing background domain callers. Sol owns its
-// removal when those callers pass declared gateway requests directly.
-func (s *Store) generatePaid(ctx context.Context, j worker.Job, purpose, instructions string, prompt json.RawMessage, refs []memory.Ref) (*paidModelResult, error) {
-	return s.generatePaidInput(ctx, j, purpose, instructions, "", prompt, refs)
+// JobCallStore gives the background call generator the paid results and the
+// reservations of a job.
+func (s *Store) JobCallStore() jobcall.Store { return jobCallStore{s} }
+
+type jobCallStore struct{ store *Store }
+
+func (a jobCallStore) SavedResult(ctx context.Context, j worker.Job) (*modelcall.PaidResult, error) {
+	return a.store.paidModelResult(ctx, j)
 }
 
-// generatePaidInput sends modelInput to the provider and saves record with the
-// result. An empty modelInput sends the record itself.
-func (s *Store) generatePaidInput(ctx context.Context, j worker.Job, purpose, instructions, modelInput string, prompt json.RawMessage, refs []memory.Ref) (*paidModelResult, error) {
-	definition, ok := prompts.FromText(instructions)
-	if !ok {
-		return nil, &worker.JobError{Code: "prompt_not_registered"}
-	}
-	if s.calls == nil {
-		return nil, &worker.JobError{Code: "provider_not_configured"}
-	}
-	result, err := s.calls.Call(ctx, modelcall.Request{OwnerID: j.OwnerID, ExecutionID: j.ID, RootExecutionID: j.ID, Function: purpose, Stage: j.Stage, Instructions: definition, Prompt: prompt, ModelInput: modelInput, Refs: refs, Policy: j})
-	if errors.Is(err, modelcall.ErrNotConfigured) {
-		return nil, &worker.JobError{Code: "provider_not_configured"}
-	}
-	if errors.Is(err, modelcall.ErrNotAvailable) {
-		return nil, &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(time.Minute), NoAttempt: true}
-	}
-	if errors.Is(err, modelcall.ErrRetryExhausted) || errors.Is(err, modelcall.ErrRecoveryBudgetExhausted) {
-		code := modelcall.ErrRetryExhausted.Error()
-		if errors.Is(err, modelcall.ErrRecoveryBudgetExhausted) {
-			code = modelcall.ErrRecoveryBudgetExhausted.Error()
-		}
-		return nil, &worker.JobError{Code: code}
-	}
-	if errors.Is(err, modelcall.ErrOutcomeUnknown) {
-		return nil, backgroundCalls{store: s}.UnknownRecovery(ctx, j)
-	}
-	var failed *modelcall.Failure
-	if errors.As(err, &failed) {
-		if backgroundHourlyBudgets[backgroundStage(j.Stage)] == 0 {
-			if failed.Code == "provider_unavailable" {
-				// The gateway settled this invocation before returning its failure.
-				if err := s.releaseUnavailableReservation(ctx, j, failed.Reservation); err != nil {
-					return nil, err
-				}
-				return nil, &worker.JobError{Code: "provider_unavailable", Retry: true}
-			}
-			return nil, &worker.JobError{Code: "model_call_failed", Retry: failed.ReservedCost == 0}
-		}
-		return nil, &worker.JobError{Code: "model_call_failed", Until: time.Now().Add(retryDelay(j.Attempts))}
-	}
-	return result, err
+func (a jobCallStore) UnknownRecovery(ctx context.Context, j worker.Job) error {
+	return backgroundCalls{store: a.store}.UnknownRecovery(ctx, j)
 }
+
+func (a jobCallStore) ReleaseUnavailable(ctx context.Context, j worker.Job, reservation string) error {
+	return a.store.releaseUnavailableReservation(ctx, j, reservation)
+}
+
+func (a jobCallStore) HourlyLimited(stage string) bool {
+	return backgroundHourlyBudgets[backgroundStage(stage)] != 0
+}
+
+func (a jobCallStore) RetryDelay(attempts int) time.Duration { return retryDelay(attempts) }
+
+// Gateway is the model gateway over this store's call records. Flows whose
+// model call is still in this package use it too; it leaves the store with
+// the last of them.
+func (s *Store) Gateway() *modelcall.Gateway { return s.calls }
 
 func discardPaidResultTx(ctx context.Context, tx pgx.Tx, j worker.Job) error {
 	_, err := tx.Exec(ctx, "DELETE FROM background_model_results WHERE owner_id=$1 AND job_id=$2", string(j.OwnerID), string(j.ID))

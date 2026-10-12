@@ -274,10 +274,6 @@ func (s *Store) CompareStore() comparison.Store { return compareStore{s} }
 
 type compareStore struct{ store *Store }
 
-func (a compareStore) Rejudge(ctx context.Context, j worker.Job) error {
-	return a.store.processSupersededRejudge(ctx, j)
-}
-
 func (a compareStore) Reschedule(ctx context.Context) {
 	if _, err := a.store.ScheduleCompare(ctx, time.Now()); err != nil {
 		a.store.recordScheduleFailure(ctx, CompareStage, err)

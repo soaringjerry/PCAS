@@ -3,7 +3,8 @@
 Revised by the coordinator on 2026-10-10. This page replaces the earlier scope.
 The earlier partial implementation stayed in Sol's worktree. It did not compile and is not on this branch.
 
-This page covers the embedding that `ProcessEmbedding` requests for sources and claims.
+This page covers the embedding that the vector index job requests for sources and claims.
+Since 2026-10-12 the job is `retrieval.Indexer` in `internal/retrieval`. It was `Store.ProcessEmbedding` in the storage package before, and this page uses that name for the earlier state.
 The [query embedding page](foundation-query-embedding.md) gives the shared gateway entry and its records.
 
 ## Why the Earlier Scope Was Replaced

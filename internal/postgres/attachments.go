@@ -341,24 +341,3 @@ func (s *Store) CleanupBlobs(ctx context.Context) error {
 	}
 	return nil
 }
-
-// TranscribeVoice transcribes a channel's voice message of a known length.
-// The call is recorded with its cost. The audio and the text are not stored here.
-// A missing provider or capability returns memory.ErrUnavailable.
-func (s *Store) TranscribeVoice(ctx context.Context, scope memory.Scope, audio io.Reader, name string, seconds float64) (string, error) {
-	if s.models == nil || s.calls == nil {
-		return "", memory.ErrUnavailable
-	}
-	provider, ok := s.models.Get(s.models.Config.Transcription)
-	if !ok {
-		return "", memory.ErrUnavailable
-	}
-	request := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "transcription", Stage: "voice", Provider: provider, Estimate: (seconds + 1) / 60 * provider.AudioPerMinute}
-	request.RootExecutionID = request.ExecutionID
-	text, _, _, err := s.calls.CallTranscription(ctx, request, audio, name, seconds)
-	var failure *modelcall.Failure
-	if errors.Is(err, modelcall.ErrNotAvailable) || errors.Is(err, ai.ErrUnsupportedCapability) || errors.As(err, &failure) && failure.Code == modelcall.ErrNotAvailable.Error() {
-		return "", memory.ErrUnavailable
-	}
-	return text, err
-}

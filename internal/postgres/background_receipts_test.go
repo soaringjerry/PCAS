@@ -27,7 +27,7 @@ func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T
 				compareFixture(t, s, scope, "虚构研究记录甲", "虚构研究记录乙")
 				job = compareJob(t, s, scope, false, CompareVersion)
 				process = func(s *Store, ctx context.Context, j worker.Job) error {
-					return (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j)
+					return (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j)
 				}
 				table = "memory_comparison_batches"
 				response = `{"duplicates":[],"superseded":[]}`
@@ -37,7 +37,7 @@ func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T
 				aliasProposalFixture(t, s, scope, a, b, EntityCompareVersion)
 				job = compareJob(t, s, scope, true, EntityCompareVersion)
 				process = func(s *Store, ctx context.Context, j worker.Job) error {
-					return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: s, Version: EntityCompareVersion}).Process(ctx, j)
+					return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: EntityCompareVersion}).Process(ctx, j)
 				}
 				table = "entity_alias_receipts"
 				response = `{"same":false,"keep":null}`
@@ -46,7 +46,7 @@ func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T
 				aliasEntityFixture(t, s, scope, "person", "虚构齐鹤", 1)
 				job = aliasNamesJob(t, s, scope)
 				process = func(s *Store, ctx context.Context, j worker.Job) error {
-					return (aliasscan.Service{Store: s.AliasScanStore(), Generator: s}).Process(ctx, j)
+					return (aliasscan.Service{Store: s.AliasScanStore(), Generator: jobCalls(s)}).Process(ctx, j)
 				}
 				table = "entity_alias_candidates"
 				response = `{"groups":[[1,2]]}`
@@ -111,7 +111,7 @@ func TestPersistentBackgroundFailureKeepsIncreasingAttempts(t *testing.T) {
 		if _, err := s.pool.Exec(ctx, "UPDATE memory_jobs SET state='leased',attempts=$2,lease_token=$3,lease_until=now()+interval '5 minutes' WHERE id=$1", job.ID, attempt, job.LeaseToken); err != nil {
 			t.Fatal(err)
 		}
-		err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, job)
+		err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, job)
 		failure, ok := err.(*worker.JobError)
 		if !ok || failure.Code != "model_call_failed" || failure.NoAttempt || failure.Until.IsZero() {
 			t.Fatal("model failure did not count", err)

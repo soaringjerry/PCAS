@@ -44,7 +44,7 @@ func TestLibraryDeadlinesUseModelDatesAndRetainUncertainty(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: s, Version: OrganizeVersion}).Process(ctx, organizeTestJob(t, s, scope)); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: OrganizeVersion}).Process(ctx, organizeTestJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
 	dates, err := s.ListDeadlines(ctx, scope, workspace.DeadlineQuery{})
@@ -88,7 +88,7 @@ func TestHandoverUsesIndependentRollingLimit(t *testing.T) {
 	statusTestMemories(t, s, scope, 3)
 	job := handoverTestJob(t, s, scope)
 	seedStageUsage(t, s, scope, HandoverStage, 2)
-	err := (handover.Service{Store: s.HandoverStore(), Generator: s}).Process(ctx, job)
+	err := (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, job)
 	failure, ok := err.(*worker.JobError)
 	if !ok || failure.Code != "memory.handover_hourly_limit" || !failure.NoAttempt || len(fake.all()) != 0 {
 		t.Fatal("handover borrowed other stage capacity", err)
@@ -99,7 +99,7 @@ func TestHandoverUsesIndependentRollingLimit(t *testing.T) {
 	for stage, limit := range map[string]int{OrganizeStage: 40, CompareStage: 40, EntityCompareStage: 30, EntityCandidatesStage: 6} {
 		seedStageUsage(t, s, scope, stage, limit)
 	}
-	if err := (handover.Service{Store: s.HandoverStore(), Generator: s}).Process(ctx, job); err != nil || len(fake.all()) != 1 {
+	if err := (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, job); err != nil || len(fake.all()) != 1 {
 		t.Fatal("other stages consumed handover slot", err, len(fake.all()))
 	}
 }

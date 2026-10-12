@@ -70,7 +70,7 @@ func (f *phase25B234Fixture) statusJob(t *testing.T) string {
 		if priority != 14 {
 			t.Errorf("handover priority=%d, want 14", priority)
 		}
-		processErr = (handover.Service{Store: f.store.HandoverStore(), Generator: f.store}).Process(f.ctx, *j)
+		processErr = (handover.Service{Store: f.store.HandoverStore(), Generator: jobCalls(f.store)}).Process(f.ctx, *j)
 	} else {
 		t.Fatalf("unrelated job claimed: %s", j.Stage)
 	}

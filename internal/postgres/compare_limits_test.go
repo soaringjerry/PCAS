@@ -24,7 +24,7 @@ func TestCompareUnavailableBudgetAndSharedOrganizeLock(t *testing.T) {
 	j := compareJob(t, s, scope, false, CompareVersion)
 	assertDeferred := func(code string) {
 		t.Helper()
-		err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j)
+		err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j)
 		var e *worker.JobError
 		if !errors.As(err, &e) || e.Code != code || !e.NoAttempt || e.Until.Before(time.Now()) {
 			t.Fatal(code, err)
@@ -59,7 +59,7 @@ func TestCompareUnavailableBudgetAndSharedOrganizeLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	locker.Release()
-	if err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j); err != nil {
+	if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	compareState(t, s, scope, refs, []string{"", ""}, CompareVersion)
@@ -98,7 +98,7 @@ func TestCompareHourlyCapIsIndependent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j)
+	err = (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j)
 	var failure *worker.JobError
 	if !errors.As(err, &failure) || failure.Code != "compare_hourly_limit" || !failure.NoAttempt {
 		t.Fatal(err)
@@ -139,7 +139,7 @@ func TestCompareRuleEpochComesFromProgramNotQueueAndRemovedModelSkips(t *testing
 	b1Model(t, s, `{"duplicates":[],"superseded":[]}`)
 	refs := compareFixture(t, s, scope, "虚构规则纪元记忆", "虚构规则纪元另一条记忆")
 	j := compareJob(t, s, scope, false, CompareVersion+7)
-	if err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j); err != nil {
+	if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	compareState(t, s, scope, refs, []string{"", ""}, CompareVersion)
@@ -151,7 +151,7 @@ func TestCompareRuleEpochComesFromProgramNotQueueAndRemovedModelSkips(t *testing
 	}
 	j = compareJob(t, s, scope, false, CompareVersion)
 	s.models = nil
-	err := (comparison.Service{Store: s.CompareStore(), Generator: s, Version: CompareVersion}).Process(ctx, j)
+	err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: CompareVersion}).Process(ctx, j)
 	var failure *worker.JobError
 	if !errors.As(err, &failure) || failure.Code != "provider_unavailable" || !failure.NoAttempt {
 		t.Fatal(err)

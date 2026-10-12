@@ -76,6 +76,6 @@ The release record gives CI, backup, and live results when this revision is rele
 
 ## Not In This Scope
 
-- Background embedding in `ProcessEmbedding` still calls the provider directly. It keeps its migration exception.
+- Background embedding was outside this scope. The [background embedding page](foundation-background-embedding.md) covers it.
 - This revision does not change retrieval ranking, access rules, or the provider request body.
 - This revision adds no table and no database migration.

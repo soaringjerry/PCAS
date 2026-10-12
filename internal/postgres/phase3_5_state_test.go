@@ -118,10 +118,10 @@ func TestPhase35T2ConcurrentExtractionSchedulerAndUserHTTP(t *testing.T) {
 	})
 	result := make(chan error, 2)
 	go func() {
-		result <- (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, a)
+		result <- (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, a)
 	}()
 	go func() {
-		result <- (extraction.Service{Store: s.ExtractionStore(), Generator: s, MaxAttempts: MaxJobAttempts}).Process(ctx, b)
+		result <- (extraction.Service{Store: s.ExtractionStore(), Generator: jobCalls(s), MaxAttempts: MaxJobAttempts}).Process(ctx, b)
 	}()
 	for i := 0; i < 2; i++ {
 		select {

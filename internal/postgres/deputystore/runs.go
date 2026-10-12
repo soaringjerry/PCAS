@@ -1,4 +1,4 @@
-package postgres
+package deputystore
 
 import (
 	"context"
@@ -38,14 +38,14 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-var assistantInstructions = prompts.Must("assistant").Text()
+var AssistantInstructions = prompts.Must("assistant").Text()
 
 // deputyInstructions are for work handed to an agent. Research and drafting
 // often need what is public, so the agent may search where its channel can;
 // what it sends out as a search must not carry the owner's private material.
 var deputyInstructions = prompts.Must("deputy").Text()
 
-func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
+func (s *Deputy) RunCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	if c.Type == "requestRun" {
 		if err := deputy.CheckRequest(c.Kind, c.Prompt); err != nil {
 			return err
@@ -135,7 +135,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		}
 		loc := kernel.Location(settings)
 		plan := memory.PlanQuery(c.Prompt, s.BusinessNow(), loc)
-		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
+		if prepared, ok := ctx.Value(RunContextKey{}).(PreparedRunContext); ok {
 			plan = prepared.Plan
 		}
 		u, err := s.StartUseContextTx(ctx, tx, scope)
@@ -149,13 +149,13 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		// Rank through the same scoped retrieval used by Recall instead of
 		// filling the prompt with globally recent memories. No nested model
 		// request is made while the owner's transaction is locked.
-		query := runHistoryQuery(item.Title, history, c.Prompt)
-		if omitted := len(query) - len(usestore.Tail(query, delegateContextBytes)); omitted > 0 {
+		query := RunHistoryQuery(item.Title, history, c.Prompt)
+		if omitted := len(query) - len(usestore.Tail(query, DelegateContextBytes)); omitted > 0 {
 			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_bytes", omitted); err != nil {
 				return err
 			}
 		}
-		query = usestore.Tail(query, delegateContextBytes)
+		query = usestore.Tail(query, DelegateContextBytes)
 		tokens := memory.SearchTokens(query)
 		if len(tokens) > 120 {
 			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_terms", len(tokens)-120); err != nil {
@@ -191,7 +191,7 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		excerpts := recall.Excerpts
 		var preparedRefs []memory.Ref
 		historyRequests := []string{}
-		if prepared, ok := ctx.Value(runContextKey{}).(preparedRunContext); ok {
+		if prepared, ok := ctx.Value(RunContextKey{}).(PreparedRunContext); ok {
 			excerpts = append(append([]memory.RecallExcerpt{}, prepared.Excerpts...), excerpts...)
 			preparedRefs = prepared.Refs
 		}
@@ -202,12 +202,12 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 			}
 		}
 		historyText := runHistoryText(history)
-		if omitted := len(historyText) - len(usestore.Tail(historyText, delegateContextBytes)); omitted > 0 {
+		if omitted := len(historyText) - len(usestore.Tail(historyText, DelegateContextBytes)); omitted > 0 {
 			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "delegate_history_bytes", omitted); err != nil {
 				return err
 			}
 		}
-		brief.WriteString(usestore.Tail(historyText, delegateContextBytes))
+		brief.WriteString(usestore.Tail(historyText, DelegateContextBytes))
 		ordered := deputy.OrderMemories(memories, recall.Structured, preparedRefs, recall.Memories)
 		run.MemoryTier = usestore.MemoryTierForStatus(usestore.MemoryTier(ctx, c.Prompt, "heavy"), u.Ready)
 		u.Tier = run.MemoryTier
@@ -349,12 +349,12 @@ func (s *Store) runCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 		return err
 	}
 	if c.Type == "pasteRunResult" {
-		return s.autoAdoptRunTx(ctx, tx, scope, &run)
+		return s.AutoAdoptRunTx(ctx, tx, scope, &run)
 	}
 	return nil
 }
 
-func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run, as, text, actionID string, auto bool) error {
+func (s *Deputy) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run, as, text, actionID string, auto bool) error {
 	if run.SmokeID != "" {
 		ctx = actionlog.WithSmoke(ctx, run.SmokeID)
 	}
@@ -460,7 +460,7 @@ func (s *Store) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, r
 
 // RunAgentJobs owns costly jobs: an ambiguous provider timeout/crash is marked
 // failed and is never automatically submitted again (which could double bill).
-func (s *Store) RunAgentJobs(ctx context.Context, logger *slog.Logger, steps deputy.Steps) error {
+func (s *Deputy) RunAgentJobs(ctx context.Context, logger *slog.Logger, steps deputy.Steps) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -471,7 +471,7 @@ func (s *Store) RunAgentJobs(ctx context.Context, logger *slog.Logger, steps dep
 			if recovery, err := s.RecoverInteractiveCallsOnce(ctx); err != nil && ctx.Err() == nil {
 				logger.Warn("interactive accounting recovery failed", "error_type", fmt.Sprintf("%T", err), "pending_results", recovery.PendingResults, "pending_accounting", recovery.PendingAccounting, "interrupted_calls", recovery.Interrupted, "counts_known", recovery.CountsKnown)
 			}
-			if err := s.runAgent(ctx, steps); err != nil && ctx.Err() == nil {
+			if err := s.RunAgent(ctx, steps); err != nil && ctx.Err() == nil {
 				logger.Warn("agent job failed", "error_type", fmt.Sprintf("%T", err))
 			}
 		}
@@ -480,11 +480,11 @@ func (s *Store) RunAgentJobs(ctx context.Context, logger *slog.Logger, steps dep
 
 // RunDeputy makes the single worker pass for bounded evaluation.
 // Selection, leases, generation, and application remain in the normal workflow.
-func (s *Store) RunDeputy(ctx context.Context, steps deputy.Steps) error {
-	return s.runAgent(ctx, steps)
+func (s *Deputy) RunDeputy(ctx context.Context, steps deputy.Steps) error {
+	return s.RunAgent(ctx, steps)
 }
 
-func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr error) {
+func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr error) {
 	started := time.Now()
 	ctx, timing := budgetstore.NewExecutionTimer(ctx, "deputy", started)
 	ctx, persistCancel := context.WithDeadline(ctx, started.Add(secretary.TurnTimeout))
@@ -831,7 +831,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		if _, err := tx.Exec(ctx, "UPDATE agent_runs SET status=$4,reserved_cost=$5,document=$6,lease_until=NULL,lease_token=NULL WHERE owner_id=$1 AND id=$2 AND lease_token=$3", string(scope.OwnerID), run.ID, token, current.Status, current.Cost, kernel.JSON(current)); err != nil {
 			return err
 		}
-		if err := s.autoAdoptRunTx(ctx, tx, scope, &current); err != nil {
+		if err := s.AutoAdoptRunTx(ctx, tx, scope, &current); err != nil {
 			return err
 		}
 		// Work handed off is reported back where reminders go, so the person who
@@ -884,7 +884,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	})
 }
 
-func (s *Store) autoAdoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run) error {
+func (s *Deputy) AutoAdoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run) error {
 	if run.Status != "done" || run.StaleContext || run.Adopted != nil || deputy.TrimChecklist(run.Output) == "" {
 		return nil
 	}
@@ -914,7 +914,7 @@ func (s *Store) autoAdoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	return nil
 }
 
-func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run) error {
+func (s *Deputy) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run) error {
 	if run.SmokeID != "" {
 		ctx = actionlog.WithSmoke(ctx, run.SmokeID)
 	}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/deputystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -86,9 +87,9 @@ func TestP3SecretaryDelegateHistoryRetrievesMemory(t *testing.T) {
 }
 
 func TestP3HistoryQueryKeepsRecentUTF8(t *testing.T) {
-	history := []storedDeskContext{{Question: strings.Repeat("旧", 5000)}, {Question: "AuroraCedar", Answer: "最近的决定"}}
-	query := usestore.Tail(runHistoryQuery("旧事项", history, "写方案"), delegateContextBytes)
-	if len(query) > delegateContextBytes || !strings.Contains(query, "AuroraCedar") || !strings.HasSuffix(query, "写方案") {
+	history := []deputystore.StoredDeskContext{{Question: strings.Repeat("旧", 5000)}, {Question: "AuroraCedar", Answer: "最近的决定"}}
+	query := usestore.Tail(deputystore.RunHistoryQuery("旧事项", history, "写方案"), deputystore.DelegateContextBytes)
+	if len(query) > deputystore.DelegateContextBytes || !strings.Contains(query, "AuroraCedar") || !strings.HasSuffix(query, "写方案") {
 		t.Fatal(query)
 	}
 }

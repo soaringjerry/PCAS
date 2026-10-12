@@ -17,6 +17,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/deputystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
@@ -41,6 +42,7 @@ var migrations embed.FS
 // storage packages share.
 type Store struct {
 	*kernel.DB
+	*deputystore.Deputy
 	*usestore.Use
 	*interpstore.Interp
 	*workspacestore.Workspace
@@ -184,19 +186,21 @@ func newStore(db *kernel.DB) *Store {
 	callsPart := &callstore.Calls{DB: db, Usage: usagePart, Budgets: budgetsPart}
 	sourcesPart := &sourcestore.Sources{DB: db}
 	claimsPart := &claimstore.Claims{DB: db, Sources: sourcesPart}
-	evidencePart := &evidencestore.Evidence{DB: db}
 	readerPart := &memoryread.Reader{DB: db}
 	workPart := &workstore.Work{DB: db}
 	intakePart := &intakestore.Intake{DB: db, Sources: sourcesPart, Owners: ownersPart, Calls: callsPart, Claims: claimsPart, Reader: readerPart, Work: workPart}
+	statePart := &statestore.State{DB: db, Reader: readerPart}
+	usePart := &usestore.Use{DB: db, Reader: readerPart, Owners: ownersPart, State: statePart}
+	workspacePart := &workspacestore.Workspace{DB: db, Claims: claimsPart, Intake: intakePart, Reader: readerPart, Owners: ownersPart, Sources: sourcesPart, State: statePart}
+	deputyPart := &deputystore.Deputy{DB: db, Budgets: budgetsPart, Intake: intakePart, Reader: readerPart, Usage: usagePart, Use: usePart, Workspace: workspacePart}
+	evidencePart := &evidencestore.Evidence{DB: db}
 	interpPart := &interpstore.Interp{DB: db, Budgets: budgetsPart, Owners: ownersPart}
 	itemsPart := &itemstore.Items{DB: db}
 	memoryPart := &memorystore.Memory{DB: db}
 	schedulesPart := &schedulestore.Schedules{DB: db}
-	statePart := &statestore.State{DB: db, Reader: readerPart}
-	usePart := &usestore.Use{DB: db, Reader: readerPart, Owners: ownersPart, State: statePart}
-	workspacePart := &workspacestore.Workspace{DB: db, Claims: claimsPart, Intake: intakePart, Reader: readerPart, Owners: ownersPart, Sources: sourcesPart, State: statePart}
 	return &Store{
 		DB:        db,
+		Deputy:    deputyPart,
 		Use:       usePart,
 		Interp:    interpPart,
 		Workspace: workspacePart,

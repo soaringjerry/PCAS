@@ -1,4 +1,4 @@
-package postgres
+package deputystore
 
 import (
 	"context"
@@ -31,7 +31,7 @@ func validateReviseTargetTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	}
 	return nil
 }
-func (s *Store) adoptReviseDocumentTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run, text string) error {
+func (s *Deputy) adoptReviseDocumentTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run, text string) error {
 	if err := validateReviseTargetTx(ctx, tx, scope, run); err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func (s *Store) adoptReviseDocumentTx(ctx context.Context, tx pgx.Tx, scope memo
 	return workspacestore.SaveDoc(ctx, tx, scope, doc)
 }
 
-func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, current workspace.Run, token string, paid *callstore.PaidModelResult) (resultErr error) {
+func (s *Deputy) finishPaidRevise(ctx context.Context, scope memory.Scope, current workspace.Run, token string, paid *callstore.PaidModelResult) (resultErr error) {
 	defer func() {
 		if resultErr == nil {
 			return
@@ -169,7 +169,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 
 // D5 permits undoing the inverse of a revise adoption. Keep this extension
 // confined to actions that changed a revise run; ordinary undo stays as before.
-func reviseUndoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (bool, error) {
+func ReviseUndoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (bool, error) {
 	if !memory.ID(id).Valid() {
 		return false, nil
 	}

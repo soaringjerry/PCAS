@@ -72,7 +72,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 		if run.Kind == "" {
 			run.Kind = "draft"
 		}
-		return s.runCommandTx(ctx, tx, scope, run)
+		return s.RunCommandTx(ctx, tx, scope, run)
 	case "capture":
 		if err := kernel.RequireText(c.Text); err != nil {
 			return err
@@ -136,7 +136,7 @@ func (s *Store) commandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c 
 	case "editMemory", "confirmMemory", "deleteMemory", "setMemoryVisibility", "pinMemory":
 		return s.MemoryCommandTx(ctx, tx, scope, c)
 	case "requestRun", "pasteRunResult", "adoptRun", "discardRun":
-		return s.runCommandTx(ctx, tx, scope, c)
+		return s.RunCommandTx(ctx, tx, scope, c)
 	case "createDoc", "updateDoc", "deleteDoc":
 		var doc workspace.Doc
 		if c.Type == "createDoc" {

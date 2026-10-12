@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/deputystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
@@ -53,7 +54,7 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 			}
 		}
 		var errPrepare error
-		ctx, errPrepare = s.prepareRunContext(ctx, scope, in, embed)
+		ctx, errPrepare = s.PrepareRunContext(ctx, scope, in, embed)
 		if errPrepare != nil {
 			return out, errPrepare
 		}
@@ -87,7 +88,7 @@ func (s *Store) ExecuteWith(ctx context.Context, scope memory.Scope, in workspac
 		recordAction := workspacestore.UndoableCommand(in.Type)
 		if in.Type == "undoAction" {
 			var err error
-			recordAction, err = reviseUndoActionTx(ctx, tx, scope, in.ID)
+			recordAction, err = deputystore.ReviseUndoActionTx(ctx, tx, scope, in.ID)
 			if err != nil {
 				return err
 			}

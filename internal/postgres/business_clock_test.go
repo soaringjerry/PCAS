@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/deputystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
@@ -93,11 +94,11 @@ func TestDeputyUsesBusinessDateAndActualAdmissionTime(t *testing.T) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Fictitious dated request"})
 	command := workspace.Command{Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "draft", Prompt: "昨天说过什么来着"}
-	ctx, err := s.prepareRunContext(context.Background(), scope, command, s.recaller().Embed)
+	ctx, err := s.PrepareRunContext(context.Background(), scope, command, s.recaller().Embed)
 	if err != nil {
 		t.Fatal(err)
 	}
-	prepared := ctx.Value(runContextKey{}).(preparedRunContext)
+	prepared := ctx.Value(deputystore.RunContextKey{}).(deputystore.PreparedRunContext)
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	if err != nil {
 		t.Fatal(err)

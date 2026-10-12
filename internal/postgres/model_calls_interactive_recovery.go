@@ -57,7 +57,7 @@ func (s *Store) recoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 		paid := cloneInteractivePaid(oldest.paid)
 		err := adapter.Save(persist, oldest.request, paid)
 		if err == nil {
-			err = s.calls.RecoverAccounting(persist, oldest.request, paid)
+			err = modelcall.SettleReceipt(persist, s.CallRecords(), s.CallRecords(), oldest.request, paid)
 		}
 		if err != nil {
 			failures = append(failures, err)
@@ -129,7 +129,7 @@ func (a interactiveCalls) recoverAccountingReceipt(ctx context.Context) (bool, e
 		return false, errors.Join(fmt.Errorf("interactive_billing_receipt_invalid: %w", memory.ErrConflict), markErr)
 	}
 	request := modelcall.Request{OwnerID: row.OwnerID, ExecutionID: row.ExecutionID, RootExecutionID: row.RootExecutionID, CausationID: row.CausationID, Function: row.Function, Stage: row.Stage, ProviderID: row.Provider, Policy: interactiveCallPolicy{Kind: row.Manifest.Kind, Origin: row.Manifest.Origin, BudgetOwner: row.Manifest.BudgetOwner, Usage: row.Mode.Usage}}
-	if err := a.store.calls.RecoverAccounting(ctx, request, paid); err != nil {
+	if err := modelcall.SettleReceipt(ctx, a.store.CallRecords(), a.store.CallRecords(), request, paid); err != nil {
 		return false, err
 	}
 	_, err = a.store.pool.Exec(ctx, `UPDATE model_calls c SET result_receipt=jsonb_set(result_receipt,'{availableForApplication}','false'::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2 AND input_manifest->>'budgetOwner' IS DISTINCT FROM 'deputy_run' AND (`+inactiveInteractiveExecutionSQL+`)`, string(row.OwnerID), string(row.ID))

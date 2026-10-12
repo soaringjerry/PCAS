@@ -275,17 +275,36 @@ func (g *Gateway) RecoverAccounting(ctx context.Context, request Request, saved 
 }
 
 func (g *Gateway) finishAccounting(ctx context.Context, request Request, saved *PaidResult) error {
+	return finishAccounting(ctx, g.accounting, g.journal, request, saved)
+}
+
+// SettleReceipt finishes the accounting of a verified stored receipt: it
+// records the usage, settles the reservation, and stores the accounting
+// state. It selects no provider, reserves no budget, and submits no model
+// call, so the storage of the receipts can use it without a gateway. The
+// caller verifies the receipt's durable owner and billing links first.
+func SettleReceipt(ctx context.Context, accounting Accounting, journal Journal, request Request, saved *PaidResult) error {
+	if request.OwnerID == "" || request.ExecutionID == "" || saved == nil || saved.InvocationID == "" || saved.Reservation == "" || saved.Provider == "" || saved.Model == "" {
+		return memory.ErrInvalid
+	}
+	return finishAccounting(ctx, accounting, journal, request, saved)
+}
+
+func finishAccounting(ctx context.Context, accounting Accounting, journal Journal, request Request, saved *PaidResult) error {
+	failed := func(err error) error {
+		return errors.Join(err, journal.AccountingState(ctx, request, saved, "failed"))
+	}
 	// An unavailable adapter made no invocation. All other attempts retain
 	// returned or partial usage even if their output cannot be applied.
 	if saved.CallErrorCode != "provider_unavailable" {
-		if err := g.accounting.Record(ctx, request, saved); err != nil {
-			return g.accountingError(ctx, request, saved, err)
+		if err := accounting.Record(ctx, request, saved); err != nil {
+			return failed(err)
 		}
 	}
-	if err := g.accounting.Settle(ctx, request, saved); err != nil {
-		return g.accountingError(ctx, request, saved, err)
+	if err := accounting.Settle(ctx, request, saved); err != nil {
+		return failed(err)
 	}
-	return g.journal.AccountingState(ctx, request, saved, "settled")
+	return journal.AccountingState(ctx, request, saved, "settled")
 }
 
 // OutcomeUnknown reports that the provider can have processed the request.
@@ -305,10 +324,6 @@ func OutcomeUnknown(err error) bool {
 		}
 	}
 	return false
-}
-
-func (g *Gateway) accountingError(ctx context.Context, request Request, result *PaidResult, err error) error {
-	return errors.Join(err, g.journal.AccountingState(ctx, request, result, "failed"))
 }
 
 // PersistenceTimeout keeps accounting independent of caller cancellation.

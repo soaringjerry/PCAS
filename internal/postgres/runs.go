@@ -804,7 +804,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		}
 	} else if verifyErr == nil {
 		answerCtx, answerCancel := context.WithTimeout(workCtx, 60*time.Second)
-		mainPaid, generationErr = s.calls.Call(modelcall.Timed(answerCtx, "answer"), request)
+		mainPaid, generationErr = steps.Calls.Answer(answerCtx, request)
 		answerCancel()
 		var persistence *modelcall.PersistenceError
 		if errors.As(generationErr, &persistence) {
@@ -875,20 +875,9 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 		checkedText := ""
 		err := s.checkDeputySelfcheckContext(checkCtx, scope, run, token)
 		if err == nil {
-			usage := modelUsage{Purpose: "selfcheck", Tier: run.MemoryTier, RunID: run.ID, MemoryRefs: run.ContextVersions, Plan: asJSON(usePlan{Groups: run.MemoryGroups})}
-			request := modelcall.Request{
-				OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID),
-				Function: "deputy", Stage: "selfcheck", ProviderID: run.AgentID,
-				Instructions: prompts.Must("deputy-selfcheck"), ContextBuilderVersion: "deputy-selfcheck-v1",
-				Prompt: asJSON(map[string]string{"rawPrompt": deputy.SelfcheckInput(run.Brief, result.Text)}), ModelInput: deputy.SelfcheckInput(run.Brief, result.Text),
-				Refs: run.ContextVersions,
-				Policy: interactiveCallPolicy{
-					Kind: "deputy", Token: token, Origin: run.CreatedAt,
-					AgentID: run.AgentID, ThingID: run.ThingID, Usage: usage,
-				},
-			}
+			request := deputy.SelfcheckRequest(scope.OwnerID, token, run, result.Text)
 			var paid *modelcall.PaidResult
-			paid, err = s.calls.Call(modelcall.Timed(checkCtx, "selfcheck"), request)
+			paid, err = steps.Calls.Selfcheck(checkCtx, request)
 			readCtx, readCancel := context.WithTimeout(context.WithoutCancel(checkCtx), modelcall.PersistenceTimeout)
 			row, readErr := latestInteractiveCall(readCtx, s.pool, request)
 			readCancel()

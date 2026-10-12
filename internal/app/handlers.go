@@ -22,7 +22,7 @@ import (
 // JobCalls makes the model calls of background jobs through the gateway. The
 // store keeps their paid results.
 func JobCalls(db *postgres.Store) jobcall.Generator {
-	return jobcall.Generator{Calls: db.Gateway(), Store: db.JobCallStore()}
+	return jobcall.Generator{Calls: Gateway(db), Store: db.JobCallStore()}
 }
 
 // Effort connects the workspace effort service to storage and generation.
@@ -77,7 +77,7 @@ func EntityCompare(db *postgres.Store) comparison.EntityService {
 
 // Embedding returns the service of the vector index stages.
 func Embedding(db *postgres.Store) retrieval.Indexer {
-	indexer := retrieval.Indexer{Store: db.IndexStore(), Calls: db.Gateway()}
+	indexer := retrieval.Indexer{Store: db.IndexStore(), Calls: Gateway(db)}
 	if models := db.Models(); models != nil {
 		indexer.Providers = models
 	}
@@ -86,5 +86,5 @@ func Embedding(db *postgres.Store) retrieval.Indexer {
 
 // Voice transcribes the voice messages of a channel.
 func Voice(db *postgres.Store) voice.Transcriber {
-	return voice.Transcriber{Models: db.Models(), Calls: db.Gateway()}
+	return voice.Transcriber{Models: db.Models(), Calls: Gateway(db)}
 }

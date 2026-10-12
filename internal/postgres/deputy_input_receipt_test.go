@@ -34,7 +34,7 @@ func TestDeputyInputIsDurableBeforeProviderSubmission(t *testing.T) {
 		secretaryModelReply(w, "Fictitious returned deputy result.")
 	})
 	request = leasedDeputyAnswer(t, s, scope)
-	paid, err := s.calls.Call(ctx, request)
+	paid, err := s.Gateway().Call(ctx, request)
 	if err != nil || paid == nil || calls.Load() != 1 {
 		t.Fatal(paid, err, calls.Load())
 	}
@@ -47,7 +47,7 @@ func TestDeputyInputIsDurableBeforeProviderSubmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	recovered, err := peer.calls.Call(ctx, request)
+	recovered, err := peer.Gateway().Call(ctx, request)
 	if err != nil || recovered.Output != paid.Output || recovered.InvocationID != paid.InvocationID {
 		t.Fatal("restart did not recover the completed result", recovered, err)
 	}
@@ -66,7 +66,7 @@ func TestDeputyInputWriteFailurePreventsSubmissionAndReleasesAdmission(t *testin
  CREATE TRIGGER reject_deputy_input BEFORE INSERT ON background_model_results FOR EACH ROW EXECUTE FUNCTION reject_deputy_input()`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.calls.Call(ctx, request); err == nil {
+	if _, err := s.Gateway().Call(ctx, request); err == nil {
 		t.Fatal("input write failure was hidden")
 	}
 	var outcome, state string
@@ -113,7 +113,7 @@ func TestDeputyInterruptedInputCannotBecomeARecoveredResult(t *testing.T) {
 	if err != nil || status.Interrupted != 1 {
 		t.Fatal(status, err)
 	}
-	if _, err := peer.calls.Call(ctx, request); !errors.Is(err, modelcall.ErrOutcomeUnknown) {
+	if _, err := peer.Gateway().Call(ctx, request); !errors.Is(err, modelcall.ErrOutcomeUnknown) {
 		t.Fatal("an input-only receipt became a usable result", err)
 	}
 	if paid, err := peer.paidModelResult(ctx, worker.Job{OwnerID: scope.OwnerID, ID: invocation}); err != nil || paid != nil {

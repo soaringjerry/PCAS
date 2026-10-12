@@ -14,8 +14,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 )
 
@@ -845,20 +845,7 @@ type deputyResultSelection struct {
 }
 
 func deputyAnswerRequest(owner memory.ID, token string, snapshot reviseSnapshot) modelcall.Request {
-	run := snapshot.Run
-	instruction := prompts.Must("deputy")
-	var schema prompts.Schema
-	if run.Kind == "revise" {
-		instruction = prompts.Must("document-revise")
-		schema = prompts.MustSchema("document-revise-output")
-	}
-	return modelcall.Request{
-		OwnerID: owner, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Stage: "answer",
-		ProviderID: run.AgentID, Instructions: instruction, Schema: schema, Search: true, ModeFallback: true, ContextBuilderVersion: "deputy-answer-v1",
-		Prompt: asJSON(snapshot), ModelInput: snapshot.RawPrompt, Refs: run.ContextVersions,
-		Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID, BudgetOwner: "deputy_run",
-			Usage: modelUsage{Purpose: "deputy", RunID: run.ID, Tier: run.MemoryTier, Plan: asJSON(usePlan{Groups: run.MemoryGroups})}},
-	}
+	return deputy.AnswerRequest(owner, token, snapshot)
 }
 
 // Resume reads the original prepared input. It never reconstructs a new brief

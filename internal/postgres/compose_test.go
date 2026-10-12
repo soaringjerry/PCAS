@@ -7,6 +7,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
 	"github.com/soaringjerry/PCAS/internal/input/attachment"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/modelcall/stagecall"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -20,6 +21,20 @@ import (
 // again after it opened the store. The application's own entries have the
 // same names.
 
+// Gateway builds the model gateway over the store's records and models.
+func (s *Store) Gateway() *modelcall.Gateway {
+	var providers modelcall.Providers
+	if s.models != nil {
+		providers = s.models
+	}
+	records := s.CallRecords()
+	gateway := modelcall.New(providers, records, records, records)
+	if s.models != nil {
+		gateway.WithDirectCalls(s.models, s.DirectCallRecords())
+	}
+	return gateway
+}
+
 func (s *Store) stageCalls() stagecall.Caller {
 	return stagecall.Caller{Calls: s.Gateway(), ErrorType: secretary.ErrorType}
 }
@@ -28,7 +43,9 @@ func (s *Store) memoryReader() reader.Service {
 	return reader.Service{Store: s.ReaderStore(), Calls: s.stageCalls(), ErrorType: secretary.ErrorType}
 }
 
-func (s *Store) deputySteps() deputy.Steps { return deputy.Steps{Reader: s.memoryReader()} }
+func (s *Store) deputySteps() deputy.Steps {
+	return deputy.Steps{Reader: s.memoryReader(), Calls: deputy.Calls{Gateway: s.Gateway()}}
+}
 
 func (s *Store) recaller() retrieval.Recaller {
 	recaller := retrieval.Recaller{Store: s, Calls: s.Gateway()}

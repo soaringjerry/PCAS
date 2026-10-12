@@ -60,11 +60,6 @@ func (a jobCallStore) HourlyLimited(stage string) bool {
 
 func (a jobCallStore) RetryDelay(attempts int) time.Duration { return retryDelay(attempts) }
 
-// Gateway is the model gateway over this store's call records. Flows whose
-// model call is still in this package use it too; it leaves the store with
-// the last of them.
-func (s *Store) Gateway() *modelcall.Gateway { return s.calls }
-
 func discardPaidResultTx(ctx context.Context, tx pgx.Tx, j worker.Job) error {
 	_, err := tx.Exec(ctx, "DELETE FROM background_model_results WHERE owner_id=$1 AND job_id=$2", string(j.OwnerID), string(j.ID))
 	return err

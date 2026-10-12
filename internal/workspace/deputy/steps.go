@@ -19,4 +19,6 @@ type Reader interface {
 type Steps struct {
 	// Reader reads memory for a heavy run.
 	Reader Reader
+	// Calls makes the answer call and the self-check call of a run.
+	Calls Calls
 }

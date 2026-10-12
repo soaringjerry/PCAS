@@ -21,7 +21,7 @@ func TestUnsupportedRequiredSchemaHasCallRecordWithoutSpending(t *testing.T) {
 	job := organizeTestJob(t, s, scope)
 	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: job.ID, RootExecutionID: job.ID, Function: "organize", Stage: job.Stage, ProviderID: s.models.ExtractionID(), Instructions: prompts.Must("organize"), Schema: prompts.MustSchema("use-groups"), ContextBuilderVersion: "fictitious-context-v1", Prompt: asJSON(map[string]string{"rawPrompt": "Fictitious input."}), Policy: job}
 	ctx := context.Background()
-	if _, err := s.calls.Call(ctx, request); !errors.Is(err, ai.ErrUnsupportedCapability) {
+	if _, err := s.Gateway().Call(ctx, request); !errors.Is(err, ai.ErrUnsupportedCapability) {
 		t.Fatal("unsupported schema did not fail explicitly", err)
 	}
 	var outcome, code, accounting, schemaName, schemaHash, builder string
@@ -46,7 +46,7 @@ func TestSelectedCodexCallRecordsRegisteredModeAndExactUsageLink(t *testing.T) {
 	dir := secretaryRetryCodex(t, s, 0, 0, "")
 	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: job.ID, RootExecutionID: job.ID, Function: "organize", Stage: job.Stage, ProviderID: "chatgpt", Instructions: prompts.Must("organize"), Schema: prompts.MustSchema("secretary-output"), Search: true, ContextBuilderVersion: "fictitious-context-v1", Prompt: asJSON(map[string]string{"rawPrompt": "Fictitious input."}), Policy: job}
 	ctx := context.Background()
-	paid, err := s.calls.Call(ctx, request)
+	paid, err := s.Gateway().Call(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}

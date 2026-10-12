@@ -33,7 +33,7 @@ func New(db *postgres.Store) *Application {
 
 // Stages makes the calls of the readers and the self-check.
 func Stages(db *postgres.Store) stagecall.Caller {
-	return stagecall.Caller{Calls: db.Gateway(), ErrorType: secretary.ErrorType}
+	return stagecall.Caller{Calls: Gateway(db), ErrorType: secretary.ErrorType}
 }
 
 // Reader reads groups of memory for the secretary and the deputy.
@@ -44,7 +44,7 @@ func Reader(db *postgres.Store) reader.Service {
 // Recall returns the service that searches memory. It requests the vector
 // of a query from the model.
 func Recall(db *postgres.Store) retrieval.Recaller {
-	recaller := retrieval.Recaller{Store: db, Calls: db.Gateway()}
+	recaller := retrieval.Recaller{Store: db, Calls: Gateway(db)}
 	if models := db.Models(); models != nil {
 		recaller.Providers = models
 	}
@@ -53,7 +53,7 @@ func Recall(db *postgres.Store) retrieval.Recaller {
 
 // Attachments parses original files with the configured models.
 func Attachments(db *postgres.Store) attachment.Reader {
-	return attachment.Reader{Models: db.Models(), Calls: db.Gateway(), ErrorType: secretary.ErrorType}
+	return attachment.Reader{Models: db.Models(), Calls: Gateway(db), ErrorType: secretary.ErrorType}
 }
 
 // Attachment returns the handler of the job of an uploaded file.
@@ -64,12 +64,12 @@ func Attachment(db *postgres.Store) worker.Handler {
 
 // Secretary returns the service that answers the owner's sentences.
 func Secretary(db *postgres.Store) secretary.Service {
-	return secretary.Service{Store: db.DeskStore(), Calls: db.Gateway(), Stages: Stages(db), Reader: Reader(db), Recall: Recall(db).Recall, ReadAttachment: Attachments(db).Read}
+	return secretary.Service{Store: db.DeskStore(), Calls: Gateway(db), Stages: Stages(db), Reader: Reader(db), Recall: Recall(db).Recall, ReadAttachment: Attachments(db).Read}
 }
 
 // DeputySteps are the steps of a deputy run that a domain service makes.
 func DeputySteps(db *postgres.Store) deputy.Steps {
-	return deputy.Steps{Reader: Reader(db)}
+	return deputy.Steps{Reader: Reader(db), Calls: deputy.Calls{Gateway: Gateway(db)}}
 }
 
 // DeskTurn conducts one turn of the owner with the secretary.

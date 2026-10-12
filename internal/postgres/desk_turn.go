@@ -811,8 +811,6 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	return out, nil
 }
 
-const outdatedDeskAnswer = secretary.OutdatedAnswer
-
 // Erasure keeps its existing placeholders; changed dependencies preserve the
 // owner's exchange and are replaced only when assembling model history.
 func refreshDeskTurnTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn *workspace.SecretaryTurn, run workspace.Run, erased, originalDeleted bool) {

@@ -81,11 +81,3 @@ func (s *Store) deskAttachmentReceiptTx(ctx context.Context, tx pgx.Tx, scope me
 	_, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,turn_id,summary,changes) VALUES($1,$2,'desk',$3,$4,$5)", string(scope.OwnerID), actionID, turn, text, kernel.JSON(changes))
 	return workspace.DeskReceipt{ActionID: &actionID, SourceID: &sourceID, SourceVersion: a.Ref.Version, Op: "attachment", Text: text, Undoable: true, Status: "done"}, err
 }
-
-func boundedAttachmentText(text string, limit int) string {
-	r := []rune(text)
-	if len(r) > limit {
-		return string(r[:limit])
-	}
-	return text
-}

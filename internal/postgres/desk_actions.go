@@ -24,23 +24,7 @@ type (
 // resolves its ref through them and nothing else.
 type secretaryMemoriesKey struct{}
 
-// Internal commands still persist in order for validation and undo collection.
-// Publish history and its memory source only after the whole secretary action,
-// including reminder changes, has reached its final state.
-type secretaryHistoryKey struct{}
-type secretaryCreationKey struct{}
 type secretaryProjectReceiptsKey struct{}
-type secretaryHistory struct {
-	ids       []string
-	summaries map[string]string
-}
-
-func (h *secretaryHistory) record(id, summary string) {
-	if _, ok := h.summaries[id]; !ok {
-		h.ids = append(h.ids, id)
-		h.summaries[id] = summary
-	}
-}
 
 func (s *Store) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, value string, aliases map[string]workspace.Item) (string, error) {
 	if value == "" || value == "none" {

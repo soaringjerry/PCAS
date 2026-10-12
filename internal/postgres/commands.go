@@ -324,10 +324,6 @@ func (e itemEffects) PromoteIdea(ctx context.Context, ideaID string, task worksp
 	return accessstore.PromoteArtifactsTx(ctx, e.tx, e.scope, ideaID, task.ID)
 }
 
-func saveCandidate(ctx context.Context, tx pgx.Tx, scope memory.Scope, v workspace.Candidate) error {
-	_, err := tx.Exec(ctx, `INSERT INTO capture_candidates(owner_id,id,source_id,source_version,state,document) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(owner_id,id) DO UPDATE SET state=excluded.state,document=excluded.document`, string(scope.OwnerID), v.ID, v.Source.SourceID, v.Source.Version, v.State, kernel.JSON(v))
-	return err
-}
 func saveDoc(ctx context.Context, tx pgx.Tx, scope memory.Scope, doc workspace.Doc) error {
 	var exists bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM work_documents WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), doc.ID).Scan(&exists); err != nil {
@@ -360,22 +356,6 @@ func (s *Store) saveAction(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	}
 	item.Sources = append(item.Sources, workspace.SourceRef{SourceID: string(source.ID), Version: source.Version, Label: summary, At: revision.At})
 	return itemstore.SaveItem(ctx, tx, scope, item)
-}
-
-func activeClaim(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
-	var exists bool
-	err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM memory_records WHERE owner_id=$1 AND id=$2 AND kind='claim' AND state='active')", string(scope.OwnerID), id).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return memory.ErrNotFound
-	}
-	return nil
-}
-func sampleTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, sample workspace.Sample) error {
-	_, err := tx.Exec(ctx, "INSERT INTO training_samples(owner_id,id,run_id,memory_id,state,stale,document) VALUES($1,$2,$3,$4,$5,$6,$7)", string(scope.OwnerID), sample.ID, kernel.NullString(sample.Origin.RunID), kernel.NullString(sample.Origin.MemoryID), sample.State, sample.Stale, kernel.JSON(sample))
-	return err
 }
 
 // The wire format is deliberately a small explicit command vocabulary. Client

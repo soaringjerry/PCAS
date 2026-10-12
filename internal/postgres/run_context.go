@@ -17,12 +17,6 @@ import (
 const delegateHistoryTurns = 6
 const delegateContextBytes = 4000 // Same query budget as manual handoff; UTF-8-safe recent tail.
 
-type delegateHistoryKey struct{}
-type delegateHistoryContext struct {
-	ConversationID string
-	IDs            []string
-}
-
 type runContextKey struct{}
 type preparedRunContext struct {
 	Plan     memory.QueryPlan

@@ -17,20 +17,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func currentStudioProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, thing string) (string, error) {
-	if thing == "" {
-		return "", nil
-	}
-	item, err := itemstore.GetItem(ctx, tx, scope, thing)
-	if err != nil {
-		return "", err
-	}
-	if item.Kind == "project" {
-		return item.ID, nil
-	}
-	return item.ProjectID, nil
-}
-
 // Supply current evidence behind the handover, including completed items that
 // are absent from the ordinary unfinished task list. Aliases remain server-owned;
 // the model decides which evidence the user's correction concerns.

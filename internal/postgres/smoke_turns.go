@@ -95,22 +95,6 @@ func lockSmokeTurnTx(ctx context.Context, tx pgx.Tx, owner string) error {
 	return err
 }
 
-func refreshSmokeChangesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, changes []actionlog.ActionChange) error {
-	if actionlog.SmokeID(ctx) == "" {
-		return nil
-	}
-	for _, c := range changes {
-		hash, err := actionlog.SmokeDocumentHashTx(ctx, tx, string(scope.OwnerID), c.Table, c.ID)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, "UPDATE desk_smoke_changes SET after_hash=$5 WHERE owner_id=$1 AND smoke_id=$2 AND table_name=$3 AND record_id=$4", string(scope.OwnerID), actionlog.SmokeID(ctx), c.Table, c.ID, hash); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Cleanup serializes with turns and completion/adoption through the group and
 // owner locks. It removes only this group's documents, or restores an untouched
 // ordinary document; genuine later edits make the whole operation conflict.

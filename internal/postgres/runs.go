@@ -943,7 +943,3 @@ func (s *Store) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	}
 	return actionlog.FlushActionLog(ctx, tx, scope)
 }
-
-// runNoticePrefix marks a notice that reports how handed-off work ended,
-// as opposed to a reminder that came due.
-const runNoticePrefix = "run:"

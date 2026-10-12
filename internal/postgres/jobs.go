@@ -12,19 +12,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
-// These stages keep paid snapshots and retry until success or changed inputs.
-func persistentBackgroundStage(stage string) bool {
-	_, ok := kernel.HourlyBudgets[kernel.BaseStage(stage)]
-	return ok
-}
-
 const persistentJobStageSQL = "j.stage ~ '^memory\\.(organize|compare|entity_compare|entity_candidates|handover|project_handover|effort|topic_project|date_tidy):'"
 const persistentStageSQL = "stage ~ '^memory\\.(organize|compare|entity_compare|entity_candidates|handover|project_handover|effort|topic_project|date_tidy):'"
-
-const maxAttempts = 5
-
-// MaxJobAttempts is the attempt limit of one queue job.
-const MaxJobAttempts = maxAttempts
 
 func (s *Store) Claim(ctx context.Context, lease time.Duration) (*worker.Job, error) {
 	return s.claim(ctx, lease, false)

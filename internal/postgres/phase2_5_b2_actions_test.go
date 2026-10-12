@@ -1,9 +1,10 @@
 package postgres_test
 
 import (
+	"testing"
+
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
-	"testing"
 )
 
 // Command spelling is not frozen in the contract. This adapter is the only

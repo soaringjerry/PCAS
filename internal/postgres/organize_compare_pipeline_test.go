@@ -3,13 +3,14 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"io"
 	"log/slog"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"

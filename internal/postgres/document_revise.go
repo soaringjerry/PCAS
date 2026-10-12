@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
@@ -86,7 +87,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 		reason = "副手未输出完整正文（截断或未完成）"
 	}
 	if paid.InvocationID == "" {
-		if err := s.recordUsage(ctx, modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(paid.Reservation), Purpose: "deputy", AgentID: paid.Provider, Model: paid.Model, InputTokens: paid.InputTokens, OutputTokens: paid.OutputTokens, InputEstimated: paid.InputEstimated, OutputEstimated: paid.OutputEstimated, CostEstimated: paid.CostEstimated, Cost: paid.Cost, RunID: run.ID, MemoryRefs: paid.Refs, Tier: run.MemoryTier}); err != nil {
+		if err := s.RecordUsage(ctx, usagelog.ModelUsage{OwnerID: scope.OwnerID, ID: memory.ID(paid.Reservation), Purpose: "deputy", AgentID: paid.Provider, Model: paid.Model, InputTokens: paid.InputTokens, OutputTokens: paid.OutputTokens, InputEstimated: paid.InputEstimated, OutputEstimated: paid.OutputEstimated, CostEstimated: paid.CostEstimated, Cost: paid.Cost, RunID: run.ID, MemoryRefs: paid.Refs, Tier: run.MemoryTier}); err != nil {
 			return err
 		}
 		if err := s.settleRunCost(ctx, scope.OwnerID, run, paid.Cost); err != nil {

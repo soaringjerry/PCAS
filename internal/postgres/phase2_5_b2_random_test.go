@@ -2,12 +2,13 @@ package postgres_test
 
 import (
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/workspace"
 	"math/rand"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func TestPhase25B2_RandomActualComparisonSequence(t *testing.T) {

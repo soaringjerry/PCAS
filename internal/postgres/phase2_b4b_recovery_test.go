@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"log/slog"
 	"net/http"
@@ -16,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"

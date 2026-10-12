@@ -3,12 +3,13 @@ package postgres
 import (
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"math/rand"
 	"net/http"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"

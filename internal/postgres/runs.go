@@ -623,7 +623,7 @@ func (s *Store) RunDeputy(ctx context.Context, steps deputy.Steps) error {
 func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr error) {
 	started := time.Now()
 	ctx, timing := newExecutionTimer(ctx, "deputy", started)
-	ctx, persistCancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout))
+	ctx, persistCancel := context.WithDeadline(ctx, started.Add(secretary.TurnTimeout))
 	defer persistCancel()
 	s.pendingPaid.Range(func(key, value any) bool {
 		var snap reviseSnapshot
@@ -735,7 +735,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 	}()
 	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID}}
 	ctx = modelcall.WithExecution(ctx, execution)
-	workCtx, cancel := context.WithDeadline(ctx, started.Add(heavyUseTimeout-10*time.Second))
+	workCtx, cancel := context.WithDeadline(ctx, started.Add(secretary.TurnTimeout-10*time.Second))
 	defer cancel()
 	if s.Models != nil && s.Models.ReloadSubscription && s.Models.Codex != nil {
 		defer s.Models.Codex.Close()
@@ -761,7 +761,7 @@ func (s *Store) runAgent(ctx context.Context, steps deputy.Steps) (resultErr err
 			}
 			if run.MemoryTier == "heavy" {
 				taskText := deputy.HeavyTask(run)
-				readerCtx, readerCancel := context.WithDeadline(workCtx, started.Add(heavyReaderBudget))
+				readerCtx, readerCancel := context.WithDeadline(workCtx, started.Add(reader.Budget))
 				picked, refs, keys := steps.Reader.Read(readerCtx, ctx, reader.Task{Scope: scope, Agent: agent, Thing: &run.ThingID, Text: taskText, Run: run.ID, Phase: "reader:prepare"}, u)
 				readerCancel()
 				run.MemoryGroups = keys

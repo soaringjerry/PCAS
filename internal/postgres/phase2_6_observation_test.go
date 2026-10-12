@@ -5,11 +5,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"log/slog"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 )
 
 func TestPhase26A2SchedulerReportsConcreteLockFailure(t *testing.T) {

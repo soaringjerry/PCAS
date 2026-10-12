@@ -2,12 +2,13 @@ package postgres_test
 
 import (
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"math/rand"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"

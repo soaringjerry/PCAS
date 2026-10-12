@@ -11,6 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -28,7 +29,7 @@ func leasedDeputyAnswer(t *testing.T, s *Store, scope memory.Scope) modelcall.Re
 		OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID),
 		Function: "deputy", Stage: "answer", ProviderID: "model", Instructions: prompts.Must("deputy"),
 		ContextBuilderVersion: "fictitious-deputy-v1", Prompt: kernel.JSON(map[string]string{"rawPrompt": "Fictitious main generation."}),
-		Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID, BudgetOwner: "deputy_run", Usage: modelUsage{Purpose: "deputy", RunID: run.ID}},
+		Policy: interactiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID, BudgetOwner: "deputy_run", Usage: usagelog.ModelUsage{Purpose: "deputy", RunID: run.ID}},
 	}
 }
 

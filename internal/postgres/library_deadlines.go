@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/schedulestore"
 )
 
 // Program validation does not attempt to understand the original date language.
@@ -34,7 +35,7 @@ func writeOrganizedDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 				if e != nil {
 					said = time.Now()
 				}
-				rule, ok := legacyScheduleRule(d.Recurrence, said, loc)
+				rule, ok := schedulestore.LegacyScheduleRule(d.Recurrence, said, loc)
 				if ok {
 					d.ScheduleRule = &rule
 				}
@@ -89,7 +90,7 @@ func organizedDeadlineID(owner memory.ID, m cardMemory, d cardDeadline) string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", sum[0:4], sum[4:6], sum[6:8], sum[8:10], sum[10:16])
 }
 
-func optionalScheduleRule(rule *scheduleRule) any {
+func optionalScheduleRule(rule *schedulestore.ScheduleRule) any {
 	if rule == nil {
 		return nil
 	}

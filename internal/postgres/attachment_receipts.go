@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -52,11 +53,11 @@ func (s *Store) saveAttachmentReceipt(ctx context.Context, scope memory.Scope, r
 	}
 }
 func (s *Store) accountAttachmentReceipt(ctx context.Context, scope memory.Scope, ref memory.Ref, paid *paidModelResult, purpose string, job *worker.Job) error {
-	usage := modelUsage{OwnerID: scope.OwnerID, ID: memory.ID(paid.Reservation), Purpose: purpose, AgentID: paid.Provider, Model: paid.Model, InputTokens: paid.InputTokens, OutputTokens: paid.OutputTokens, InputEstimated: paid.InputEstimated, OutputEstimated: paid.OutputEstimated, CostEstimated: paid.CostEstimated, Cost: paid.Cost, MemoryRefs: []memory.Ref{ref}}
+	usage := usagelog.ModelUsage{OwnerID: scope.OwnerID, ID: memory.ID(paid.Reservation), Purpose: purpose, AgentID: paid.Provider, Model: paid.Model, InputTokens: paid.InputTokens, OutputTokens: paid.OutputTokens, InputEstimated: paid.InputEstimated, OutputEstimated: paid.OutputEstimated, CostEstimated: paid.CostEstimated, Cost: paid.Cost, MemoryRefs: []memory.Ref{ref}}
 	if job != nil {
 		usage.JobID = string(job.ID)
 	}
-	if err := s.recordUsage(ctx, usage); err != nil {
+	if err := s.RecordUsage(ctx, usage); err != nil {
 		return err
 	}
 	return s.settleModelCost(ctx, scope.OwnerID, paid.Reservation, paid.Cost)

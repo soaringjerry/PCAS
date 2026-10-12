@@ -3,13 +3,14 @@ package postgres
 // Section 11 oracles were frozen in 631ab49 before these tests were written.
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"

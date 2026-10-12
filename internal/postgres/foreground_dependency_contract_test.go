@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/contextbuilder"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"

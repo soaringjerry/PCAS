@@ -3,12 +3,13 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"testing"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"net/http"
-	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/worker"
 )

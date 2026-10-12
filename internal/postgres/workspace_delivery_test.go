@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"

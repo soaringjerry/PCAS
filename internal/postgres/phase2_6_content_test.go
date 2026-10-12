@@ -3,13 +3,14 @@ package postgres
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/contextbuilder"
-	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"

@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"

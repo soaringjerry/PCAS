@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/soaringjerry/PCAS/internal/memory"

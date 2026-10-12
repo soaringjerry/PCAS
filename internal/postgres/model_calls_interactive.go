@@ -15,6 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -125,7 +126,7 @@ type interactiveCallRow struct {
 		ThingID     string       `json:"thingId"`
 	} `json:"input_manifest"`
 	Mode struct {
-		Usage           modelUsage             `json:"originalUsage"`
+		Usage           usagelog.ModelUsage    `json:"originalUsage"`
 		Token           string                 `json:"executionToken"`
 		Unsupported     string                 `json:"unsupportedCapability"`
 		Reserved        float64                `json:"reservationEstimate"`
@@ -337,7 +338,7 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 		usage.AgentID = provider.ID
 		usage.Model = provider.Model
 		usage.MemoryRefs = nil
-		usage.Plan = kernel.JSON(safeUsePlan(usage.Plan))
+		usage.Plan = kernel.JSON(usagelog.SafeUsePlan(usage.Plan))
 
 		refs := r.Refs
 		if refs == nil {
@@ -666,7 +667,7 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			if paid.CallErrorCode == modelcall.ErrOutcomeUnknown.Error() {
 				outcome = "unknown"
 			}
-			var originalUsage modelUsage
+			var originalUsage usagelog.ModelUsage
 			if err := tx.QueryRow(persist, `SELECT actual_mode->'originalUsage' FROM model_calls WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID)).Scan(&originalUsage); err != nil {
 				return err
 			}
@@ -716,7 +717,7 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 func (a interactiveCalls) Record(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
 	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 	defer cancel()
-	var usage modelUsage
+	var usage usagelog.ModelUsage
 	if err := a.store.Pool.QueryRow(persist, `SELECT actual_mode->'originalUsage' FROM model_calls WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID)).Scan(&usage); err != nil {
 		return err
 	}
@@ -740,7 +741,7 @@ func (a interactiveCalls) Record(ctx context.Context, r modelcall.Request, paid 
 			return a.store.recordReturnedUsage(persist, paid.Output, usage)
 		}
 	}
-	return a.store.recordUsage(persist, usage)
+	return a.store.RecordUsage(persist, usage)
 }
 func (a interactiveCalls) Settle(ctx context.Context, r modelcall.Request, paid *modelcall.PaidResult) error {
 	if r.Policy.(interactiveCallPolicy).BudgetOwner == "deputy_run" {

@@ -3,10 +3,11 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/worker"

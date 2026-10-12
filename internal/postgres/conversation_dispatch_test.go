@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 )

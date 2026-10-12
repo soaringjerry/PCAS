@@ -2,10 +2,11 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 )
 
 func TestIndexDispatchRunsAlongsideConversationAndHonorsPause(t *testing.T) {

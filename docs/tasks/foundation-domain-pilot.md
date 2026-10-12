@@ -153,11 +153,16 @@ Tests in the storage package compose the same services in `internal/postgres/com
 ## Storage Packages
 
 The PostgreSQL adapter is being split by domain into storage packages over a shared kernel. The declarations of `internal/postgres` have no cycle among them, so a domain can leave in one behavior-neutral change when the kernel holds what it shares.
+Each storage package has a type over the kernel's `DB`, and `Store` embeds that type, so a caller of the store keeps its entry. A group of files leaves only when it needs nothing that stays behind.
 
 | Package | Content | State |
 |---|---|---|
 | `internal/postgres/kernel` | `DB`, the core of the store: the connection pool, the configured models, the file store, and the business clock. Also the encoding of a document, the checks of a request, the reads of document rows, the lease and the queueing of a job, and the owner lock. No business rule and no table of one domain. | Since 2026-10-12. |
 | `internal/postgres/memoryread` | The reads of memories: the owner's list and one memory, the memories that a turn or a run is given, the filters of a list, and the status of a statement. `Reader` works on the kernel's `DB`; the store embeds it. | Since 2026-10-12. |
+| `internal/postgres/memorystore` | Derived memory material that needs no other storage code: the summaries, the groups of sources, the graph around a record, the expansion of a reference, and the backfill jobs. More of the memory storage joins this package when it needs nothing that stays behind. | Since 2026-10-12. |
+| `internal/postgres/usagelog` | The usage records of model calls, the owner's view of them, and the validated plan that a record keeps. | Since 2026-10-12. |
+| `internal/postgres/schedulestore` | The owner's schedule view and the rule of a repeating date. | Since 2026-10-12. |
+| `internal/postgres/activitystore` | The query of one day's activity. | Since 2026-10-12. |
 | `internal/postgres` | Everything else, and the composition of the store. `Store` embeds the kernel's `DB`. | Each domain leaves in its own change. The deputy's storage leaves last. |
 
 ## Pattern for the Next Paths

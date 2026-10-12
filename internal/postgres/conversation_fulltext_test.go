@@ -2,10 +2,11 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 )

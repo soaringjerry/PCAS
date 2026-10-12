@@ -12,8 +12,12 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/activitystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
+	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
+	"github.com/soaringjerry/PCAS/internal/postgres/schedulestore"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -97,6 +101,10 @@ func TestDeputyGenerationRecoversWritesWithoutRepeatingPaidWork(t *testing.T) {
 				// A new process has no pending responses, model registry, or reviewer.
 				worker = &Store{DB: &kernel.DB{Pool: s.Pool}}
 				worker.Reader = &memoryread.Reader{DB: worker.DB}
+				worker.Activity = &activitystore.Activity{DB: worker.DB}
+				worker.Schedules = &schedulestore.Schedules{DB: worker.DB}
+				worker.Usage = &usagelog.Usage{DB: worker.DB}
+				worker.Memory = &memorystore.Memory{DB: worker.DB}
 				worker.SetModels(nil)
 			}
 			if err := worker.RunDeputyOnce(ctx); err != nil {

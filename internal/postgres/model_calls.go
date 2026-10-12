@@ -12,6 +12,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -50,7 +51,7 @@ func (a backgroundCalls) Reserve(ctx context.Context, request modelcall.Request,
 }
 
 func (a backgroundCalls) Record(ctx context.Context, request modelcall.Request, saved *modelcall.PaidResult) error {
-	return a.store.recordUsage(ctx, modelUsage{OwnerID: request.OwnerID, ID: memory.ID(saved.Reservation), Purpose: request.Function, AgentID: saved.Provider, Model: saved.Model, DurationMS: saved.DurationMS, InputTokens: saved.InputTokens, OutputTokens: saved.OutputTokens, InputEstimated: saved.InputEstimated, OutputEstimated: saved.OutputEstimated, CostEstimated: saved.CostEstimated, Cost: saved.Cost, JobID: string(request.ExecutionID), MemoryRefs: saved.Refs})
+	return a.store.RecordUsage(ctx, usagelog.ModelUsage{OwnerID: request.OwnerID, ID: memory.ID(saved.Reservation), Purpose: request.Function, AgentID: saved.Provider, Model: saved.Model, DurationMS: saved.DurationMS, InputTokens: saved.InputTokens, OutputTokens: saved.OutputTokens, InputEstimated: saved.InputEstimated, OutputEstimated: saved.OutputEstimated, CostEstimated: saved.CostEstimated, Cost: saved.Cost, JobID: string(request.ExecutionID), MemoryRefs: saved.Refs})
 }
 
 func (a backgroundCalls) Settle(ctx context.Context, request modelcall.Request, saved *modelcall.PaidResult) error {

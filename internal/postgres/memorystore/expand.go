@@ -1,7 +1,8 @@
-package postgres
+package memorystore
 
 import (
 	"context"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
@@ -11,7 +12,7 @@ func readRevision(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref memory
 	err := tx.QueryRow(ctx, `SELECT valid_from,valid_to,time_precision,expressed_at,recorded_at,state FROM record_versions WHERE owner_id=$1 AND record_id=$2 AND version=$3`, string(scope.OwnerID), string(ref.ID), ref.Version).Scan(&v.ValidTime.From, &v.ValidTime.To, &v.ValidTime.Precision, &v.ExpressedAt, &v.RecordedAt, &v.State)
 	return v, err
 }
-func readEntity(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref memory.Ref) (memory.Entity, error) {
+func ReadEntity(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref memory.Ref) (memory.Entity, error) {
 	e := memory.Entity{Aliases: []string{}}
 	var err error
 	e.Revision, err = readRevision(ctx, tx, scope, ref)
@@ -36,7 +37,7 @@ func readEntity(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref memory.R
 	}
 	return e, rows.Err()
 }
-func readEpisode(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref memory.Ref) (memory.Episode, error) {
+func ReadEpisode(ctx context.Context, tx pgx.Tx, scope memory.Scope, ref memory.Ref) (memory.Episode, error) {
 	e := memory.Episode{Members: []memory.Ref{}}
 	var err error
 	e.Revision, err = readRevision(ctx, tx, scope, ref)

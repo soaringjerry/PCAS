@@ -12,6 +12,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -142,21 +144,21 @@ func TestP3DurationSummaryExactAndHistoricalNull(t *testing.T) {
 	at := time.Date(2026, 1, 1, 16, 0, 0, 0, time.UTC)
 	for i, ms := range []int64{10, 30, 100} {
 		turn := memory.NewID()
-		u := modelUsage{OwnerID: scope.OwnerID, ID: memory.NewID(), At: at, Purpose: "secretary", Model: "fictional", TurnID: string(turn), Tier: "medium", DurationMS: &ms}
-		if err := s.recordUsage(ctx, u); err != nil {
+		u := usagelog.ModelUsage{OwnerID: scope.OwnerID, ID: memory.NewID(), At: at, Purpose: "secretary", Model: "fictional", TurnID: string(turn), Tier: "medium", DurationMS: &ms}
+		if err := s.RecordUsage(ctx, u); err != nil {
 			t.Fatal(err)
 		}
 		b4Exec(t, s, `INSERT INTO execution_timings(owner_id,id,kind,tier,at,prepare_ms,answer_ms,selfcheck_ms,writeback_ms,model_ms,total_ms,other_ms) VALUES($1,$2,'secretary','medium',$3,$4::bigint,$4::bigint,0,$4::bigint,$4::bigint,$4::bigint*3,0)`, scope.OwnerID, turn, at, ms)
 		if i == 0 { // A second call in the same turn must not duplicate execution stats.
 			u.ID = memory.NewID()
 			u.DurationMS = nil
-			if err := s.recordUsage(ctx, u); err != nil {
+			if err := s.RecordUsage(ctx, u); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
-	historical := modelUsage{OwnerID: scope.OwnerID, ID: memory.NewID(), At: at, Purpose: "deputy", Model: "old", Tier: "light"}
-	if err := s.recordUsage(ctx, historical); err != nil {
+	historical := usagelog.ModelUsage{OwnerID: scope.OwnerID, ID: memory.NewID(), At: at, Purpose: "deputy", Model: "old", Tier: "light"}
+	if err := s.RecordUsage(ctx, historical); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := s.UsageSummary(ctx, scope, "2026-01-02", "2026-01-02")
@@ -240,7 +242,7 @@ func TestP3LiveExecutionTiming(t *testing.T) {
 		var result ai.Result
 		var err error
 		if strings.Contains(system, "这是自查") && strings.Contains(system, "前台秘书") {
-			result, err = real.GenerateSchema(r.Context(), "chatgpt", system, prompt, secretaryCheckSchema)
+			result, err = real.GenerateSchema(r.Context(), "chatgpt", system, prompt, prompts.MustSchema("secretary-check").Bytes())
 		} else if strings.Contains(system, "这是自查") {
 			result, err = real.Generate(r.Context(), "chatgpt", system, prompt)
 		} else if system == secretaryInstructions {

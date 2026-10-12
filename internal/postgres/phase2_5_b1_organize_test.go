@@ -3,11 +3,12 @@ package postgres_test
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"log/slog"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"

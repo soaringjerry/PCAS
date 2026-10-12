@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
+	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 
 	"github.com/jackc/pgx/v5"
@@ -309,7 +310,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	out.Coverage.Omitted = max(0, totalClaims-offset-consumed)
 	out.Coverage.OmittedSources = max(0, totalSources-offset-len(teamSources))
 	out.Summary = summary.String()
-	relations, related, err := graphTx(ctx, tx, scope, out.Memories, b, in.Mode == memory.History, in.Context)
+	relations, related, err := memorystore.GraphTx(ctx, tx, scope, out.Memories, b, in.Mode == memory.History, in.Context)
 	if err != nil {
 		return err
 	}
@@ -448,13 +449,13 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 				}
 				out.Claims = append(out.Claims, c)
 			case memory.EntityKind:
-				e, err := readEntity(ctx, tx, scope, ref)
+				e, err := memorystore.ReadEntity(ctx, tx, scope, ref)
 				if err != nil {
 					return err
 				}
 				out.Entities = append(out.Entities, e)
 			case memory.EpisodeKind:
-				e, err := readEpisode(ctx, tx, scope, ref)
+				e, err := memorystore.ReadEpisode(ctx, tx, scope, ref)
 				if err != nil {
 					return err
 				}
@@ -478,7 +479,7 @@ func (s *Store) Expand(ctx context.Context, scope memory.Scope, in memory.Expand
 				out.Evidence = append(out.Evidence, ev...)
 			}
 		}
-		relations, _, err := graphTx(ctx, tx, scope, refs[offset:end], b, in.History, memory.WorkingContext{})
+		relations, _, err := memorystore.GraphTx(ctx, tx, scope, refs[offset:end], b, in.History, memory.WorkingContext{})
 		if err != nil {
 			return err
 		}

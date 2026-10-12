@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
-	"github.com/soaringjerry/PCAS/internal/worker"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -14,6 +12,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
 type phase3File struct {

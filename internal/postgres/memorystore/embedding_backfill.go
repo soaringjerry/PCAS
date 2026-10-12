@@ -1,4 +1,4 @@
-package postgres
+package memorystore
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 )
 
 // Keep old vectors for rollback. Recall compares only the selected model.
-func (s *Store) QueueEmbeddingBackfill(ctx context.Context, scope memory.Scope) (int64, error) {
+func (s *Memory) QueueEmbeddingBackfill(ctx context.Context, scope memory.Scope) (int64, error) {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return 0, err
 	}

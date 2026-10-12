@@ -1,4 +1,4 @@
-package postgres
+package activitystore
 
 import (
 	"context"
@@ -110,7 +110,7 @@ SELECT jsonb_build_object(
 
 // DayActivity returns one local day of the owner's recorded work. An empty
 // date selects the current local day.
-func (s *Store) DayActivity(ctx context.Context, scope memory.Scope, date string, limit, offset int) (json.RawMessage, error) {
+func (s *Activity) DayActivity(ctx context.Context, scope memory.Scope, date string, limit, offset int) (json.RawMessage, error) {
 	if err := kernel.RequireOwner(scope); err != nil {
 		return nil, err
 	}

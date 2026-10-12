@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -16,7 +17,7 @@ import (
 // erased responses remain erased and no additional response cache is written.
 func (s *Store) DeskTurnByRequest(ctx context.Context, scope memory.Scope, requestID string) (workspace.DeskTurnResponse, error) {
 	var out workspace.DeskTurnResponse
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !memory.ID(requestID).Valid() {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -19,7 +20,7 @@ func TestPhase26C7EffectiveSignalsChangeRankingAtScale(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		ref := memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}
 		refs = append(refs, ref)
-		in := memory.CommitRequest{RequestID: memory.NewID(), Claims: []memory.Claim{{Revision: memory.Revision{Ref: ref, State: "active"}, SubjectID: f.Entities[998], Predicate: "fictitious_activity", Value: asJSON(fmt.Sprintf("FictitiousSignalRank ceramic record %d", i)), Nature: "fact", Acquisition: "direct", Confirmation: "confirmed"}}, Evidence: []memory.Evidence{{ID: memory.NewID(), Source: f.Sources[0], Target: ref, Acquisition: "direct", Stance: "supports"}}}
+		in := memory.CommitRequest{RequestID: memory.NewID(), Claims: []memory.Claim{{Revision: memory.Revision{Ref: ref, State: "active"}, SubjectID: f.Entities[998], Predicate: "fictitious_activity", Value: kernel.JSON(fmt.Sprintf("FictitiousSignalRank ceramic record %d", i)), Nature: "fact", Acquisition: "direct", Confirmation: "confirmed"}}, Evidence: []memory.Evidence{{ID: memory.NewID(), Source: f.Sources[0], Target: ref, Acquisition: "direct", Stance: "supports"}}}
 		if _, err := f.Store.Commit(f.Context, f.Scope, in); err != nil {
 			t.Fatal(err)
 		}

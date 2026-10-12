@@ -2,13 +2,15 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/workspace"
 	"math"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 // Exercise the real HTTP provider while its response is withheld. Corrections
@@ -126,7 +128,7 @@ func TestDeputyCompletionRechecksDependencyAccess(t *testing.T) {
 			var paid float64
 			for _, row := range rows {
 				paid += row.Cost
-				if row.RunID == nil || *row.RunID != run.ID || !oneOf(row.Purpose, "deputy", "selfcheck") {
+				if row.RunID == nil || *row.RunID != run.ID || !kernel.OneOf(row.Purpose, "deputy", "selfcheck") {
 					t.Errorf("uncorrelated returned usage: %+v", row)
 				}
 			}
@@ -154,7 +156,7 @@ func TestDeputyContinuationUsesCurrentDocuments(t *testing.T) {
 	if len(st.Docs) != 1 {
 		t.Fatal("missing adopted doc", st.Docs)
 	}
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateDoc", ID: st.Docs[0].ID, Patch: asJSON(map[string]string{"body": "R1 owner edited draft"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateDoc", ID: st.Docs[0].ID, Patch: kernel.JSON(map[string]string{"body": "R1 owner edited draft"})})
 	workspaceCommand(t, s, scope, workspace.Command{Type: "createDoc", Doc: &workspace.Doc{ID: string(memory.NewID()), ThingID: thing, Title: "Owner notes", Body: "R1 owner created notes", By: "user"}})
 	unrelated := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Unrelated"}).Tasks[0].ID
 	workspaceCommand(t, s, scope, workspace.Command{Type: "createDoc", Doc: &workspace.Doc{ID: string(memory.NewID()), ThingID: unrelated, Title: "Other notes", Body: "R1 unrelated secret", By: "user"}})
@@ -207,7 +209,7 @@ func TestDeputyDocumentsRespectPermissionsAndLength(t *testing.T) {
 			case "delete-doc":
 				workspaceCommand(t, s, scope, workspace.Command{Type: "deleteDoc", ID: doc.ID})
 			case "long-doc":
-				workspaceCommand(t, s, scope, workspace.Command{Type: "updateDoc", ID: doc.ID, Patch: asJSON(map[string]string{"body": "R1 current long document\n" + strings.Repeat("正文", 20000) + "R1 truncated end"})})
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateDoc", ID: doc.ID, Patch: kernel.JSON(map[string]string{"body": "R1 current long document\n" + strings.Repeat("正文", 20000) + "R1 truncated end"})})
 			}
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: thing, AgentID: "model", Kind: "draft", Prompt: "Continue"})
 			brief := st.Runs[0].Brief

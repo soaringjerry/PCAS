@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/notify"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -16,7 +17,7 @@ func TestFinishedRunReportsBack(t *testing.T) {
 	s, scope := testStore(t), owner()
 	ctx := context.Background()
 	autoAdoptModel(t, s, "研究结论：三层记忆已经落地。\n第二段细节。", nil)
-	st := workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]bool{"followUps": true})})
+	st := workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]bool{"followUps": true})})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "研究 PCAS"})
 	id := st.Tasks[0].ID
 	workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: id, AgentID: "auto-model", Kind: "summary", Prompt: "写研究报告"})

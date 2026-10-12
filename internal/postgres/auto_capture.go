@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -29,7 +30,7 @@ func captureReasons(source memory.SourceResult, item extractedItem, imported boo
 	if item.Qualification == "tentative" || !item.Explicit && item.Acquisition == "direct" {
 		add("qualified", "带保留，留作候选")
 	}
-	if item.Acquisition == "inferred" || item.Confidence < automaticCaptureConfidence || !oneOf(item.Qualification, "", "asserted", "corrected") || !item.Explicit && item.Acquisition != "direct" {
+	if item.Acquisition == "inferred" || item.Confidence < automaticCaptureConfidence || !kernel.OneOf(item.Qualification, "", "asserted", "corrected") || !item.Explicit && item.Acquisition != "direct" {
 		add("uncertain", "拿不准，留作候选")
 	}
 	return reasons, strings.Join(descriptions, "；")
@@ -38,7 +39,7 @@ func captureReasons(source memory.SourceResult, item extractedItem, imported boo
 // Candidate acceptance is deliberately outside action tracking: its retained
 // accepted row is the replay fence even after undo deletes the work item.
 func (s *Store) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, source memory.SourceResult, item extractedItem, imported bool, project string) error {
-	if !oneOf(item.Kind, "task", "idea") {
+	if !kernel.OneOf(item.Kind, "task", "idea") {
 		return memory.ErrInvalid
 	}
 	var duplicate bool
@@ -50,7 +51,7 @@ func (s *Store) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		return nil
 	}
 	reasons, reason := captureReasons(source, item, imported)
-	v := workspace.Candidate{ID: string(memory.NewID()), Kind: item.Kind, Text: item.Text, ProjectID: project, Confidence: item.Confidence, Source: workspace.SourceRef{SourceID: string(source.Source.Ref.ID), Version: source.Source.Ref.Version, Label: source.Source.Title, Excerpt: item.Quote, At: stamp()}, State: "pending", CreatedAt: stamp(), Reasons: reasons, Reason: reason}
+	v := workspace.Candidate{ID: string(memory.NewID()), Kind: item.Kind, Text: item.Text, ProjectID: project, Confidence: item.Confidence, Source: workspace.SourceRef{SourceID: string(source.Source.Ref.ID), Version: source.Source.Ref.Version, Label: source.Source.Title, Excerpt: item.Quote, At: kernel.Stamp()}, State: "pending", CreatedAt: kernel.Stamp(), Reasons: reasons, Reason: reason}
 	if len(reasons) == 0 && item.Kind == "task" {
 		var count int
 		err := tx.QueryRow(ctx, `SELECT count(*) FROM capture_candidates c WHERE c.owner_id=$1 AND c.document->>'kind'='task' AND c.state='accepted'

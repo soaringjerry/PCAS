@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -91,7 +92,7 @@ func b2Count(t *testing.T, s *Store, sql string, args ...any) int {
 }
 func b2Zone(t *testing.T, s *Store, scope memory.Scope, zone string) {
 	t.Helper()
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"timezone": zone})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"timezone": zone})})
 }
 func b2Anchor(t *testing.T, zone string) time.Time {
 	t.Helper()
@@ -172,7 +173,7 @@ func b2Mentions(t *testing.T, m workspace.Memory) []b2Mention {
 	var wire struct {
 		Mentions []b2Mention `json:"mentions"`
 	}
-	if err := json.Unmarshal(asJSON(m), &wire); err != nil {
+	if err := json.Unmarshal(kernel.JSON(m), &wire); err != nil {
 		t.Fatal(err)
 	}
 	if wire.Mentions == nil {
@@ -318,7 +319,7 @@ func b2Archive(t *testing.T, s *Store, scope memory.Scope, at time.Time, user, a
 		current = "a"
 		mapping["a"] = map[string]any{"parent": "u", "message": map[string]any{"id": "a", "author": map[string]string{"role": "assistant"}, "create_time": at.Add(time.Minute).Unix(), "content": map[string]any{"parts": []string{assistant}}}}
 	}
-	data := asJSON([]any{map[string]any{"id": string(memory.NewID()), "title": "合成历史", "current_node": current, "mapping": mapping}})
+	data := kernel.JSON([]any{map[string]any{"id": string(memory.NewID()), "title": "合成历史", "current_node": current, "mapping": mapping}})
 	out, err := s.ImportArchive(context.Background(), scope, "conversations.json", data)
 	if err != nil {
 		t.Fatal(err)

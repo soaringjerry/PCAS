@@ -3,12 +3,14 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -37,7 +39,7 @@ func TestLibraryDeadlinesUseModelDatesAndRetainUncertainty(t *testing.T) {
 		}
 		secretaryModelReply(w, map[string]any{"items": items})
 	})
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	for _, text := range texts {
 		ref := organizeTestMemory(t, s, scope, text)
 		if _, err := s.pool.Exec(ctx, "UPDATE record_versions SET expressed_at='2026-08-01T09:00:00+08:00' WHERE owner_id=$1 AND record_id=$2", scope.OwnerID, ref.ID); err != nil {
@@ -84,7 +86,7 @@ func TestHandoverUsesIndependentRollingLimit(t *testing.T) {
 	for _, title := range handoverTitles {
 		sections = append(sections, handoverSection{Title: title, Body: "虚构交接内容", Refs: []int{1}})
 	}
-	fake := b1Model(t, s, string(asJSON(handoverOutput{Sections: sections})))
+	fake := b1Model(t, s, string(kernel.JSON(handoverOutput{Sections: sections})))
 	statusTestMemories(t, s, scope, 3)
 	job := handoverTestJob(t, s, scope)
 	seedStageUsage(t, s, scope, HandoverStage, 2)

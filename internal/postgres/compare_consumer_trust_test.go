@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -52,7 +53,7 @@ func TestCompareTrustAtEveryMemoryConsumer(t *testing.T) {
 				if _, err := s.pool.Exec(ctx, `UPDATE record_versions SET expressed_at='2026-09-12 09:00:00+00' WHERE owner_id=$1 AND record_id=$2`, string(scope.OwnerID), string(ref.ID)); err != nil {
 					t.Fatal(err)
 				}
-				workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: asJSON(map[string]any{"includeInferred": tc.include})})
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: kernel.JSON(map[string]any{"includeInferred": tc.include})})
 				if m := compareDetail(t, s, scope, ref); m.Trust != tc.trust {
 					t.Fatalf("trust=%s want=%s", m.Trust, tc.trust)
 				}

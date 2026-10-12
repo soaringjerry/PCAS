@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -44,7 +45,7 @@ func studioFileProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ite
 }
 func (s *Store) UploadProjectFile(ctx context.Context, scope memory.Scope, item, name, media string, input io.Reader) (workspace.ProjectFileUpload, error) {
 	out := workspace.ProjectFileUpload{}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if s.blobs == nil {
@@ -209,7 +210,7 @@ func fileProcessingReason(code string) string {
 }
 func (s *Store) ListProjectFiles(ctx context.Context, scope memory.Scope, item string) (workspace.ProjectFileList, error) {
 	out := workspace.ProjectFileList{Items: []workspace.ProjectFile{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
@@ -217,7 +218,7 @@ func (s *Store) ListProjectFiles(ctx context.Context, scope memory.Scope, item s
 		if err != nil {
 			return err
 		}
-		ids, err := queryDocuments[string](ctx, tx, `SELECT to_jsonb(f.source_id::text) FROM project_files f JOIN memory_records r ON(r.owner_id,r.id)=(f.owner_id,f.source_id) WHERE f.owner_id=$1 AND f.project_id=$2 AND r.state='active' ORDER BY f.created_at DESC,f.source_id`, string(scope.OwnerID), project)
+		ids, err := kernel.QueryDocuments[string](ctx, tx, `SELECT to_jsonb(f.source_id::text) FROM project_files f JOIN memory_records r ON(r.owner_id,r.id)=(f.owner_id,f.source_id) WHERE f.owner_id=$1 AND f.project_id=$2 AND r.state='active' ORDER BY f.created_at DESC,f.source_id`, string(scope.OwnerID), project)
 		if err != nil {
 			return err
 		}
@@ -233,7 +234,7 @@ func (s *Store) ListProjectFiles(ctx context.Context, scope memory.Scope, item s
 	return out, err
 }
 func (s *Store) DeleteProjectFile(ctx context.Context, scope memory.Scope, item, source string, confirmed bool) error {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
 	if !confirmed {

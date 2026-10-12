@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/retrieval"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -45,7 +47,7 @@ func TestSecretaryUsesBusinessDateAndActualUsageTime(t *testing.T) {
 	secretaryModel(t, s, func(w http.ResponseWriter, _ *http.Request) {
 		secretaryModelReply(w, `{"reply":"Fictional reply","actions":[]}`)
 	})
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	req := turnRequest("昨天说过什么来着")
 	conversationID := string(memory.NewID())
 	req.ConversationID = &conversationID
@@ -87,7 +89,7 @@ func TestDeputyUsesBusinessDateAndActualAdmissionTime(t *testing.T) {
 	})
 	fixed := time.Date(2024, 12, 31, 16, 30, 0, 0, time.UTC)
 	s.SetBusinessClock(func() time.Time { return fixed })
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Fictitious dated request"})
 	command := workspace.Command{Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "draft", Prompt: "昨天说过什么来着"}
 	ctx, err := s.prepareRunContext(context.Background(), scope, command, s.recaller().Embed)

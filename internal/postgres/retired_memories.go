@@ -9,12 +9,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func (s *Store) listRetiredMemories(ctx context.Context, scope memory.Scope, q workspace.MemoryQuery) (workspace.MemoryPage, error) {
 	out := workspace.MemoryPage{Items: []workspace.Memory{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if err := validateMemoryQuery(&q); err != nil {

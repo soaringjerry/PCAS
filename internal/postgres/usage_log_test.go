@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestUsageDatesCalendarBoundaries(t *testing.T) {
@@ -45,7 +46,7 @@ func TestUsageDatesCalendarBoundaries(t *testing.T) {
 
 func TestUsageCursorValidation(t *testing.T) {
 	want := usageCursor{At: time.Now().UTC().Truncate(time.Microsecond), ID: memory.NewID()}
-	raw := base64.RawURLEncoding.EncodeToString(asJSON(want))
+	raw := base64.RawURLEncoding.EncodeToString(kernel.JSON(want))
 	got, err := parseUsageCursor(raw)
 	if err != nil || got != want {
 		t.Fatalf("cursor round trip: %v %v", got, err)

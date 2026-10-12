@@ -5,13 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -26,7 +28,7 @@ func aliasEntityFixture(t *testing.T, s *Store, scope memory.Scope, kind, name s
 	for i := range count {
 		text := fmt.Sprintf("虚构别名资料 %s 的证据 %d，归属于同一对象。", name, i)
 		src := b1Source(t, s, scope, "虚构别名资料", text, "manual")
-		claim := memory.Claim{Revision: memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}}, SubjectID: entity.ID, Predicate: "虚构对象", Value: asJSON(text), Nature: "fact", Acquisition: "direct", Confirmation: "candidate"}
+		claim := memory.Claim{Revision: memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}}, SubjectID: entity.ID, Predicate: "虚构对象", Value: kernel.JSON(text), Nature: "fact", Acquisition: "direct", Confirmation: "candidate"}
 		req := memory.CommitRequest{RequestID: memory.NewID(), Claims: []memory.Claim{claim}, Evidence: []memory.Evidence{{Source: src, Target: claim.Ref, Acquisition: "direct", Stance: "supports"}}}
 		if i == 0 {
 			req.Entities = []memory.Entity{entity}

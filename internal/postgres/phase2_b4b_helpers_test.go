@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -16,6 +15,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/connectors"
@@ -76,7 +78,7 @@ type b4bArchive struct {
 func b4bHTTP(t *testing.T, s *Store, scope memory.Scope, method, path string, body any) *httptest.ResponseRecorder {
 	t.Helper()
 	api := httpapi.New(s, s, b1Auth{scope}, func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Connectors: s})
-	req := httptest.NewRequest(method, path, bytes.NewReader(asJSON(body)))
+	req := httptest.NewRequest(method, path, bytes.NewReader(kernel.JSON(body)))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer synthetic-b4b-auth")
 	w := httptest.NewRecorder()
@@ -142,7 +144,7 @@ func b4bImport(t *testing.T, s *Store, scope memory.Scope, messages []b4bMessage
 		}
 		mapping[key] = map[string]any{"parent": parent, "message": map[string]any{"id": key, "author": map[string]string{"role": m.Role}, "create_time": m.At.Unix(), "content": map[string]any{"parts": []string{m.Text}}}}
 	}
-	data := asJSON([]any{map[string]any{"id": string(memory.NewID()), "title": "合成历史对话", "current_node": fmt.Sprintf("m%d", len(messages)), "mapping": mapping}})
+	data := kernel.JSON([]any{map[string]any{"id": string(memory.NewID()), "title": "合成历史对话", "current_node": fmt.Sprintf("m%d", len(messages)), "mapping": mapping}})
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
 	part, err := form.CreateFormFile("file", "conversations.json")

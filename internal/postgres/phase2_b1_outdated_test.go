@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -92,7 +93,7 @@ func TestPhase2B1_M4_SourceDeletionScrubsDependentTurnRunAndDoc(t *testing.T) {
 	if turn.Reply != "（这条回答依据的记忆已变更）" || len(turn.Cards) != 0 {
 		t.Error("source deletion did not scrub dependent exchange", turn)
 	}
-	b1Absent(t, string(asJSON(turn)), out.Turn.Reply, b1Text(t, "trip", "text"))
+	b1Absent(t, string(kernel.JSON(turn)), out.Turn.Reply, b1Text(t, "trip", "text"))
 	w := b1HTTP(t, s, scope, "GET", "/v1/memory/sources/"+string(src.ID), nil)
 	if w.Code != 404 {
 		t.Error("deleted source still accessible", w.Code)
@@ -248,7 +249,7 @@ func TestPhase2B1_M2_CurrentDestinationUnavailablePreservesQuestionAndReceipt(t 
 			b1Absent(t, f.last(t).Prompt, out.Turn.Reply, "成都陈述旧说法蓝灯")
 			visible := b1History(t, s, scope, out.ConversationID)
 			if visible.Reply != out.Turn.Reply || !b1SameJSON(t, visible.Cards, out.Turn.Cards) || !b1SameJSON(t, visible.Receipts, out.Turn.Receipts) {
-				t.Errorf("current destination scope erased user-visible exchange: before=%s after=%s", asJSON(out.Turn), asJSON(visible))
+				t.Errorf("current destination scope erased user-visible exchange: before=%s after=%s", kernel.JSON(out.Turn), kernel.JSON(visible))
 			}
 		})
 	}

@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -56,7 +57,7 @@ func b2E3Gold(t *testing.T) (b2E3Fixtures, b2E3Limits) {
 
 func b2E3Turn(t *testing.T, s *Store, scope memory.Scope, f *b1Fake, conversation, question, answer string) (workspace.DeskTurnRequest, workspace.DeskTurnResponse, memory.Ref) {
 	t.Helper()
-	f.set(string(asJSON(map[string]any{"reply": answer, "actions": []any{}})))
+	f.set(string(kernel.JSON(map[string]any{"reply": answer, "actions": []any{}})))
 	req := turnRequest(question)
 	if conversation != "" {
 		req.ConversationID = &conversation

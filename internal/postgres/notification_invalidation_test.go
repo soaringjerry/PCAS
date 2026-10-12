@@ -2,12 +2,14 @@ package postgres
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
-	"testing"
-	"time"
 )
 
 func TestRescheduledNoticeIsInvalidated(t *testing.T) {
@@ -29,7 +31,7 @@ func TestRescheduledNoticeIsInvalidated(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: notice.ThingID, Patch: asJSON(map[string]string{"due": now.Add(24 * time.Hour).UTC().Format(time.RFC3339)})})
+					workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: notice.ThingID, Patch: kernel.JSON(map[string]string{"due": now.Add(24 * time.Hour).UTC().Format(time.RFC3339)})})
 					return
 				}
 				err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {

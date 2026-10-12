@@ -18,6 +18,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -49,7 +50,7 @@ func TestSmokeThreeSentencesLeaveNothing(t *testing.T) {
 		case 3:
 			secretaryModelReply(w, secretaryOutput{Reply: "安排好了。", Remember: true, Actions: []secretaryAction{{Op: "create_task", Title: "虚构栀岑晾纸", Due: &due}}})
 		case 4:
-			secretaryModelReply(w, secretaryOutput{Reply: "改好了。", Remember: true, Actions: []secretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"due": asJSON(later)}}}})
+			secretaryModelReply(w, secretaryOutput{Reply: "改好了。", Remember: true, Actions: []secretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"due": kernel.JSON(later)}}}})
 		default:
 			secretaryModelReply(w, secretaryOutput{Reply: "正常对话。"})
 		}
@@ -68,7 +69,7 @@ func TestSmokeThreeSentencesLeaveNothing(t *testing.T) {
 	api := httpapi.New(memory.NewService(s), s, httpapi.NewOwnerToken(token, scope.OwnerID), s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s})
 	call := func(method, path string, body any, want int) []byte {
 		t.Helper()
-		req := httptest.NewRequest(method, path, strings.NewReader(string(asJSON(body))))
+		req := httptest.NewRequest(method, path, strings.NewReader(string(kernel.JSON(body))))
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -216,7 +217,7 @@ func TestSmokeRestoresOrdinaryItemAndRejectsLaterOrdinaryEdit(t *testing.T) {
 			s := testStore(t)
 			scope := owner()
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
-				secretaryModelReply(w, secretaryOutput{Reply: "改好了。", Actions: []secretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"notesAppend": asJSON("虚构检查时的临时文字")}}}})
+				secretaryModelReply(w, secretaryOutput{Reply: "改好了。", Actions: []secretaryAction{{Op: "update", Ref: "THIS", Set: map[string]json.RawMessage{"notesAppend": kernel.JSON("虚构检查时的临时文字")}}}})
 			})
 			state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "虚构正常档案"})
 			original := state.Tasks[0]
@@ -228,7 +229,7 @@ func TestSmokeRestoresOrdinaryItemAndRejectsLaterOrdinaryEdit(t *testing.T) {
 				t.Fatal("check edit did not execute", out.Turn.Receipts)
 			}
 			if laterEdit {
-				workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: original.ID, Patch: asJSON(map[string]string{"notes": "虚构正常对话的新内容"})})
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: original.ID, Patch: kernel.JSON(map[string]string{"notes": "虚构正常对话的新内容"})})
 				beforeFailure := smokeCounts(t, s, scope)
 				if err := s.CleanupSmoke(context.Background(), scope, req.SmokeID); !errors.Is(err, workspace.ErrChangedSince) {
 					t.Fatal(err)
@@ -254,7 +255,7 @@ func TestSmokeRestoresOrdinaryItemAndRejectsLaterOrdinaryEdit(t *testing.T) {
 			}
 			got.Version, got.UpdatedAt = original.Version, original.UpdatedAt
 			if !reflect.DeepEqual(original, got) {
-				t.Fatalf("original content/history not restored: %s", asJSON(got))
+				t.Fatalf("original content/history not restored: %s", kernel.JSON(got))
 			}
 		})
 	}
@@ -414,7 +415,7 @@ func TestSmokeRetiredTicketCannotCreateIncompleteCandidate(t *testing.T) {
 	if err := s.registerSmokeRequest(ctx, scope, req); err != nil {
 		t.Fatal(err)
 	}
-	hash := sha256.Sum256(asJSON(req))
+	hash := sha256.Sum256(kernel.JSON(req))
 	if _, err := s.admitSecretaryTurn(ctx, ctx, string(scope.OwnerID), req.RequestID, req.SmokeID, hash[:]); err != nil {
 		t.Fatal(err)
 	}

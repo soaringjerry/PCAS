@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -114,18 +116,18 @@ func TestStatusHandoverParser(t *testing.T) {
 		}
 		output.Sections = append(output.Sections, handoverSection{Title: title, Body: "可能参加一次活动", Refs: []int{ref}})
 	}
-	body, valid := parseHandover(string(asJSON(output)), ms)
+	body, valid := parseHandover(string(kernel.JSON(output)), ms)
 	if valid || body != "" {
 		t.Fatal(body, valid)
 	}
 	output.Sections[0].Title = "不合法标题"
-	if _, valid := parseHandover(string(asJSON(output)), ms); valid {
+	if _, valid := parseHandover(string(kernel.JSON(output)), ms); valid {
 		t.Fatal("accepted unknown section")
 	}
 	output.Sections[0].Title = handoverTitles[0]
 	output.Sections[0].Refs = []int{1}
 	output.Sections[0].Body = strings.Repeat("字", 1800)
-	if _, valid := parseHandover(string(asJSON(output)), ms); valid {
+	if _, valid := parseHandover(string(kernel.JSON(output)), ms); valid {
 		t.Fatal("accepted overlong handover")
 	}
 }

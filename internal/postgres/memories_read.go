@@ -5,10 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"math"
 	"strings"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -306,7 +308,7 @@ func (s *Store) readMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		}
 		i := indices[id]
 		if result[i].Version == version {
-			if oneOf(mention.Role, "project", "topic", "area") {
+			if kernel.OneOf(mention.Role, "project", "topic", "area") {
 				result[i].Groups = append(result[i].Groups, workspace.MemoryGroup{EntityID: mention.EntityID, Name: mention.Name, Type: mention.Role})
 			} else {
 				result[i].Mentions = append(result[i].Mentions, mention)
@@ -326,7 +328,7 @@ func validateMemoryQuery(q *workspace.MemoryQuery) error {
 		return memory.ErrInvalid
 	}
 	q.Limit = min(q.Limit, 100)
-	if q.Trust != "" && !oneOf(q.Trust, "stated", "repeated", "tentative", "reported", "inferred") {
+	if q.Trust != "" && !kernel.OneOf(q.Trust, "stated", "repeated", "tentative", "reported", "inferred") {
 		return memory.ErrInvalid
 	}
 	if q.RetiredBy != "" && (!q.Retired || !memory.ID(q.RetiredBy).Valid()) {
@@ -338,10 +340,10 @@ func validateMemoryQuery(q *workspace.MemoryQuery) error {
 	if q.Category != "" && !organize.ValidCategory(q.Category) {
 		return memory.ErrInvalid
 	}
-	if q.Nature != "" && !oneOf(q.Nature, "fact", "preference", "decision", "intention", "plan") {
+	if q.Nature != "" && !kernel.OneOf(q.Nature, "fact", "preference", "decision", "intention", "plan") {
 		return memory.ErrInvalid
 	}
-	if q.Epistemic != "" && !oneOf(q.Epistemic, "confirmed", "sourced", "inferred") {
+	if q.Epistemic != "" && !kernel.OneOf(q.Epistemic, "confirmed", "sourced", "inferred") {
 		return memory.ErrInvalid
 	}
 	var from, to time.Time
@@ -368,7 +370,7 @@ func validateMemoryQuery(q *workspace.MemoryQuery) error {
 
 func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspace.MemoryQuery) (workspace.MemoryPage, error) {
 	out := workspace.MemoryPage{Items: []workspace.Memory{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if err := validateMemoryQuery(&q); err != nil {
@@ -446,7 +448,7 @@ func (s *Store) ListMemories(ctx context.Context, scope memory.Scope, q workspac
 
 func (s *Store) GetMemory(ctx context.Context, scope memory.Scope, id string) (workspace.Memory, error) {
 	var out workspace.Memory
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !memory.ID(id).Valid() {
@@ -468,7 +470,7 @@ func (s *Store) GetMemory(ctx context.Context, scope memory.Scope, id string) (w
 
 func (s *Store) MemoryFacets(ctx context.Context, scope memory.Scope) (workspace.MemoryFacets, error) {
 	out := workspace.MemoryFacets{People: []workspace.MemoryFacet{}, Places: []workspace.MemoryFacet{}, Groups: []workspace.MemoryGroupFacet{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	rows, err := s.pool.Query(ctx, `WITH counts AS(

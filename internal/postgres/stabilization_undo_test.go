@@ -20,6 +20,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/notify"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -713,7 +714,7 @@ func TestStabilizationUndoU16_FiftySeededReverseSequences(t *testing.T) {
 						c = workspace.Command{Type: "setNotes", ID: target.ID, Text: fmt.Sprintf("notes %d", step)}
 					}
 				case 5:
-					c = workspace.Command{Type: "updateDoc", ID: doc, Patch: asJSON(map[string]string{"title": fmt.Sprintf("doc %d", step), "body": fmt.Sprintf("body %d seed %d", step, seed)})}
+					c = workspace.Command{Type: "updateDoc", ID: doc, Patch: kernel.JSON(map[string]string{"title": fmt.Sprintf("doc %d", step), "body": fmt.Sprintf("body %d seed %d", step, seed)})}
 				}
 				states = append(states, stabilizationUndoBusiness(t, s, scope, true))
 				sequence = append(sequence, fmt.Sprintf("%02d:%s target-index=%d title=%s text=%s status=%s patch=%s", step, c.Type, targetIndex, c.Title, c.Text, c.Status, c.Patch))

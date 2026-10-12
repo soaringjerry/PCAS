@@ -14,6 +14,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -171,7 +172,7 @@ func interactiveBinding(r modelcall.Request) (string, error) {
 		InputPolicy                                                                          string `json:"inputPolicy,omitempty"`
 		BudgetOwner                                                                          string `json:"budgetOwner,omitempty"`
 	}{r.OwnerID, r.ExecutionID, r.RootExecutionID, r.CausationID, r.Function, r.Stage, r.ProviderID, r.Instructions.Name(), r.Instructions.Hash(), r.Schema.Name(), r.Schema.Hash(), r.ContextBuilderVersion, r.Search, fmt.Sprintf("%x", sha256.Sum256(r.Prompt)), refs, p.Kind, p.Origin, p.AgentID, p.ThingID, p.InputPolicy, p.BudgetOwner}
-	return fmt.Sprintf("%x", sha256.Sum256(asJSON(binding))), nil
+	return fmt.Sprintf("%x", sha256.Sum256(kernel.JSON(binding))), nil
 }
 
 func latestInteractiveCall(ctx context.Context, q interface {
@@ -336,7 +337,7 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 		usage.AgentID = provider.ID
 		usage.Model = provider.Model
 		usage.MemoryRefs = nil
-		usage.Plan = asJSON(safeUsePlan(usage.Plan))
+		usage.Plan = kernel.JSON(safeUsePlan(usage.Plan))
 
 		refs := r.Refs
 		if refs == nil {
@@ -347,7 +348,7 @@ func (a interactiveCalls) Prepare(ctx context.Context, r modelcall.Request, prov
 			manifest["budgetOwner"] = p.BudgetOwner
 		}
 		mode := map[string]any{"output": "text", "schema": "none", "search": false, "executionToken": p.Token, "originalUsage": usage, "usageComplete": false}
-		_, err = tx.Exec(ctx, `INSERT INTO model_calls(owner_id,id,execution_id,root_execution_id,causation_id,retry_of_id,attempt_number,attempt_limit,function_name,stage,provider_id,model,prompt_name,instruction_hash,schema_name,schema_hash,context_builder_version,input_manifest,required_capabilities,actual_mode,outcome,accounting_state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'prepared','not_reserved')`, string(r.OwnerID), string(id), string(r.ExecutionID), string(r.RootExecutionID), nullString(string(r.CausationID)), nullString(string(p.RetryOf)), attempt, limit, r.Function, r.Stage, provider.ID, provider.Model, r.Instructions.Name(), r.Instructions.Hash(), nullString(r.Schema.Name()), nullString(r.Schema.Hash()), r.ContextBuilderVersion, asJSON(manifest), asJSON(r.RequiredCapabilities()), asJSON(mode))
+		_, err = tx.Exec(ctx, `INSERT INTO model_calls(owner_id,id,execution_id,root_execution_id,causation_id,retry_of_id,attempt_number,attempt_limit,function_name,stage,provider_id,model,prompt_name,instruction_hash,schema_name,schema_hash,context_builder_version,input_manifest,required_capabilities,actual_mode,outcome,accounting_state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'prepared','not_reserved')`, string(r.OwnerID), string(id), string(r.ExecutionID), string(r.RootExecutionID), kernel.NullString(string(r.CausationID)), kernel.NullString(string(p.RetryOf)), attempt, limit, r.Function, r.Stage, provider.ID, provider.Model, r.Instructions.Name(), r.Instructions.Hash(), kernel.NullString(r.Schema.Name()), kernel.NullString(r.Schema.Hash()), r.ContextBuilderVersion, kernel.JSON(manifest), kernel.JSON(r.RequiredCapabilities()), kernel.JSON(mode))
 		return err
 	})
 	return id, err
@@ -496,7 +497,7 @@ func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *
 			// input and its started journal together before provider submission.
 			tag, err := tx.Exec(ctx, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs)
  SELECT owner_id,id,'deputy_input',$4::jsonb,'',reservation_id,provider_id,model,0,0,0,$5::jsonb FROM model_calls
- WHERE owner_id=$1 AND id=$2 AND reservation_id=$3 AND outcome='prepared' AND recovery_state='active' AND input_manifest->>'bindingHash'=$6`, string(r.OwnerID), string(paid.InvocationID), paid.Reservation, r.Prompt, asJSON(r.Refs), binding)
+ WHERE owner_id=$1 AND id=$2 AND reservation_id=$3 AND outcome='prepared' AND recovery_state='active' AND input_manifest->>'bindingHash'=$6`, string(r.OwnerID), string(paid.InvocationID), paid.Reservation, r.Prompt, kernel.JSON(r.Refs), binding)
 			if err != nil {
 				return err
 			}
@@ -509,7 +510,7 @@ func (a interactiveCalls) Start(ctx context.Context, r modelcall.Request, paid *
 			mode["schema"] = r.Schema.Name()
 			mode["output"] = "structured"
 		}
-		tag, err := tx.Exec(ctx, `UPDATE model_calls SET outcome='started',started_at=clock_timestamp(),updated_at=clock_timestamp(),actual_mode=actual_mode||$4::jsonb WHERE owner_id=$1 AND id=$2 AND reservation_id=$3 AND outcome='prepared' AND recovery_state='active'`, string(r.OwnerID), string(paid.InvocationID), paid.Reservation, asJSON(mode))
+		tag, err := tx.Exec(ctx, `UPDATE model_calls SET outcome='started',started_at=clock_timestamp(),updated_at=clock_timestamp(),actual_mode=actual_mode||$4::jsonb WHERE owner_id=$1 AND id=$2 AND reservation_id=$3 AND outcome='prepared' AND recovery_state='active'`, string(r.OwnerID), string(paid.InvocationID), paid.Reservation, kernel.JSON(mode))
 		if err == nil && tag.RowsAffected() != 1 {
 			return modelcall.ErrOutcomeUnknown
 		}
@@ -548,7 +549,7 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			if len(paid.Prompt) > 0 && !bytes.Equal(paid.Prompt, r.Prompt) {
 				return memory.ErrConflict
 			}
-			if manifestHash != expected || provider != paid.Provider || model != paid.Model || reservation != paid.Reservation || !bytes.Equal(asJSON(uniqueRefs(paid.Refs)), asJSON(uniqueRefs(r.Refs))) {
+			if manifestHash != expected || provider != paid.Provider || model != paid.Model || reservation != paid.Reservation || !bytes.Equal(kernel.JSON(kernel.UniqueRefs(paid.Refs)), kernel.JSON(kernel.UniqueRefs(r.Refs))) {
 				return memory.ErrConflict
 			}
 			accessible := !paid.NotApplicable
@@ -563,7 +564,7 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 			for i, ref := range paid.Refs {
 				ids[i] = string(ref.ID)
 			}
-			rows, err := queryDocuments[struct {
+			rows, err := kernel.QueryDocuments[struct {
 				ID      string
 				Version int
 			}](persist, tx, `SELECT jsonb_build_object('id',id,'version',version) FROM memory_records WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND state='active' ORDER BY id FOR SHARE`, string(r.OwnerID), ids)
@@ -621,7 +622,7 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 					conflict = ` ON CONFLICT(job_id) DO UPDATE SET purpose=EXCLUDED.purpose,output=EXCLUDED.output,input_tokens=EXCLUDED.input_tokens,output_tokens=EXCLUDED.output_tokens,cost=EXCLUDED.cost,input_estimated=EXCLUDED.input_estimated,output_estimated=EXCLUDED.output_estimated,cost_estimated=EXCLUDED.cost_estimated,duration_ms=EXCLUDED.duration_ms
  WHERE background_model_results.purpose='deputy_input' AND background_model_results.owner_id=EXCLUDED.owner_id AND background_model_results.reservation_id=EXCLUDED.reservation_id AND background_model_results.provider_id=EXCLUDED.provider_id AND background_model_results.model=EXCLUDED.model AND background_model_results.prompt=EXCLUDED.prompt AND background_model_results.refs=EXCLUDED.refs`
 				}
-				tag, writeErr := tx.Exec(persist, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated,duration_ms) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`+conflict, string(r.OwnerID), string(paid.InvocationID), r.Function, paid.Prompt, paid.Output, paid.Reservation, paid.Provider, paid.Model, paid.InputTokens, paid.OutputTokens, paid.Cost, asJSON(paid.Refs), paid.InputEstimated, paid.OutputEstimated, paid.CostEstimated, paid.DurationMS)
+				tag, writeErr := tx.Exec(persist, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated,duration_ms) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`+conflict, string(r.OwnerID), string(paid.InvocationID), r.Function, paid.Prompt, paid.Output, paid.Reservation, paid.Provider, paid.Model, paid.InputTokens, paid.OutputTokens, paid.Cost, kernel.JSON(paid.Refs), paid.InputEstimated, paid.OutputEstimated, paid.CostEstimated, paid.DurationMS)
 				err = writeErr
 				if err != nil {
 					return err
@@ -643,7 +644,7 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 				original.NotApplicable = false
 				compare := billing
 				compare.NotApplicable = false
-				if !bytes.Equal(asJSON(original), asJSON(compare)) {
+				if !bytes.Equal(kernel.JSON(original), kernel.JSON(compare)) {
 					return memory.ErrConflict
 				}
 				available = available && prior.Available
@@ -673,7 +674,7 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 				if err := tx.QueryRow(persist, `SELECT coalesce(finished_at,clock_timestamp()) FROM model_calls WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID)).Scan(&originalUsage.At); err != nil {
 					return err
 				}
-				if _, err := tx.Exec(persist, `UPDATE model_calls SET actual_mode=jsonb_set(actual_mode,'{originalUsage}',$3::jsonb) WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID), asJSON(originalUsage)); err != nil {
+				if _, err := tx.Exec(persist, `UPDATE model_calls SET actual_mode=jsonb_set(actual_mode,'{originalUsage}',$3::jsonb) WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID), kernel.JSON(originalUsage)); err != nil {
 					return err
 				}
 			}
@@ -692,7 +693,7 @@ func (a interactiveCalls) Save(ctx context.Context, r modelcall.Request, paid *m
 					mode["inputPayload"] = "result_saved"
 				}
 			}
-			_, err = tx.Exec(persist, `UPDATE model_calls SET outcome=$3,error_code=$4,finished_at=coalesce(finished_at,clock_timestamp()),updated_at=clock_timestamp(),usage_id=$5,result_receipt=$6,actual_mode=actual_mode||$7::jsonb,accounting_state=CASE WHEN accounting_state='settled' THEN 'settled' WHEN accounting_state='held' AND $3='unknown' AND EXISTS(SELECT 1 FROM model_usage u WHERE u.owner_id=model_calls.owner_id AND u.id=model_calls.usage_id) THEN 'held' ELSE 'pending' END WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID), outcome, paid.CallErrorCode, usage, asJSON(receipt), asJSON(mode))
+			_, err = tx.Exec(persist, `UPDATE model_calls SET outcome=$3,error_code=$4,finished_at=coalesce(finished_at,clock_timestamp()),updated_at=clock_timestamp(),usage_id=$5,result_receipt=$6,actual_mode=actual_mode||$7::jsonb,accounting_state=CASE WHEN accounting_state='settled' THEN 'settled' WHEN accounting_state='held' AND $3='unknown' AND EXISTS(SELECT 1 FROM model_usage u WHERE u.owner_id=model_calls.owner_id AND u.id=model_calls.usage_id) THEN 'held' ELSE 'pending' END WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(paid.InvocationID), outcome, paid.CallErrorCode, usage, kernel.JSON(receipt), kernel.JSON(mode))
 			return err
 		})
 		cancel()
@@ -955,12 +956,12 @@ func (a interactiveCalls) saveDeputySelection(ctx context.Context, r modelcall.R
 			return err
 		}
 		if original != nil {
-			if !bytes.Equal(asJSON(original), asJSON(selection)) {
+			if !bytes.Equal(kernel.JSON(original), kernel.JSON(selection)) {
 				return memory.ErrConflict
 			}
 			return nil
 		}
-		_, err := tx.Exec(persist, `UPDATE model_calls SET actual_mode=actual_mode||jsonb_build_object('deputySelection',$3::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(selection.Main), asJSON(selection))
+		_, err := tx.Exec(persist, `UPDATE model_calls SET actual_mode=actual_mode||jsonb_build_object('deputySelection',$3::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2`, string(r.OwnerID), string(selection.Main), kernel.JSON(selection))
 		return err
 	})
 	if err == nil {
@@ -973,7 +974,7 @@ func (a interactiveCalls) recordDeputyApplicationTx(ctx context.Context, tx pgx.
 	if invocation == "" {
 		return nil
 	}
-	tag, err := tx.Exec(ctx, `UPDATE model_calls SET actual_mode=actual_mode||jsonb_build_object('applicationOutcome',$5::text,'applicationReason',$6::text,'applicationAdoption',$7::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'executionKind'='deputy'`, string(owner), string(invocation), run.ID, run.CreatedAt, outcome, reason, asJSON(run.Adopted))
+	tag, err := tx.Exec(ctx, `UPDATE model_calls SET actual_mode=actual_mode||jsonb_build_object('applicationOutcome',$5::text,'applicationReason',$6::text,'applicationAdoption',$7::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2 AND execution_id=$3 AND input_manifest->>'origin'=$4 AND input_manifest->>'executionKind'='deputy'`, string(owner), string(invocation), run.ID, run.CreatedAt, outcome, reason, kernel.JSON(run.Adopted))
 	if err != nil {
 		return err
 	}

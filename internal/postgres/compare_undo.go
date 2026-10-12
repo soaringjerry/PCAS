@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -42,7 +43,7 @@ func restoredMemorySQL(rule string) string {
 }
 
 func retirementFingerprint(state retirementSnapshot) string {
-	return fmt.Sprintf("%x", sha256.Sum256(asJSON(state)))
+	return fmt.Sprintf("%x", sha256.Sum256(kernel.JSON(state)))
 }
 
 func restoreMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
@@ -81,7 +82,7 @@ func restoreMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id stri
  VALUES($1,$2,$3,$4)`, string(scope.OwnerID), id, before.Version, fmt.Sprintf("%s:%d:restored:%s", CompareStage, CompareVersion, log.id)); err != nil {
 		return err
 	}
-	changes := asJSON([]map[string]any{{"table": "claim_retirement", "id": id, "before": before, "afterHash": retirementFingerprint(after), "rule": CompareVersion}})
+	changes := kernel.JSON([]map[string]any{{"table": "claim_retirement", "id": id, "before": before, "afterHash": retirementFingerprint(after), "rule": CompareVersion}})
 	if _, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'command','恢复退出的记忆',$3)", string(scope.OwnerID), log.id, changes); err != nil {
 		return err
 	}
@@ -132,7 +133,7 @@ func undoComparisonActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		Before    json.RawMessage `json:"before"`
 		AfterHash string          `json:"afterHash"`
 	}
-	if json.Unmarshal(data, &entries) != nil || len(entries) != 1 || !oneOf(entries[0].Table, "claim_retirement", "entity_merge") {
+	if json.Unmarshal(data, &entries) != nil || len(entries) != 1 || !kernel.OneOf(entries[0].Table, "claim_retirement", "entity_merge") {
 		return false, nil
 	}
 	if undone {

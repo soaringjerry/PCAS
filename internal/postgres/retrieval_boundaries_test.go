@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestRecallReturnsMatchingTailChunk(t *testing.T) {
@@ -57,8 +58,8 @@ func TestRecallGraphHonorsEffectiveAndKnowledgeTime(t *testing.T) {
 				return memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: kind}}
 			}
 			entity := memory.Entity{Revision: rev(memory.EntityKind), Name: "项目主体", Type: "project"}
-			seed := memory.Claim{Revision: rev(memory.ClaimKind), SubjectID: entity.ID, Predicate: "seed", Value: asJSON("唯一查询锚点"), Nature: "fact", Acquisition: "direct", Confirmation: "confirmed"}
-			hidden := memory.Claim{Revision: rev(memory.ClaimKind), SubjectID: entity.ID, Predicate: "future", Value: asJSON("不应出现的后续结论"), Nature: "fact", Acquisition: "direct", Confirmation: "confirmed"}
+			seed := memory.Claim{Revision: rev(memory.ClaimKind), SubjectID: entity.ID, Predicate: "seed", Value: kernel.JSON("唯一查询锚点"), Nature: "fact", Acquisition: "direct", Confirmation: "confirmed"}
+			hidden := memory.Claim{Revision: rev(memory.ClaimKind), SubjectID: entity.ID, Predicate: "future", Value: kernel.JSON("不应出现的后续结论"), Nature: "fact", Acquisition: "direct", Confirmation: "confirmed"}
 			relation := memory.Relation{Revision: rev(memory.RelationKind), From: seed.Ref, To: hidden.Ref, Type: "depends_on"}
 			in := memory.CommitRequest{RequestID: memory.NewID(), Entities: []memory.Entity{entity}, Claims: []memory.Claim{seed, hidden}, Relations: []memory.Relation{relation}}
 			for _, ref := range []memory.Ref{seed.Ref, hidden.Ref, relation.Ref} {

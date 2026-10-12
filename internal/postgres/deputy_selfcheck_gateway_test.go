@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -33,7 +34,7 @@ func TestDeputySelfcheckUsesOriginalRunAndReportsFallback(t *testing.T) {
 					secretaryModelReply(w, "Fictitious checked draft.")
 				}
 			})
-			state := workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]bool{"followUps": true})})
+			state := workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]bool{"followUps": true})})
 			state = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Fictitious self-check task"})
 			state = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "summary", Prompt: "Prepare a fictitious draft."})
 			if len(state.Runs) != 1 {

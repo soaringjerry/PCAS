@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 type b3BaselineGold struct {
@@ -118,7 +119,7 @@ func TestPhase2B3_S10_PublicRecallFifteenRequestsByteIdentical(t *testing.T) {
 				}
 				// C6 adds overflow metadata. Preserve the historical business bytes.
 				got.Coverage.Omitted, got.Coverage.OmittedSources = 0, 0
-				body = append(asJSON(got), '\n')
+				body = append(kernel.JSON(got), '\n')
 			}
 			if w.Code != c.Status || !bytes.Equal(body, []byte(c.Body)) {
 				t.Errorf("public recall changed from %s: status=%d want %d\nwant bytes=%s\ngot bytes=%s", gold.Commit, w.Code, c.Status, c.Body, w.Body.String())

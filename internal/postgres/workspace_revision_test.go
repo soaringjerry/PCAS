@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -22,7 +23,7 @@ func revisionCommandClient(t *testing.T, s *Store, scope memory.Scope) func(work
 	api := httpapi.New(s, s, httpapi.NewOwnerToken(token, scope.OwnerID), func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s})
 	return func(command workspace.Command, status int, code string) workspace.State {
 		t.Helper()
-		req := httptest.NewRequest(http.MethodPost, "/v1/workspace/commands", strings.NewReader(string(asJSON(command))))
+		req := httptest.NewRequest(http.MethodPost, "/v1/workspace/commands", strings.NewReader(string(kernel.JSON(command))))
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()

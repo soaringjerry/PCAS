@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -75,7 +76,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		return out, memory.ErrUnavailable
 	}
 	var err error
-	out.Agent, err = queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), agentID)
+	out.Agent, err = kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), agentID)
 	if errors.Is(err, memory.ErrNotFound) {
 		return out, memory.ErrUnavailable
 	}
@@ -92,7 +93,7 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	out.Settings = settings
 	out.Tasks = tasks
 	out.Dependencies = deps
-	out.Projects, err = queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='project' AND status='active' ORDER BY created_at,id LIMIT 50", string(scope.OwnerID))
+	out.Projects, err = kernel.QueryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='project' AND status='active' ORDER BY created_at,id LIMIT 50", string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
@@ -108,11 +109,11 @@ func (s *Store) secretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		}
 		p.Goal = projectMeaning(p.Goal, excerpt, goals[p.ID])
 	}
-	out.Ideas, err = queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM (SELECT document,created_at,id FROM work_items WHERE owner_id=$1 AND kind='idea' ORDER BY created_at DESC,id DESC LIMIT 20) recent ORDER BY created_at,id", string(scope.OwnerID))
+	out.Ideas, err = kernel.QueryDocuments[workspace.Item](ctx, tx, "SELECT document FROM (SELECT document,created_at,id FROM work_items WHERE owner_id=$1 AND kind='idea' ORDER BY created_at DESC,id DESC LIMIT 20) recent ORDER BY created_at,id", string(scope.OwnerID))
 	if err != nil {
 		return out, err
 	}
-	out.Recent, err = queryDocuments[workspace.Item](ctx, tx, `SELECT w.document FROM work_items w JOIN (
+	out.Recent, err = kernel.QueryDocuments[workspace.Item](ctx, tx, `SELECT w.document FROM work_items w JOIN (
  SELECT c->>'id' AS id,max(l.created_at) AS at FROM action_log l JOIN desk_turns t ON (t.owner_id,t.id)=(l.owner_id,l.turn_id)
  CROSS JOIN LATERAL jsonb_array_elements(l.changes) c
  WHERE l.owner_id=$1 AND t.conversation_id=$2 AND l.undone_at IS NULL AND c->>'table'='work_items' GROUP BY c->>'id'
@@ -197,7 +198,7 @@ func (s *Store) checkDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 			return err
 		}
 		if full {
-			if !bytes.Equal(asJSON(current), asJSON(sent)) {
+			if !bytes.Equal(kernel.JSON(current), kernel.JSON(sent)) {
 				return memory.ErrConflict
 			}
 		} else if current.Title != sent.Title || current.Status != sent.Status || current.Due != sent.Due {
@@ -317,7 +318,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	prompt.WriteString(shown.Text)
 	sent, contextClaims := shown.Sent, shown.Claims
 	c.Dependencies = append(c.Dependencies, shown.Dependencies...)
-	historyRequests, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(request_id::text) FROM desk_turns WHERE owner_id=$1 AND conversation_id=$2 AND question!='' AND request_id IS NOT NULL", string(scope.OwnerID), c.ConversationID)
+	historyRequests, err := kernel.QueryDocuments[string](ctx, tx, "SELECT to_jsonb(request_id::text) FROM desk_turns WHERE owner_id=$1 AND conversation_id=$2 AND question!='' AND request_id IS NOT NULL", string(scope.OwnerID), c.ConversationID)
 	if err != nil {
 		return "", nil, err
 	}
@@ -346,7 +347,7 @@ func (s *Store) secretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	if err := s.secretaryHandoverEvidenceTx(ctx, tx, scope, c, &prompt, sent); err != nil {
 		return "", nil, err
 	}
-	c.Dependencies = uniqueRefs(c.Dependencies)
+	c.Dependencies = kernel.UniqueRefs(c.Dependencies)
 	request := secretary.Request{Now: s.businessNow(), Location: loc, Text: req.Text, Attachments: c.AttachmentContext}
 	if t, ok := c.Aliases["THIS"]; ok {
 		request.This = &t
@@ -366,7 +367,7 @@ type deskStore struct{ store *Store }
 func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.DeskTurnRequest, steps secretary.Steps) (workspace.DeskTurnResponse, error) {
 	s := a.store
 	var out workspace.DeskTurnResponse
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	req, err := secretary.CheckRequest(req)
@@ -394,7 +395,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 	}
 	ctx, persistCancel := context.WithTimeout(context.WithoutCancel(ctx), persistTimeout)
 	defer persistCancel()
-	hash := sha256.Sum256(asJSON(req)) // The original body, before trimming, fences retries.
+	hash := sha256.Sum256(kernel.JSON(req)) // The original body, before trimming, fences retries.
 	ownerPrepStarted := time.Now()
 	prepared, err := s.prepareUseOwner(ctx, scope)
 	if err != nil {
@@ -461,7 +462,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 			return err
 		}
 		out.ConversationID = conversationID
-		out.Turn = workspace.SecretaryTurn{ID: string(memory.NewID()), Text: req.Text, Cards: []workspace.DeskCard{}, Receipts: []workspace.DeskReceipt{}, CreatedAt: stamp()}
+		out.Turn = workspace.SecretaryTurn{ID: string(memory.NewID()), Text: req.Text, Cards: []workspace.DeskCard{}, Receipts: []workspace.DeskReceipt{}, CreatedAt: kernel.Stamp()}
 		timing.id = out.Turn.ID
 		if req.ThingID != nil && !captureOnly {
 			if _, err := getItem(ctx, tx, scope, *req.ThingID); err != nil {
@@ -506,7 +507,7 @@ func (a deskStore) Turn(ctx context.Context, scope memory.Scope, req workspace.D
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,conversation_id,thing_id,request_id,request_hash,response,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", string(scope.OwnerID), out.Turn.ID, c.Agent.ID, req.Text, out.Turn.Reply, asJSON(dependencies), conversationID, pointerValueOrNull(req.ThingID), req.RequestID, hash[:], asJSON(storedSecretaryResponse{ConversationID: out.ConversationID, Turn: out.Turn, AttachmentContext: c.AttachmentContext}), out.Turn.CreatedAt)
+		_, err = tx.Exec(ctx, "INSERT INTO desk_turns(owner_id,id,agent_id,question,answer,dependencies,conversation_id,thing_id,request_id,request_hash,response,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", string(scope.OwnerID), out.Turn.ID, c.Agent.ID, req.Text, out.Turn.Reply, kernel.JSON(dependencies), conversationID, pointerValueOrNull(req.ThingID), req.RequestID, hash[:], kernel.JSON(storedSecretaryResponse{ConversationID: out.ConversationID, Turn: out.Turn, AttachmentContext: c.AttachmentContext}), out.Turn.CreatedAt)
 		return err
 	})
 	if req.SmokeID != "" && errors.Is(err, pgx.ErrNoRows) {
@@ -613,7 +614,7 @@ func (t *secretarySession) KeepSentence(ctx context.Context, unordered bool) err
 
 func (t *secretarySession) SaveSentence(ctx context.Context) error {
 	s := t.secretaryAsk
-	original := workspace.SourceRef{Label: "秘书原话", Excerpt: s.req.Text, At: stamp()}
+	original := workspace.SourceRef{Label: "秘书原话", Excerpt: s.req.Text, At: kernel.Stamp()}
 	if t.text != "" && s.req.SmokeID == "" {
 		ref, err := s.store.ingestTx(ctx, s.tx, s.scope, memory.IngestRequest{Connector: "desk", ExternalID: s.req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: s.req.Text, MediaType: "text/plain"})
 		if err != nil {
@@ -752,7 +753,7 @@ func (t *secretaryTurn) Act(ctx context.Context, a secretaryAction, aliases map[
 
 func (s *Store) DeskTurns(ctx context.Context, scope memory.Scope, conversationID string) (workspace.DeskTurnsResponse, error) {
 	out := workspace.DeskTurnsResponse{ConversationID: conversationID, Turns: []workspace.SecretaryTurn{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !memory.ID(conversationID).Valid() {
@@ -775,7 +776,7 @@ func (s *Store) deskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		// The exchange's own original was deleted, as opposed to a memory it used.
 		OriginalDeleted bool `json:"originalDeleted"`
 	}
-	turns, err := queryDocuments[storedTurn](ctx, tx, `SELECT jsonb_build_object('response',response,'dependencies',dependencies,'agentId',agent_id,'erased',question='' AND answer='','originalDeleted',original_deleted) FROM
+	turns, err := kernel.QueryDocuments[storedTurn](ctx, tx, `SELECT jsonb_build_object('response',response,'dependencies',dependencies,'agentId',agent_id,'erased',question='' AND answer='','originalDeleted',original_deleted) FROM
  (SELECT response,dependencies,agent_id,question,answer,created_at,id,
    request_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM sources s WHERE s.owner_id=t.owner_id AND s.connector IN ('desk','capture','desk-incomplete') AND lower(s.external_id)=t.request_id::text) AS original_deleted
   FROM desk_turns t WHERE owner_id=$1 AND conversation_id=$2 AND response IS NOT NULL ORDER BY created_at DESC,id DESC LIMIT $3) recent ORDER BY created_at,id`, string(scope.OwnerID), conversationID, limit)
@@ -839,7 +840,7 @@ func refreshDeskReceiptUndoTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 	if len(ids) == 0 {
 		return nil
 	}
-	undone, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(id::text) FROM action_log WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND undone_at IS NOT NULL", string(scope.OwnerID), ids)
+	undone, err := kernel.QueryDocuments[string](ctx, tx, "SELECT to_jsonb(id::text) FROM action_log WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND undone_at IS NOT NULL", string(scope.OwnerID), ids)
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -48,7 +49,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 	ready := false
 	var thingID string
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		agent, err := queryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
+		agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
 		if err != nil {
 			return err
 		}
@@ -66,7 +67,7 @@ func (s *Store) prepareRunContext(ctx context.Context, scope memory.Scope, c wor
 			}
 		}
 		thingID = item.ID
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if err != nil {
 			return err
 		}
@@ -127,7 +128,7 @@ func currentRunDocsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item w
 	if item.Kind == "project" {
 		project = item.ID
 	}
-	docs, err := queryDocuments[workspace.Doc](ctx, tx, "SELECT d.document FROM work_documents d JOIN work_items w ON(w.owner_id,w.id)=(d.owner_id,d.thing_id) WHERE d.owner_id=$1 AND (w.id=$2 OR w.id=nullif($3,'')::uuid OR w.project_id=nullif($3,'')::uuid) ORDER BY d.document->>'updatedAt' DESC,d.id", string(scope.OwnerID), item.ID, project)
+	docs, err := kernel.QueryDocuments[workspace.Doc](ctx, tx, "SELECT d.document FROM work_documents d JOIN work_items w ON(w.owner_id,w.id)=(d.owner_id,d.thing_id) WHERE d.owner_id=$1 AND (w.id=$2 OR w.id=nullif($3,'')::uuid OR w.project_id=nullif($3,'')::uuid) ORDER BY d.document->>'updatedAt' DESC,d.id", string(scope.OwnerID), item.ID, project)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -135,7 +136,7 @@ func currentRunDocsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item w
 	refs := []memory.Ref{}
 	for _, doc := range docs {
 		if doc.RunID != "" {
-			run, err := queryDocument[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), doc.RunID)
+			run, err := kernel.QueryDocument[workspace.Run](ctx, tx, "SELECT document FROM agent_runs WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), doc.RunID)
 			if err != nil {
 				if err == memory.ErrNotFound {
 					continue
@@ -150,7 +151,7 @@ func currentRunDocsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item w
 		}
 		permitted = append(permitted, doc)
 	}
-	return permitted, uniqueRefs(refs), nil
+	return permitted, kernel.UniqueRefs(refs), nil
 }
 
 // Automatic history is constrained to the server-selected conversation. Manual
@@ -171,7 +172,7 @@ func readRunHistoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c work
 		boundary := "$3::text=$3::text"
 		target := c.AgentID
 		if auto {
-			if !oneOf(id, automatic.IDs...) {
+			if !kernel.OneOf(id, automatic.IDs...) {
 				return nil, memory.ErrForbidden
 			}
 			boundary = "conversation_id=$3"

@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -18,7 +20,7 @@ import (
 func TestBreakdownRequestStatesTheStepFormat(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "manual", Patch: asJSON(map[string]bool{"enabled": true})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "manual", Patch: kernel.JSON(map[string]bool{"enabled": true})})
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "周末出行准备"})
 	task := st.Tasks[0]
 	briefs := map[string]string{}

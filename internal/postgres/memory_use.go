@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -19,7 +21,7 @@ func WithMemoryTier(ctx context.Context, tier string) context.Context {
 	return context.WithValue(ctx, memoryTierKey{}, tier)
 }
 func memoryTier(ctx context.Context, text, fallback string) string {
-	if tier, _ := ctx.Value(memoryTierKey{}).(string); oneOf(tier, "light", "medium", "heavy") {
+	if tier, _ := ctx.Value(memoryTierKey{}).(string); kernel.OneOf(tier, "light", "medium", "heavy") {
 		return tier
 	}
 	return fallback
@@ -83,7 +85,7 @@ func chooseUseGroups(text string, index []workspace.StatusCardRef, ranked []work
 		for _, g := range m.Mentions {
 			add("entity:" + g.EntityID)
 		}
-		if oneOf(m.Category, "identity", "taste", "rule", "goal") {
+		if kernel.OneOf(m.Category, "identity", "taste", "rule", "goal") {
 			add("self:" + m.Category)
 		}
 	}
@@ -107,7 +109,7 @@ func chooseUseGroups(text string, index []workspace.StatusCardRef, ranked []work
 func (s *Store) useMemoriesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, thing *string, ids []string) ([]workspace.Memory, error) {
 	// Ungrouped retrieved claims use the same policy; the membership view is only
 	// used for group enumeration, not as an access condition.
-	allowed, err := queryDocuments[string](ctx, tx, `SELECT to_jsonb(c.claim_id::text) FROM claim_revisions c JOIN memory_records r ON(r.owner_id,r.id,r.version)=(c.owner_id,c.claim_id,c.version)
+	allowed, err := kernel.QueryDocuments[string](ctx, tx, `SELECT to_jsonb(c.claim_id::text) FROM claim_revisions c JOIN memory_records r ON(r.owner_id,r.id,r.version)=(c.owner_id,c.claim_id,c.version)
  WHERE c.owner_id=$1 AND c.claim_id=ANY($2::uuid[]) AND NOT EXISTS(SELECT 1 FROM context_exclusions ex WHERE ex.owner_id=c.owner_id AND ex.thing_id=$3::uuid AND ex.memory_id=c.claim_id)
  AND ($3::uuid IS NULL OR coalesce(c.scope->>'project_id','')='' OR c.scope->>'project_id'=coalesce((SELECT CASE WHEN w.kind='project' THEN w.id::text ELSE w.project_id::text END FROM work_items w WHERE w.owner_id=$1 AND w.id=$3),''))`, string(scope.OwnerID), ids, thing)
 	if err != nil {
@@ -138,7 +140,7 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		}
 		return nil
 	}
-	visible, err := queryDocuments[workspace.StatusCardRef](ctx, tx, `WITH members AS MATERIALIZED(SELECT * FROM status_current_members WHERE owner_id=$1)
+	visible, err := kernel.QueryDocuments[workspace.StatusCardRef](ctx, tx, `WITH members AS MATERIALIZED(SELECT * FROM status_current_members WHERE owner_id=$1)
  SELECT jsonb_build_object('key',m.key,'kind',m.kind,'name',m.name,'count',count(*)) FROM members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
  WHERE m.owner_id=$1 AND c.nature=ANY($2::text[]) AND ($3 OR c.acquisition!='inferred')
  AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=m.owner_id AND g.record_id=m.claim_id AND g.principal_id=$4)
@@ -169,7 +171,7 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 				}
 				u.ProjectHandover = &h
 				u.Ready = u.Ready || h.WrittenAt != nil
-				keys, e := queryDocuments[string](ctx, tx, `SELECT to_jsonb('entity:'||ev.entity_id::text) FROM entity_versions ev JOIN memory_records r ON(r.owner_id,r.id,r.version)=(ev.owner_id,ev.entity_id,ev.version) WHERE ev.owner_id=$1 AND ev.disambiguation->>'work_item_id'=$2 ORDER BY ev.entity_id`, string(scope.OwnerID), projectID)
+				keys, e := kernel.QueryDocuments[string](ctx, tx, `SELECT to_jsonb('entity:'||ev.entity_id::text) FROM entity_versions ev JOIN memory_records r ON(r.owner_id,r.id,r.version)=(ev.owner_id,ev.entity_id,ev.version) WHERE ev.owner_id=$1 AND ev.disambiguation->>'work_item_id'=$2 ORDER BY ev.entity_id`, string(scope.OwnerID), projectID)
 				if e != nil {
 					return e
 				}
@@ -211,7 +213,7 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		byID[m.ID] = m
 	}
 	// Repeated is evidence from distinct conversations/sources, not number of mentions.
-	repeated, err := queryDocuments[string](ctx, tx, `SELECT to_jsonb(e.target_id::text) FROM evidence e JOIN memory_records er ON(er.owner_id,er.id,er.version)=(e.owner_id,e.target_id,e.target_version) LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(e.owner_id,e.source_id,e.source_version) WHERE e.owner_id=$1 AND e.target_id=ANY($2::uuid[]) AND e.stance='supports' GROUP BY e.target_id HAVING count(DISTINCT coalesce(nullif(sc.conversation_key,''),e.source_id::text))>=2`, string(scope.OwnerID), ids)
+	repeated, err := kernel.QueryDocuments[string](ctx, tx, `SELECT to_jsonb(e.target_id::text) FROM evidence e JOIN memory_records er ON(er.owner_id,er.id,er.version)=(e.owner_id,e.target_id,e.target_version) LEFT JOIN source_contexts sc ON(sc.owner_id,sc.source_id,sc.source_version)=(e.owner_id,e.source_id,e.source_version) WHERE e.owner_id=$1 AND e.target_id=ANY($2::uuid[]) AND e.stance='supports' GROUP BY e.target_id HAVING count(DISTINCT coalesce(nullif(sc.conversation_key,''),e.source_id::text))>=2`, string(scope.OwnerID), ids)
 	if err != nil {
 		return err
 	}
@@ -220,8 +222,8 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		if (a.Confirmation == "confirmed") != (b.Confirmation == "confirmed") {
 			return a.Confirmation == "confirmed"
 		}
-		if oneOf(a.ID, repeated...) != oneOf(b.ID, repeated...) {
-			return oneOf(a.ID, repeated...)
+		if kernel.OneOf(a.ID, repeated...) != kernel.OneOf(b.ID, repeated...) {
+			return kernel.OneOf(a.ID, repeated...)
 		}
 		if a.ExpressedAt != b.ExpressedAt {
 			return a.ExpressedAt > b.ExpressedAt
@@ -290,7 +292,7 @@ func (s *Store) finishUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if u.ProjectGroup != "" {
 		u.Groups = append([]string{u.ProjectGroup}, u.Groups...)
 	}
-	u.Dependencies = uniqueRefs(u.Dependencies)
+	u.Dependencies = kernel.UniqueRefs(u.Dependencies)
 	return nil
 }
 
@@ -316,7 +318,7 @@ func (s *Store) prepareUseOwner(ctx context.Context, scope memory.Scope) (bool, 
 		if !ready {
 			return nil
 		}
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1 FOR SHARE", string(scope.OwnerID))
+		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1 FOR SHARE", string(scope.OwnerID))
 		if err != nil {
 			return err
 		}

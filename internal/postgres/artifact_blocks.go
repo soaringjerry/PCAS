@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -42,7 +43,7 @@ func setField(item *workspace.Item, field, text string) {
 	}
 }
 func saveBlocksTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, thing, field string, blocks []artifactBlock) error {
-	_, err := tx.Exec(ctx, "INSERT INTO artifact_fields(owner_id,thing_id,field,blocks) VALUES($1,$2,$3,$4) ON CONFLICT(owner_id,thing_id,field) DO UPDATE SET blocks=excluded.blocks", string(scope.OwnerID), thing, field, asJSON(blocks))
+	_, err := tx.Exec(ctx, "INSERT INTO artifact_fields(owner_id,thing_id,field,blocks) VALUES($1,$2,$3,$4) ON CONFLICT(owner_id,thing_id,field) DO UPDATE SET blocks=excluded.blocks", string(scope.OwnerID), thing, field, kernel.JSON(blocks))
 	return err
 }
 
@@ -51,7 +52,7 @@ func syncArtifactEditsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ite
 		Field  string          `json:"field"`
 		Blocks []artifactBlock `json:"blocks"`
 	}
-	fields, err := queryDocuments[fieldBlocks](ctx, tx, "SELECT jsonb_build_object('field',field,'blocks',blocks) FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
+	fields, err := kernel.QueryDocuments[fieldBlocks](ctx, tx, "SELECT jsonb_build_object('field',field,'blocks',blocks) FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
 	if err != nil {
 		return err
 	}
@@ -68,7 +69,7 @@ func adoptBlocksTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run, thin
 	if kind == "task" {
 		field = "title"
 	}
-	if !oneOf(field, "notes", "body", "progress", "title") {
+	if !kernel.OneOf(field, "notes", "body", "progress", "title") {
 		return nil
 	}
 	item, err := getItem(ctx, tx, scope, thing)
@@ -78,7 +79,7 @@ func adoptBlocksTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run, thin
 	var blocks []artifactBlock
 	err = tx.QueryRow(ctx, "SELECT blocks FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2 AND field=$3", string(scope.OwnerID), thing, field).Scan(&blocks)
 	if errors.Is(err, pgx.ErrNoRows) {
-		legacyRuns, err := queryDocuments[string](ctx, tx, "SELECT to_jsonb(run_id::text) FROM adopted_artifacts WHERE owner_id=$1 AND thing_id=$2 AND kind=$3", string(scope.OwnerID), thing, kind)
+		legacyRuns, err := kernel.QueryDocuments[string](ctx, tx, "SELECT to_jsonb(run_id::text) FROM adopted_artifacts WHERE owner_id=$1 AND thing_id=$2 AND kind=$3", string(scope.OwnerID), thing, kind)
 		if err != nil {
 			return err
 		}
@@ -99,7 +100,7 @@ func adoptBlocksTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run, thin
 // Owner-only recovery for ambiguous pre-block fields. These are deliberately
 // excluded from Recall, run briefs and normal export.
 func (s *Store) RetainedWriting(ctx context.Context, scope memory.Scope, thing string) ([]map[string]string, error) {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return nil, err
 	}
 	if !memory.ID(thing).Valid() {
@@ -108,7 +109,7 @@ func (s *Store) RetainedWriting(ctx context.Context, scope memory.Scope, thing s
 	var out []map[string]string
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		out, err = queryDocuments[map[string]string](ctx, tx, "SELECT jsonb_build_object('field',field,'text',body,'reason',reason) FROM retained_artifact_writing WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), thing)
+		out, err = kernel.QueryDocuments[map[string]string](ctx, tx, "SELECT jsonb_build_object('field',field,'text',body,'reason',reason) FROM retained_artifact_writing WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), thing)
 		return err
 	})
 	return out, err

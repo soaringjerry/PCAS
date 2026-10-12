@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 // Program validation does not attempt to understand the original date language.
@@ -20,7 +21,7 @@ func writeOrganizedDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	}
 	normalized := []cardDeadline{}
 	for _, d := range output {
-		if !oneOf(d.Kind, "deadline", "appointment", "recurring", "unclear") || strings.TrimSpace(d.Title) == "" {
+		if !kernel.OneOf(d.Kind, "deadline", "appointment", "recurring", "unclear") || strings.TrimSpace(d.Title) == "" {
 			return memory.ErrInvalid
 		}
 		if d.Kind == "recurring" {
@@ -92,5 +93,5 @@ func optionalScheduleRule(rule *scheduleRule) any {
 	if rule == nil {
 		return nil
 	}
-	return asJSON(rule)
+	return kernel.JSON(rule)
 }

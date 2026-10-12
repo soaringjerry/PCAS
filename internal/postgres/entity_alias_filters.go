@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 // Resolve old facet IDs as well as alias names: bookmarks using the original
@@ -30,6 +31,6 @@ func resolveMemoryEntityFiltersTx(ctx context.Context, tx pgx.Tx, owner memory.I
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
-	opts.groupAsEntity = oneOf(kind, "place", "organization")
+	opts.groupAsEntity = kernel.OneOf(kind, "place", "organization")
 	return err
 }

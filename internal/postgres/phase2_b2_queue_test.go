@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,6 +18,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/blob"
@@ -191,7 +193,7 @@ func TestPhase2B2_F4_BudgetDefersWithoutAttemptAndCalendarHandlesDST(t *testing.
 		t.Run(zone, func(t *testing.T) {
 			s, scope := testStore(t), owner()
 			b2Zone(t, s, scope, zone)
-			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"dailyBudget": .01})})
+			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": .01})})
 			var calls atomic.Int32
 			text := "我喜欢成都"
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -20,16 +21,16 @@ func safeUsePlan(raw json.RawMessage) any {
 	}
 	keys := []string{}
 	for _, key := range p.Groups {
-		if oneOf(key, "self:identity", "self:taste", "self:rule", "self:goal") || strings.HasPrefix(key, "entity:") && memory.ID(strings.TrimPrefix(key, "entity:")).Valid() {
-			if !oneOf(key, keys...) {
+		if kernel.OneOf(key, "self:identity", "self:taste", "self:rule", "self:goal") || strings.HasPrefix(key, "entity:") && memory.ID(strings.TrimPrefix(key, "entity:")).Valid() {
+			if !kernel.OneOf(key, keys...) {
 				keys = append(keys, key)
 			}
 		}
 	}
-	if !oneOf(p.Depth, "light", "medium", "heavy") {
+	if !kernel.OneOf(p.Depth, "light", "medium", "heavy") {
 		p.Depth = ""
 	}
-	return json.RawMessage(asJSON(usePlan{Groups: keys, Depth: p.Depth}))
+	return json.RawMessage(kernel.JSON(usePlan{Groups: keys, Depth: p.Depth}))
 }
 
 // The deputy run has the limits of a secretary turn with heavy reading.

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -31,7 +32,7 @@ func TestDeleteThingRemovesItAndWhatHangsOffIt(t *testing.T) {
 	first := urgentTask(t, st, "订搬家车").ID
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "打包"})
 	second := urgentTask(t, st, "打包").ID
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: second, Patch: asJSON(map[string][]string{"dependsOn": {first}})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: second, Patch: kernel.JSON(map[string][]string{"dependsOn": {first}})})
 	receipts := func() int {
 		var n int
 		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM sources s JOIN memory_records r ON (r.owner_id,r.id)=(s.owner_id,s.id) WHERE s.owner_id=$1 AND s.connector='actions' AND s.external_id=$2 AND r.state='active'`, string(scope.OwnerID), first).Scan(&n); err != nil {

@@ -3,16 +3,18 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/ai"
-	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/testsupport"
-	"github.com/soaringjerry/PCAS/internal/workspace"
-	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/testsupport"
+	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 )
 
 func TestUndoCommands(t *testing.T) {
@@ -181,11 +183,11 @@ func TestDueReminderTracksCommandDue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(map[string]string{"due": testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).UTC().Format(time.RFC3339)})})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: kernel.JSON(map[string]string{"due": testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).UTC().Format(time.RFC3339)})})
 	if len(st.Tasks[0].Triggers) != 1 || st.Tasks[0].Triggers[0].NextAt != testsupport.DateFromToday(t, "Asia/Shanghai", 4, 10, 0).Add(-30*time.Minute).UTC().Format(time.RFC3339) {
 		t.Fatal(st.Tasks[0].Triggers)
 	}
-	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: asJSON(map[string]string{"due": ""})})
+	st = workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: id, Patch: kernel.JSON(map[string]string{"due": ""})})
 	if len(st.Tasks[0].Triggers) != 0 {
 		t.Fatal(st.Tasks[0].Triggers)
 	}
@@ -250,7 +252,7 @@ func TestDeletionExpiresItemAndDocumentSnapshots(t *testing.T) {
 		if err := beginActionLogTx(logged, tx); err != nil {
 			return err
 		}
-		if err := saveDoc(logged, tx, scope, workspace.Doc{ID: docID, ThingID: itemID, RunID: run.ID, Title: "生成的文档", Body: "要删除的私密资料", By: "ai", CreatedAt: stamp(), UpdatedAt: stamp()}); err != nil {
+		if err := saveDoc(logged, tx, scope, workspace.Doc{ID: docID, ThingID: itemID, RunID: run.ID, Title: "生成的文档", Body: "要删除的私密资料", By: "ai", CreatedAt: kernel.Stamp(), UpdatedAt: kernel.Stamp()}); err != nil {
 			return err
 		}
 		return flushActionLog(logged, tx, scope)
@@ -260,7 +262,7 @@ func TestDeletionExpiresItemAndDocumentSnapshots(t *testing.T) {
 	}
 	st, _ = s.Snapshot(ctx, scope)
 	docEdit := string(memory.NewID())
-	if _, err = s.Execute(ctx, scope, workspace.Command{Type: "updateDoc", ID: docID, Patch: asJSON(map[string]string{"title": "文档新标题"}), RequestID: docEdit, ExpectedRevision: st.Revision}); err != nil {
+	if _, err = s.Execute(ctx, scope, workspace.Command{Type: "updateDoc", ID: docID, Patch: kernel.JSON(map[string]string{"title": "文档新标题"}), RequestID: docEdit, ExpectedRevision: st.Revision}); err != nil {
 		t.Fatal(err)
 	}
 	untouched := string(memory.NewID())

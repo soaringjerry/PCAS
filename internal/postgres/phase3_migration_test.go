@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestPhase3D1LegacyDocumentMigratesToVersionOne(t *testing.T) {
@@ -49,15 +50,15 @@ func TestPhase3D1LegacyDocumentMigratesToVersionOne(t *testing.T) {
 	scope := memory.Scope{OwnerID: memory.NewID(), PrincipalID: "fictitious-phase3-upgrade", IsOwner: true}
 	pID, dID := string(memory.NewID()), string(memory.NewID())
 	settings := map[string]any{"dailyBudget": 100, "autoAccept": false, "wakeIdeas": false, "followUps": false, "dailyReviewAt": "09:00", "timezone": "UTC"}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO workspace_owners(owner_id,settings) VALUES($1,$2)`, scope.OwnerID, asJSON(settings)); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO workspace_owners(owner_id,settings) VALUES($1,$2)`, scope.OwnerID, kernel.JSON(settings)); err != nil {
 		t.Fatal(err)
 	}
 	item := map[string]any{"id": pID, "itemKind": "project", "recordVersion": 1, "name": "虚构迁移项目", "title": "虚构迁移项目", "status": "active", "createdAt": "2026-09-22T12:00:00Z", "updatedAt": "2026-10-06T12:00:00Z"}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO work_items(owner_id,id,kind,title,status,document,version,created_at,updated_at) VALUES($1,$2,'project','虚构迁移项目','active',$3,1,'2026-09-22T12:00:00Z','2026-10-06T12:00:00Z')`, scope.OwnerID, pID, asJSON(item)); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO work_items(owner_id,id,kind,title,status,document,version,created_at,updated_at) VALUES($1,$2,'project','虚构迁移项目','active',$3,1,'2026-09-22T12:00:00Z','2026-10-06T12:00:00Z')`, scope.OwnerID, pID, kernel.JSON(item)); err != nil {
 		t.Fatal(err)
 	}
 	doc := map[string]any{"id": dID, "thingId": pID, "title": "虚构遗留方案", "body": "虚构遗留原文，不得在迁移时丢掉。", "by": "user", "createdAt": "2026-09-22T12:00:00Z", "updatedAt": "2026-10-06T12:00:00Z"}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO work_documents(owner_id,id,thing_id,document) VALUES($1,$2,$3,$4)`, scope.OwnerID, dID, pID, asJSON(doc)); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO work_documents(owner_id,id,thing_id,document) VALUES($1,$2,$3,$4)`, scope.OwnerID, dID, pID, kernel.JSON(doc)); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Migrate(ctx); err != nil {

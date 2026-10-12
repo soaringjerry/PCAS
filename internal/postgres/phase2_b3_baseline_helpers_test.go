@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -14,7 +15,7 @@ import (
 func b3FixedID(n int) memory.ID { return memory.ID(fmt.Sprintf("b3000000-0000-4000-8000-%012d", n)) }
 func b3BaselineData(t *testing.T, s *Store, scope memory.Scope) {
 	t.Helper()
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	tx, err := s.pool.Begin(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +59,7 @@ func b3BaselineData(t *testing.T, s *Store, scope memory.Scope) {
 			confirmation = "candidate"
 		}
 		text := fmt.Sprintf("neutralneedle 基准记忆%d：成都书店安排", i)
-		exec(`INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,nature,acquisition,confirmation,change_type) VALUES($1,$2,1,$3,'基准安排',$4::jsonb,$5,'direct',$6,'initial')`, scope.OwnerID, b3FixedID(n), b3FixedID(1), string(asJSON(text)), nature, confirmation)
+		exec(`INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,nature,acquisition,confirmation,change_type) VALUES($1,$2,1,$3,'基准安排',$4::jsonb,$5,'direct',$6,'initial')`, scope.OwnerID, b3FixedID(n), b3FixedID(1), string(kernel.JSON(text)), nature, confirmation)
 		exec(`INSERT INTO evidence(owner_id,id,source_id,source_version,target_id,target_version,locator,acquisition,stance) VALUES($1,$2,$3,1,$4,1,'{}','direct','supports')`, scope.OwnerID, b3FixedID(30+i), b3FixedID(10), b3FixedID(n))
 		exec(`INSERT INTO activity(owner_id,record_id,last_effective_use_at,stability,half_life_seconds) VALUES($1,$2,'2025-08-01T00:00:00Z',1,2592000)`, scope.OwnerID, b3FixedID(n))
 	}

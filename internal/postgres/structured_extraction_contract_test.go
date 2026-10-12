@@ -5,14 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -73,7 +75,7 @@ func phase35RequireCreation(t *testing.T, s *Store, scope memory.Scope, it works
 			Source *workspace.SourceRef
 		}
 	}
-	if err := json.Unmarshal(asJSON(it), &wire); err != nil {
+	if err := json.Unmarshal(kernel.JSON(it), &wire); err != nil {
 		t.Fatal(err)
 	}
 	if wire.Creation == nil || wire.Creation.By != "background_extraction" || wire.Creation.Source == nil || wire.Creation.Source.SourceID != string(ref.ID) || wire.Creation.Source.Excerpt == "" {
@@ -83,7 +85,7 @@ func phase35RequireCreation(t *testing.T, s *Store, scope memory.Scope, it works
 	// Published seam (#284): the away receipt is the item's own creation marker
 	// carrying the undoable action; the same action is not repeated as an
 	// activity row (S-P35-010: exactly one receipt).
-	phase35RequireSingleReceipt(t, phase35Snapshot(t, s, scope), asJSON(it), action)
+	phase35RequireSingleReceipt(t, phase35Snapshot(t, s, scope), kernel.JSON(it), action)
 	return action
 }
 func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
@@ -127,7 +129,7 @@ func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
 			calls := phase35Model(t, s, func(w http.ResponseWriter, r *http.Request) {
 				if tc.branch == "archive" {
 					var item map[string]any
-					_ = json.Unmarshal(asJSON(it), &item)
+					_ = json.Unmarshal(kernel.JSON(it), &item)
 					item["message_index"] = 1
 					secretaryModelReply(w, map[string]any{"items": []any{item}})
 				} else {
@@ -191,7 +193,7 @@ func TestStructuredExtractionUsesTrustMatrix(t *testing.T) {
 					rows = append(rows, row)
 				}
 				r.Close()
-				if len(rows) != 1 || !oneOf(tc.reason, rows[0].Reasons...) || rows[0].Reason == "" {
+				if len(rows) != 1 || !kernel.OneOf(tc.reason, rows[0].Reasons...) || rows[0].Reason == "" {
 					t.Fatalf("candidate must retain reason %s: %+v", tc.reason, rows)
 				}
 			}
@@ -222,8 +224,8 @@ func TestStructuredExtractionOverflowPreservedAndObservable(t *testing.T) {
 	}
 	for _, c := range pending {
 		var wire struct{ Reasons []string }
-		_ = json.Unmarshal(asJSON(c), &wire)
-		if !oneOf("overflow", wire.Reasons...) {
+		_ = json.Unmarshal(kernel.JSON(c), &wire)
+		if !kernel.OneOf("overflow", wire.Reasons...) {
 			t.Fatal("overflow missing reason", c)
 		}
 	}

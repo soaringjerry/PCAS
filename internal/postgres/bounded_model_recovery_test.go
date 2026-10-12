@@ -3,13 +3,15 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"net/http"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -257,7 +259,7 @@ func TestLateInterruptedCallCannotDeleteReplacementPaidResult(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := jobCalls(s).Generate(ctx, j, "organize", prompts.Must("organize"), "", asJSON(map[string]any{"fictitious": true}), nil)
+		_, err := jobCalls(s).Generate(ctx, j, "organize", prompts.Must("organize"), "", kernel.JSON(map[string]any{"fictitious": true}), nil)
 		done <- err
 	}()
 	select {

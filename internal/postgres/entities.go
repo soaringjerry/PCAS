@@ -3,8 +3,10 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strings"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -18,7 +20,7 @@ type claimMention = extraction.Mention
 // protects self and typed names even when callers do not hold the owner row lock.
 func entityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string) (memory.ID, error) {
 	name = strings.TrimSpace(name)
-	if name == "" || !oneOf(kind, "self", "person", "place", "organization", "thing", "project", "topic", "area") {
+	if name == "" || !kernel.OneOf(kind, "self", "person", "place", "organization", "thing", "project", "topic", "area") {
 		return "", memory.ErrInvalid
 	}
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", string(owner)+":entities"); err != nil {

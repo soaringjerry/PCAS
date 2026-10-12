@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 
 	"github.com/jackc/pgx/v5"
@@ -24,7 +25,7 @@ func (s *Store) RecallWith(ctx context.Context, scope memory.Scope, in memory.Re
 	if !scope.Valid() {
 		return out, memory.ErrForbidden
 	}
-	if len(in.Query) > 4000 || !oneOf(string(in.Mode), "continue", "remember", "history") {
+	if len(in.Query) > 4000 || !kernel.OneOf(string(in.Mode), "continue", "remember", "history") {
 		return out, memory.ErrInvalid
 	}
 	b, err := retrieval.NormalizeBudget(in.Budget)
@@ -38,7 +39,7 @@ func (s *Store) RecallWith(ctx context.Context, scope memory.Scope, in memory.Re
 	}
 	key := in
 	key.Cursor = ""
-	fingerprint := fmt.Sprintf("%x", sha256.Sum256(asJSON(key)))
+	fingerprint := fmt.Sprintf("%x", sha256.Sum256(kernel.JSON(key)))
 	offset := 0
 	if in.Cursor != "" {
 		raw, err := base64.RawURLEncoding.DecodeString(in.Cursor)
@@ -78,7 +79,7 @@ func (s *Store) RecallWith(ctx context.Context, scope memory.Scope, in memory.Re
 			return out, e
 		}
 		if gap == "" {
-			vector, model = asJSON(values), embeddingModel
+			vector, model = kernel.JSON(values), embeddingModel
 		} else {
 			out.Coverage.Gaps = append(out.Coverage.Gaps, gap)
 		}
@@ -203,7 +204,7 @@ func (s *Store) recallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in 
 	// its original ordering and pagination across all record kinds.
 	const hitColumns = "id,version,kind,body,score,role,branch,gaps,excerpt,title,connector,external_id,expressed_at,recorded_at,readable,total_count"
 	hitOrder := "CASE WHEN $6='history' THEN recorded_at END,explicit DESC,score DESC,id::uuid,version"
-	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, nullString(string(vector)), model, embeddingDimensions(vector), b.Candidates + 1, offset, tokens, scope.Team}
+	args := []any{string(scope.OwnerID), scope.IsOwner, scope.PrincipalID, query, fts, string(in.Mode), "", in.Context.Objects, in.Context.ValidAt, in.Context.KnownAt, kernel.NullString(string(vector)), model, embeddingDimensions(vector), b.Candidates + 1, offset, tokens, scope.Team}
 	// A diagnostic clock fixes decay only. Production retains the transaction's
 	// now(), and applicable versions, permissions, and usage keep actual time.
 	var activityAt *time.Time
@@ -558,10 +559,10 @@ func teamSourceExcerptsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, pr
 	characters := 0
 	omitted := 0
 	for _, excerpt := range excerpts {
-		if excerpt.Kind != memory.SourceKind || seen[excerpt.ID] || !current[excerpt.Ref] || !excerpt.Readable || strings.TrimSpace(excerpt.Text) == "" || oneOf(excerpt.Connector, "actions", "corrections", "memory-input") {
+		if excerpt.Kind != memory.SourceKind || seen[excerpt.ID] || !current[excerpt.Ref] || !excerpt.Readable || strings.TrimSpace(excerpt.Text) == "" || kernel.OneOf(excerpt.Connector, "actions", "corrections", "memory-input") {
 			continue
 		}
-		if oneOf(excerpt.Connector, "desk", "capture", "desk-incomplete") && history[strings.ToLower(excerpt.ExternalID)] {
+		if kernel.OneOf(excerpt.Connector, "desk", "capture", "desk-incomplete") && history[strings.ToLower(excerpt.ExternalID)] {
 			continue
 		}
 		if excerpt.Connector == "desk" {

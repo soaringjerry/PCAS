@@ -11,6 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -69,7 +70,7 @@ func (a backgroundCalls) Prepare(ctx context.Context, request modelcall.Request,
 		// Validate the existing lease before adding call metadata. No transaction
 		// stays open across the provider call.
 		job := request.Policy.(worker.Job)
-		if err := lockJob(ctx, tx, job); err != nil {
+		if err := kernel.LockJob(ctx, tx, job); err != nil {
 			return err
 		}
 		var unfinished memory.ID
@@ -137,7 +138,7 @@ func (a backgroundCalls) Prepare(ctx context.Context, request modelcall.Request,
 			builderVersion = "legacy-background-v1"
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO model_calls(owner_id,id,execution_id,root_execution_id,causation_id,function_name,stage,provider_id,model,prompt_name,instruction_hash,context_builder_version,input_manifest,required_capabilities,actual_mode,outcome,accounting_state,retry_of_id,attempt_number,attempt_limit,schema_name,schema_hash)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$19,$12,$20,$13,'prepared','not_reserved',$14,$15,$16,$17,$18)`, string(request.OwnerID), string(id), string(request.ExecutionID), string(request.RootExecutionID), nullString(string(request.CausationID)), request.Function, request.Stage, provider.ID, provider.Model, request.Instructions.Name(), request.Instructions.Hash(), asJSON(manifest), asJSON(mode), nullString(string(unfinished)), attempt, limit, nullString(request.Schema.Name()), nullString(request.Schema.Hash()), builderVersion, asJSON(request.RequiredCapabilities()))
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$19,$12,$20,$13,'prepared','not_reserved',$14,$15,$16,$17,$18)`, string(request.OwnerID), string(id), string(request.ExecutionID), string(request.RootExecutionID), kernel.NullString(string(request.CausationID)), request.Function, request.Stage, provider.ID, provider.Model, request.Instructions.Name(), request.Instructions.Hash(), kernel.JSON(manifest), kernel.JSON(mode), kernel.NullString(string(unfinished)), attempt, limit, kernel.NullString(request.Schema.Name()), kernel.NullString(request.Schema.Hash()), builderVersion, kernel.JSON(request.RequiredCapabilities()))
 		return err
 	})
 	if err == nil && id == "" {
@@ -148,7 +149,7 @@ func (a backgroundCalls) Prepare(ctx context.Context, request modelcall.Request,
 
 func (a backgroundCalls) Start(ctx context.Context, request modelcall.Request, saved *modelcall.PaidResult) error {
 	return pgx.BeginFunc(ctx, a.store.pool, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, request.Policy.(worker.Job)); err != nil {
+		if err := kernel.LockJob(ctx, tx, request.Policy.(worker.Job)); err != nil {
 			return err
 		}
 		mode := map[string]any{}
@@ -158,7 +159,7 @@ func (a backgroundCalls) Start(ctx context.Context, request modelcall.Request, s
 				mode["output"], mode["schema"] = "structured", request.Schema.Name()
 			}
 		}
-		tag, err := tx.Exec(ctx, `UPDATE model_calls SET reservation_id=$3,outcome='started',started_at=clock_timestamp(),updated_at=clock_timestamp(),accounting_state='reserved',actual_mode=actual_mode||jsonb_build_object('reservationEstimate',$4::double precision)||$5::jsonb WHERE owner_id=$1 AND id=$2 AND outcome='prepared' AND recovery_state='active'`, string(request.OwnerID), string(saved.InvocationID), saved.Reservation, saved.ReservedCost, asJSON(mode))
+		tag, err := tx.Exec(ctx, `UPDATE model_calls SET reservation_id=$3,outcome='started',started_at=clock_timestamp(),updated_at=clock_timestamp(),accounting_state='reserved',actual_mode=actual_mode||jsonb_build_object('reservationEstimate',$4::double precision)||$5::jsonb WHERE owner_id=$1 AND id=$2 AND outcome='prepared' AND recovery_state='active'`, string(request.OwnerID), string(saved.InvocationID), saved.Reservation, saved.ReservedCost, kernel.JSON(mode))
 		if err == nil && tag.RowsAffected() != 1 {
 			return modelcall.ErrOutcomeUnknown
 		}
@@ -195,7 +196,7 @@ func (a backgroundCalls) PreparationFailed(ctx context.Context, request modelcal
 		}
 	}
 	var recovery string
-	err := a.store.pool.QueryRow(persist, `UPDATE model_calls SET outcome='failed',error_code=$3,finished_at=clock_timestamp(),updated_at=clock_timestamp(),actual_mode=actual_mode||$5::jsonb,recovery_state=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN 'budget_exhausted' ELSE recovery_state END,recovery_reason=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN $3 ELSE recovery_reason END WHERE owner_id=$1 AND id=$2 AND outcome='prepared' RETURNING recovery_state`, string(request.OwnerID), string(id), code, budgetExhausted, asJSON(mode)).Scan(&recovery)
+	err := a.store.pool.QueryRow(persist, `UPDATE model_calls SET outcome='failed',error_code=$3,finished_at=clock_timestamp(),updated_at=clock_timestamp(),actual_mode=actual_mode||$5::jsonb,recovery_state=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN 'budget_exhausted' ELSE recovery_state END,recovery_reason=CASE WHEN retry_of_id IS NOT NULL AND $4 THEN $3 ELSE recovery_reason END WHERE owner_id=$1 AND id=$2 AND outcome='prepared' RETURNING recovery_state`, string(request.OwnerID), string(id), code, budgetExhausted, kernel.JSON(mode)).Scan(&recovery)
 	if err == nil && recovery == "budget_exhausted" {
 		return modelcall.ErrRecoveryBudgetExhausted
 	}
@@ -221,7 +222,7 @@ func (a backgroundCalls) Save(ctx context.Context, request modelcall.Request, sa
 			var err error
 			if current {
 				_, err = tx.Exec(persist, `INSERT INTO background_model_results(owner_id,job_id,purpose,prompt,output,reservation_id,provider_id,model,input_tokens,output_tokens,cost,refs,input_estimated,output_estimated,cost_estimated,duration_ms)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT(job_id) DO NOTHING`, string(request.OwnerID), string(request.ExecutionID), request.Function, saved.Prompt, saved.Output, saved.Reservation, saved.Provider, saved.Model, saved.InputTokens, saved.OutputTokens, saved.Cost, asJSON(saved.Refs), saved.InputEstimated, saved.OutputEstimated, saved.CostEstimated, saved.DurationMS)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT(job_id) DO NOTHING`, string(request.OwnerID), string(request.ExecutionID), request.Function, saved.Prompt, saved.Output, saved.Reservation, saved.Provider, saved.Model, saved.InputTokens, saved.OutputTokens, saved.Cost, kernel.JSON(saved.Refs), saved.InputEstimated, saved.OutputEstimated, saved.CostEstimated, saved.DurationMS)
 			}
 			if err != nil || saved.InvocationID == "" {
 				return err
@@ -244,7 +245,7 @@ func (a backgroundCalls) Save(ctx context.Context, request modelcall.Request, sa
 			if !current {
 				receipt = map[string]any{"kind": "late_response", "availableForApplication": false}
 			}
-			_, err = tx.Exec(persist, `UPDATE model_calls SET outcome=$3,error_code=$4,finished_at=clock_timestamp(),updated_at=clock_timestamp(),usage_id=$5,result_receipt=$6,actual_mode=actual_mode||jsonb_build_object('usageComplete',$7::boolean),accounting_state=CASE WHEN accounting_state='settled' THEN 'settled' ELSE 'pending' END WHERE owner_id=$1 AND id=$2`, string(request.OwnerID), string(saved.InvocationID), outcome, saved.CallErrorCode, usage, asJSON(receipt), outcome != "unknown")
+			_, err = tx.Exec(persist, `UPDATE model_calls SET outcome=$3,error_code=$4,finished_at=clock_timestamp(),updated_at=clock_timestamp(),usage_id=$5,result_receipt=$6,actual_mode=actual_mode||jsonb_build_object('usageComplete',$7::boolean),accounting_state=CASE WHEN accounting_state='settled' THEN 'settled' ELSE 'pending' END WHERE owner_id=$1 AND id=$2`, string(request.OwnerID), string(saved.InvocationID), outcome, saved.CallErrorCode, usage, kernel.JSON(receipt), outcome != "unknown")
 			return err
 		})
 		cancel()
@@ -280,7 +281,7 @@ func (a backgroundCalls) UnknownRecovery(ctx context.Context, job worker.Job) er
 	defer cancel()
 	decision := &worker.JobError{Code: modelcall.ErrOutcomeUnknown.Error(), Retry: true}
 	err := pgx.BeginFunc(persist, a.store.pool, func(tx pgx.Tx) error {
-		if err := lockJob(persist, tx, job); err != nil {
+		if err := kernel.LockJob(persist, tx, job); err != nil {
 			return err
 		}
 		var attempt, limit int

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -53,7 +54,7 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 		var jobID any
 		if j != nil {
 			jobID = string(j.ID)
-			if err := lockJob(ctx, tx, *j); err != nil {
+			if err := kernel.LockJob(ctx, tx, *j); err != nil {
 				return err
 			}
 			var exists bool
@@ -72,7 +73,7 @@ func (s *Store) reserveModelCostID(ctx context.Context, owner memory.ID, cost fl
 				}
 			}
 		}
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(owner))
+		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(owner))
 		if err != nil {
 			return err
 		}

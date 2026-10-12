@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -34,7 +35,7 @@ func init() {
 }
 
 func (s *Store) PreviewArchive(ctx context.Context, scope memory.Scope, name string, r io.Reader) (connectors.ArchivePreview, error) {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return connectors.ArchivePreview{}, err
 	}
 	archive, err := connectors.OpenArchive(ctx, name, r)
@@ -51,7 +52,7 @@ func (s *Store) ImportArchiveReader(ctx context.Context, scope memory.Scope, nam
 	return s.ImportArchiveReaderWithOrganizing(ctx, scope, name, r, "later")
 }
 func (s *Store) ImportArchiveReaderWithOrganizing(ctx context.Context, scope memory.Scope, name string, r io.Reader, organize string) (connectors.Result, error) {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return connectors.Result{}, err
 	}
 	if organize != "" && organize != "later" && organize != "now" {
@@ -61,7 +62,7 @@ func (s *Store) ImportArchiveReaderWithOrganizing(ctx context.Context, scope mem
 }
 func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, name string, r io.Reader, namespace string, holdOrganizing bool) (connectors.Result, error) {
 	out := connectors.Result{Refs: []memory.Ref{}, Gaps: []string{}}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if strings.TrimSpace(name) == "" || len(name) > 2000 {
@@ -162,7 +163,7 @@ func (s *Store) importArchiveReader(ctx context.Context, scope memory.Scope, nam
 		}
 		gaps := archive.Preview.Gaps
 		_, err = tx.Exec(ctx, `INSERT INTO source_contexts(owner_id,source_id,source_version,gaps) VALUES($1,$2,$3,$4)
-   ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET gaps=excluded.gaps`, string(scope.OwnerID), string(result.ID), result.Version, asJSON(gaps))
+   ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET gaps=excluded.gaps`, string(scope.OwnerID), string(result.ID), result.Version, kernel.JSON(gaps))
 		return err
 	})
 	if err != nil {
@@ -255,7 +256,7 @@ func importErrorMessage(code string) string {
 }
 func (s *Store) ListImports(ctx context.Context, scope memory.Scope) ([]ImportBatch, error) {
 	out := []ImportBatch{}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	rows, err := s.pool.Query(ctx, importBatchSelect+" WHERE b.owner_id=$1 ORDER BY b.created_at DESC,b.id DESC", string(scope.OwnerID))
@@ -279,7 +280,7 @@ var ErrImportNotActive = &connectors.ArchiveError{Code: "import_not_active"}
 // repeated requests keep already queued or completed extraction work intact.
 func (s *Store) OrganizeImport(ctx context.Context, scope memory.Scope, id memory.ID) (ImportBatch, error) {
 	var out ImportBatch
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !id.Valid() {
@@ -310,7 +311,7 @@ func (s *Store) ResumeImport(ctx context.Context, scope memory.Scope, id memory.
 }
 func (s *Store) changeImportState(ctx context.Context, scope memory.Scope, id memory.ID, pause bool) (ImportBatch, error) {
 	var out ImportBatch
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	if !id.Valid() {
@@ -403,19 +404,19 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
      VALUES($1,$2,$3,$4,'importing',$5,0,$6,$7,$8)`, string(j.OwnerID), id, string(j.Record.ID), title, total, archive.Preview.LeftOut, archive.Preview.Earliest, archive.Preview.Latest)
 				if err == nil {
 					_, err = tx.Exec(ctx, `INSERT INTO source_contexts(owner_id,source_id,source_version,gaps) VALUES($1,$2,$3,$4)
-                  ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET gaps=excluded.gaps`, string(j.OwnerID), string(j.Record.ID), j.Record.Version, asJSON(archive.Preview.Gaps))
+                  ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET gaps=excluded.gaps`, string(j.OwnerID), string(j.Record.ID), j.Record.Version, kernel.JSON(archive.Preview.Gaps))
 				}
 			}
 			if err != nil {
 				return err
 			}
-			if err = lockJob(ctx, tx, j); err != nil {
+			if err = kernel.LockJob(ctx, tx, j); err != nil {
 				return err
 			}
 			if state != "importing" {
 				stopped = true
 				if state == "done" {
-					return acknowledge(ctx, tx, j)
+					return kernel.Acknowledge(ctx, tx, j)
 				}
 				_, err = tx.Exec(ctx, `UPDATE memory_jobs SET state='blocked',error_code='import_paused',lease_token=NULL,lease_until=NULL,updated_at=now() WHERE id=$1 AND lease_token=$2`, string(j.ID), string(j.LeaseToken))
 				return err
@@ -448,7 +449,7 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 				total -= result.Blocked
 			}
 			if namespace != "archive-records" {
-				if _, err = tx.Exec(ctx, "UPDATE connector_configs SET imported=imported+$3,gaps=$4 WHERE owner_id=$1 AND id=$2", string(j.OwnerID), connectionID, result.Imported, asJSON(result.Gaps)); err != nil {
+				if _, err = tx.Exec(ctx, "UPDATE connector_configs SET imported=imported+$3,gaps=$4 WHERE owner_id=$1 AND id=$2", string(j.OwnerID), connectionID, result.Imported, kernel.JSON(result.Gaps)); err != nil {
 					return err
 				}
 			}
@@ -468,7 +469,7 @@ func (s *Store) processArchiveImport(ctx context.Context, j worker.Job, title st
 						return err
 					}
 				}
-				return acknowledge(ctx, tx, j)
+				return kernel.Acknowledge(ctx, tx, j)
 			}
 			// Finish before the worker's four-minute deadline, returning the durable
 			// parse job to the queue without using up the crash/retry attempt budget.
@@ -583,7 +584,7 @@ func classifyArchiveTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, names
    JOIN memory_records r ON r.owner_id=s.owner_id AND r.id=s.id AND r.state='active'
    JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(v.owner_id,v.source_id,v.version) AND rv.state='active'
    WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=k.id AND v.external_version=k.version) AS imported
-  FROM jsonb_to_recordset($3::jsonb) AS k(idx integer,id text,version text,hash text) ORDER BY k.idx`, string(scope.OwnerID), namespace, asJSON(keys))
+  FROM jsonb_to_recordset($3::jsonb) AS k(idx integer,id text,version text,hash text) ORDER BY k.idx`, string(scope.OwnerID), namespace, kernel.JSON(keys))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -680,7 +681,7 @@ func linkImportedArchiveTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, n
   INSERT INTO archive_entries(owner_id,archive_id,archive_version,source_id,source_version)
   SELECT $1,$3,$4,id,version FROM existing WHERE matches ON CONFLICT DO NOTHING RETURNING 1
  ) SELECT count(*)::integer,coalesce(bool_or(NOT matches),false),(SELECT count(*)::integer FROM inserted)
- FROM existing`, string(scope.OwnerID), namespace, string(ref.ID), ref.Version, asJSON(keys)).Scan(&matched, &conflict, &inserted)
+ FROM existing`, string(scope.OwnerID), namespace, string(ref.ID), ref.Version, kernel.JSON(keys)).Scan(&matched, &conflict, &inserted)
 			if err != nil {
 				return 0, err
 			}
@@ -713,7 +714,7 @@ func (s *Store) pendingArchive(ctx context.Context, scope memory.Scope, namespac
    JOIN archive_entries e ON (e.owner_id,e.source_id,e.source_version)=(v.owner_id,v.source_id,v.version)
    WHERE s.owner_id=$1 AND s.connector=$2 AND s.external_id=k.id AND v.external_version=k.version
     AND e.archive_id=$3 AND e.archive_version=$4)
-  FROM jsonb_to_recordset($5::jsonb) AS k(idx integer,id text,version text) ORDER BY k.idx`, string(scope.OwnerID), namespace, string(ref.ID), ref.Version, asJSON(keys))
+  FROM jsonb_to_recordset($5::jsonb) AS k(idx integer,id text,version text) ORDER BY k.idx`, string(scope.OwnerID), namespace, string(ref.ID), ref.Version, kernel.JSON(keys))
 			if err != nil {
 				return nil, err
 			}

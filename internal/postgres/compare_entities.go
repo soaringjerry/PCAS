@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -170,7 +171,7 @@ func (s *Store) EntityCompareStore() comparison.EntityStore { return entityCompa
 type entityCompareStore struct{ store *Store }
 
 func (a entityCompareStore) RetryLater(j worker.Job, code string) error {
-	return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts))}
+	return &worker.JobError{Code: code, Until: time.Now().Add(kernel.RetryDelay(j.Attempts))}
 }
 
 func (a entityCompareStore) Session(ctx context.Context) (comparison.EntitySession, func(), error) {
@@ -209,15 +210,15 @@ func (a entityCompareSession) NextPair(ctx context.Context, j worker.Job, versio
 			return nil, nil, false, err
 		}
 	}
-	return asJSON(pair), refs, true, nil
+	return kernel.JSON(pair), refs, true, nil
 }
 
 func (a entityCompareSession) Finish(ctx context.Context, j worker.Job) error {
 	return backgroundWriteTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		return acknowledge(ctx, tx, j)
+		return kernel.Acknowledge(ctx, tx, j)
 	})
 }
 
@@ -268,7 +269,7 @@ func (a entityCompareSession) Apply(ctx context.Context, j worker.Job, version i
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(j.OwnerID), EntityCompareStage); err != nil {
 			return err
 		}
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		return fn(entityCompareUnit{ctx: ctx, tx: tx, job: j, version: version, pair: pair, refs: refs})
@@ -341,7 +342,7 @@ func (u entityCompareUnit) Receipt(same *bool, output string) error {
 }
 
 func (u entityCompareUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
-func (u entityCompareUnit) Acknowledge() error   { return acknowledge(u.ctx, u.tx, u.job) }
+func (u entityCompareUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }
 
 func writeAliasReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, rule int, pair *comparisonEntityPair, same *bool, output string) error {
 	a, b := pair.Entities[0].Ref.ID, pair.Entities[1].Ref.ID
@@ -467,7 +468,7 @@ func mergeEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, merged, kept
 	if err != nil {
 		return err
 	}
-	aliases, err := queryDocuments[string](ctx, tx, `SELECT to_jsonb(alias) FROM (SELECT alias FROM aliases WHERE owner_id=$1 AND entity_id=$2 AND entity_version=$3 UNION SELECT name FROM entity_versions WHERE owner_id=$1 AND entity_id=$2 AND version=$3) names ORDER BY alias`, string(owner), string(merged.ID), merged.Version)
+	aliases, err := kernel.QueryDocuments[string](ctx, tx, `SELECT to_jsonb(alias) FROM (SELECT alias FROM aliases WHERE owner_id=$1 AND entity_id=$2 AND entity_version=$3 UNION SELECT name FROM entity_versions WHERE owner_id=$1 AND entity_id=$2 AND version=$3) names ORDER BY alias`, string(owner), string(merged.ID), merged.Version)
 	if err != nil {
 		return err
 	}
@@ -521,7 +522,7 @@ func mergeEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, merged, kept
 	if err != nil {
 		return err
 	}
-	changes := asJSON([]map[string]any{{"table": "entity_merge", "id": string(merged.ID), "before": snapshot, "afterHash": fingerprint, "rule": version}})
+	changes := kernel.JSON([]map[string]any{{"table": "entity_merge", "id": string(merged.ID), "before": snapshot, "afterHash": fingerprint, "rule": version}})
 	if _, err := tx.Exec(ctx, `INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'worker','合并同一实体的叫法',$3)`, string(owner), string(memory.NewID()), changes); err != nil {
 		return err
 	}

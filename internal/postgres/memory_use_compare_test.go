@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -155,7 +156,7 @@ func TestB4ConsumesFiveBatch2TrustValues(t *testing.T) {
 	}
 	b4Card(t, s, scope, "self:goal", "self", "虚构可信度", ms...)
 	for _, include := range []bool{false, true} {
-		workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: asJSON(map[string]any{"includeInferred": include})})
+		workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: kernel.JSON(map[string]any{"includeInferred": include})})
 		secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 			_, prompt := b4RequestBody(t, r)
 			for i, m := range ms {

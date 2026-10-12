@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
@@ -37,7 +38,7 @@ func (s *Store) adoptReviseDocumentTx(ctx context.Context, tx pgx.Tx, scope memo
 	if strings.TrimSpace(text) == "" || strings.TrimSpace(text) == strings.TrimSpace(base.Body) {
 		return memory.ErrInvalid
 	}
-	doc, err := queryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.DocumentID)
+	doc, err := kernel.QueryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.DocumentID)
 	if err != nil {
 		return err
 	}
@@ -48,7 +49,7 @@ func (s *Store) adoptReviseDocumentTx(ctx context.Context, tx pgx.Tx, scope memo
 	doc.By = "deputy"
 	doc.RunID = run.ID
 	doc.BasedOn = &run.BaseVersion
-	doc.UpdatedAt = stamp()
+	doc.UpdatedAt = kernel.Stamp()
 	return saveDoc(ctx, tx, scope, doc)
 }
 
@@ -111,7 +112,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 		}
 		run.Status = "done"
 		run.Output = result.Body
-		run.FinishedAt = stamp()
+		run.FinishedAt = kernel.Stamp()
 		run.Cost = paid.Cost
 		if reason != "" {
 			run.Status = "failed"
@@ -140,7 +141,7 @@ func (s *Store) finishPaidRevise(ctx context.Context, scope memory.Scope, curren
 				return err
 			}
 		}
-		if _, err := tx.Exec(ctx, `UPDATE agent_runs SET status=$4,document=$5,reserved_cost=$6,lease_token=NULL,lease_until=NULL WHERE owner_id=$1 AND id=$2 AND lease_token=$3`, string(scope.OwnerID), run.ID, token, run.Status, asJSON(run), run.Cost); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE agent_runs SET status=$4,document=$5,reserved_cost=$6,lease_token=NULL,lease_until=NULL WHERE owner_id=$1 AND id=$2 AND lease_token=$3`, string(scope.OwnerID), run.ID, token, run.Status, kernel.JSON(run), run.Cost); err != nil {
 			return err
 		}
 		if run.Status == "done" && !run.StaleContext {
@@ -187,7 +188,7 @@ func manualReviseReasonTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ru
 	if err != nil {
 		return "基准文档已删除或版本不存在", nil
 	}
-	doc, err := queryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.DocumentID)
+	doc, err := kernel.QueryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.DocumentID)
 	if err != nil {
 		return "", err
 	}

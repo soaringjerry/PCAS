@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func secretaryLogs(t *testing.T) *bytes.Buffer {
@@ -103,7 +105,7 @@ func TestSecretaryModelOutputRecovery(t *testing.T) {
 			}
 			before := logs.String()
 			replay := mustTurn(t, s, scope, req)
-			if !bytes.Equal(asJSON(out.Turn), asJSON(replay.Turn)) || logs.String() != before || len(replay.State.Tasks) != tt.tasks {
+			if !bytes.Equal(kernel.JSON(out.Turn), kernel.JSON(replay.Turn)) || logs.String() != before || len(replay.State.Tasks) != tt.tasks {
 				t.Fatal("replayed model/action or changed saved reply", replay)
 			}
 		})

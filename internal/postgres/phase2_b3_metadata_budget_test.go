@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -75,7 +76,7 @@ func TestPhase2B3_S6_MetadataDoesNotConsumeDeputyOrManualByteBudget(t *testing.T
 					b3Exec(t, s, `UPDATE entity_versions SET name=$3 WHERE owner_id=$1 AND entity_id=$2`, scope.OwnerID, b3FixedID(2), g.PlaceName)
 				}
 				task := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: g.TaskTitle}).Tasks[0].ID
-				workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: task, Patch: asJSON(map[string]string{"notes": notes})})
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateTask", ID: task, Patch: kernel.JSON(map[string]string{"notes": notes})})
 				run := b1R2aRun(t, s, scope, f, task, agent, g.Query, "边界交接已完成")
 				content := run.Brief
 				if agent == "model" {

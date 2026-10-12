@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestEvidencedGraphAndScopedExpansion(t *testing.T) {
@@ -18,7 +19,7 @@ func TestEvidencedGraphAndScopedExpansion(t *testing.T) {
 		return memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: kind}}
 	}
 	entity := memory.Entity{Revision: revision(memory.EntityKind), Name: "河边旧书店", Type: "shop", Aliases: []string{"老书屋"}}
-	claim := memory.Claim{Revision: revision(memory.ClaimKind), SubjectID: entity.ID, Predicate: "访问意愿", Value: asJSON("以后想去河边旧书店"), Nature: "intention", Acquisition: "direct", Confirmation: "confirmed"}
+	claim := memory.Claim{Revision: revision(memory.ClaimKind), SubjectID: entity.ID, Predicate: "访问意愿", Value: kernel.JSON("以后想去河边旧书店"), Nature: "intention", Acquisition: "direct", Confirmation: "confirmed"}
 	episode := memory.Episode{Revision: revision(memory.EpisodeKind), Title: "周末出行讨论", Members: []memory.Ref{source.Ref, claim.Ref}}
 	relation := memory.Relation{Revision: revision(memory.RelationKind), From: claim.Ref, To: episode.Ref, Type: "belongs_to"}
 	in := memory.CommitRequest{RequestID: memory.NewID(), Entities: []memory.Entity{entity}, Claims: []memory.Claim{claim}, Episodes: []memory.Episode{episode}, Relations: []memory.Relation{relation}}

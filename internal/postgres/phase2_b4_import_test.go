@@ -11,6 +11,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/connectors"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -221,7 +222,7 @@ func TestPhase2B4_I4_ReimportAndExtendedExportOnlyAddUnseenMessages(t *testing.T
 func TestPhase2B4_I5_HistoricalPlanRemainsCandidateWithoutPresentActions(t *testing.T) {
 	s, scope := b4Store(t), owner()
 	gold := b4FixtureFor(t, "oldPlan")
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]bool{"autoAccept": true, "wakeIdeas": true})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]bool{"autoAccept": true, "wakeIdeas": true})})
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addIdea", Title: "去成都"})
 	state = workspaceCommand(t, s, scope, workspace.Command{Type: "ideaShelve", ID: state.Ideas[0].ID, Condition: "旅行计划交上去了"})
 	conv := b4Conversations(t, "old-plan", 1)
@@ -446,7 +447,7 @@ func TestPhase2B4_I13_SpokenDateUsesSydneyAndShanghai(t *testing.T) {
 		t.Run(tc.Zone, func(t *testing.T) {
 			s, scope := b4Store(t), owner()
 			f := b4Model(t, s)
-			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": tc.Zone})})
+			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": tc.Zone})})
 			gold := b4FixtureFor(t, "recall")
 			conv := b4Conversations(t, "local-date", 1)
 			conv[0].Messages[0].Text = gold.Text

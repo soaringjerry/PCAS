@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 // Recovery uses the existing worker's one-item scheduling discipline. Each
@@ -120,7 +121,7 @@ func (a interactiveCalls) recoverAccountingReceipt(ctx context.Context) (bool, e
 	if expectedUsage == "" {
 		expectedUsage = memory.ID(row.Reservation)
 	}
-	valid := paid != nil && row.OwnerID.Valid() && row.ExecutionID.Valid() && row.RootExecutionID.Valid() && row.Receipt.Kind == "interactive_invocation" && row.Receipt.InvocationID == row.ID && paid.InvocationID == row.ID && paid.Reservation == row.Reservation && paid.Provider == row.Provider && paid.Model == row.Model && paid.CallErrorCode == row.ErrorCode && bytes.Equal(asJSON(uniqueRefs(paid.Refs)), asJSON(uniqueRefs(row.Manifest.Refs)))
+	valid := paid != nil && row.OwnerID.Valid() && row.ExecutionID.Valid() && row.RootExecutionID.Valid() && row.Receipt.Kind == "interactive_invocation" && row.Receipt.InvocationID == row.ID && paid.InvocationID == row.ID && paid.Reservation == row.Reservation && paid.Provider == row.Provider && paid.Model == row.Model && paid.CallErrorCode == row.ErrorCode && bytes.Equal(kernel.JSON(kernel.UniqueRefs(paid.Refs)), kernel.JSON(kernel.UniqueRefs(row.Manifest.Refs)))
 	if paid != nil && paid.CallErrorCode != "provider_unavailable" {
 		valid = valid && row.UsageID == expectedUsage
 	}

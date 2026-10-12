@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -34,7 +35,7 @@ func (s *Store) saveAttachmentReceipt(ctx context.Context, scope memory.Scope, r
 	s.pendingPaid.Store(key, paid)
 	for {
 		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		tag, err := s.pool.Exec(persist, `INSERT INTO attachment_model_results(owner_id,source_id,source_version,component,body) SELECT $1,$2,$3,$4,$5 FROM memory_records r WHERE r.owner_id=$1 AND r.id=$2 AND r.version=$3 AND r.state='active' FOR SHARE OF r ON CONFLICT(owner_id,source_id,source_version,component) DO UPDATE SET body=attachment_model_results.body`, string(scope.OwnerID), string(ref.ID), ref.Version, component, asJSON(paid))
+		tag, err := s.pool.Exec(persist, `INSERT INTO attachment_model_results(owner_id,source_id,source_version,component,body) SELECT $1,$2,$3,$4,$5 FROM memory_records r WHERE r.owner_id=$1 AND r.id=$2 AND r.version=$3 AND r.state='active' FOR SHARE OF r ON CONFLICT(owner_id,source_id,source_version,component) DO UPDATE SET body=attachment_model_results.body`, string(scope.OwnerID), string(ref.ID), ref.Version, component, kernel.JSON(paid))
 		cancel()
 		if err == nil {
 			s.pendingPaid.Delete(key)

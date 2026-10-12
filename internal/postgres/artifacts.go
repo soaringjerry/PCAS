@@ -5,6 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -45,7 +46,7 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 		Field  string          `json:"field"`
 		Blocks []artifactBlock `json:"blocks"`
 	}
-	fields, err := queryDocuments[fieldBlocks](ctx, tx, "SELECT jsonb_build_object('field',field,'blocks',blocks) FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
+	fields, err := kernel.QueryDocuments[fieldBlocks](ctx, tx, "SELECT jsonb_build_object('field',field,'blocks',blocks) FROM artifact_fields WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
 	if err != nil {
 		return item, nil, err
 	}
@@ -95,7 +96,7 @@ func sanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 		if blocks, ok := owned[field]; ok {
 			kept := []artifactBlock{}
 			for _, block := range blocks {
-				dependent := oneOf(runID, block.Runs...)
+				dependent := kernel.OneOf(runID, block.Runs...)
 				used = used || dependent
 				if allowed || !dependent {
 					kept = append(kept, block)
@@ -196,7 +197,7 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 		if blockErr == nil {
 			kept := []artifactBlock{}
 			for _, block := range blocks {
-				if !oneOf(a.Run, block.Runs...) {
+				if !kernel.OneOf(a.Run, block.Runs...) {
 					kept = append(kept, block)
 				}
 			}
@@ -211,7 +212,7 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 			}
 		} else if blockErr != pgx.ErrNoRows {
 			return nil, blockErr
-		} else if oneOf(field, "notes", "body", "progress", "title") {
+		} else if kernel.OneOf(field, "notes", "body", "progress", "title") {
 			text := fieldText(item, field)
 			if text != "" && text != a.Body && text != "\n"+a.Body {
 				// Ownership cannot be reconstructed after historical freeform edits.
@@ -236,7 +237,7 @@ func purgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 			item.Checklist = kept
 		}
 		item.Version++
-		item.UpdatedAt = stamp()
+		item.UpdatedAt = kernel.Stamp()
 		if err := saveItem(ctx, tx, scope, item); err != nil {
 			return nil, err
 		}

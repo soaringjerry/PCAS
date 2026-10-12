@@ -3,11 +3,13 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"math/rand"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -217,7 +219,7 @@ func TestPhase2B1_N9_UndoCommandReplayHasNoSecondDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatal("undo replay failed", err)
 	}
-	if first.Revision != replay.Revision || string(asJSON(first.Tasks)) != string(asJSON(replay.Tasks)) || string(asJSON(first.Activity)) != string(asJSON(replay.Activity)) {
+	if first.Revision != replay.Revision || string(kernel.JSON(first.Tasks)) != string(kernel.JSON(replay.Tasks)) || string(kernel.JSON(first.Activity)) != string(kernel.JSON(replay.Activity)) {
 		t.Error("undo replay returned different state")
 	}
 	rowsAfter := b1DatabaseRows(t, s, false)
@@ -251,7 +253,7 @@ func TestPhase2B1_N11_UndoUpdateThenCreationDeletesOnlyCompleteTurn(t *testing.T
 		t.Fatal(err)
 	}
 	date := time.Now().In(loc).AddDate(0, 0, 7).Format("2006-01-02")
-	s, scope, f, _, first, source := b1Plan(t, string(asJSON(map[string]any{"reply": "已安排", "actions": []map[string]any{{"op": "create_task", "title": "和张三对方案", "due": date + "T15:00", "remind": "none"}}})))
+	s, scope, f, _, first, source := b1Plan(t, string(kernel.JSON(map[string]any{"reply": "已安排", "actions": []map[string]any{{"op": "create_task", "title": "和张三对方案", "due": date + "T15:00", "remind": "none"}}})))
 	text := b1Text(t, "plan", "claim")
 	claim := b1MemoryRef(t, b1Extract(t, s, scope, f, source, b1ExtractItem(text, "plan")), text)
 	f.set(map[string]any{"reply": "改到四点", "actions": []map[string]any{{"op": "update", "ref": "R1", "set": map[string]any{"due": date + "T16:00", "remind": "none"}}}})
@@ -377,7 +379,7 @@ func TestPhase2B1_N12_RandomTwentyActionsInTwentySeededGroups(t *testing.T) {
 			business := func(item workspace.Item) map[string]any {
 				retained := []workspace.SourceRef{}
 				for _, source := range item.Sources {
-					if !oneOf(source.SourceID, operational...) {
+					if !kernel.OneOf(source.SourceID, operational...) {
 						retained = append(retained, source)
 					}
 				}
@@ -390,8 +392,8 @@ func TestPhase2B1_N12_RandomTwentyActionsInTwentySeededGroups(t *testing.T) {
 			}
 			if len(final.Tasks) != len(initial.Tasks) {
 				t.Errorf("seed=%d tasks not restored", seed)
-			} else if string(asJSON(business(final.Tasks[0]))) != string(asJSON(business(initial.Tasks[0]))) {
-				t.Errorf("seed=%d initial task business content not restored: before=%s after=%s", seed, asJSON(business(initial.Tasks[0])), asJSON(business(final.Tasks[0])))
+			} else if string(kernel.JSON(business(final.Tasks[0]))) != string(kernel.JSON(business(initial.Tasks[0]))) {
+				t.Errorf("seed=%d initial task business content not restored: before=%s after=%s", seed, kernel.JSON(business(initial.Tasks[0])), kernel.JSON(business(final.Tasks[0])))
 			}
 			if len(final.Ideas) != len(initial.Ideas) || len(final.Projects) != len(initial.Projects) {
 				t.Errorf("seed=%d non-task objects changed", seed)

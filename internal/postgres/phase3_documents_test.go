@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -278,7 +279,7 @@ func TestPhase3D6SecretaryDelegatesExactVersionOrOnlyAsksAmbiguousField(t *testi
 				if alias == nil {
 					return `{"reply":"目录里没有这份文档","actions":[],"used":[],"links":[],"show":[],"remember":false,"missingKeyInfo":true,"ask":null,"memoryPlan":{"depth":"light","groups":[]}}`
 				}
-				return string(asJSON(map[string]any{"reply": "已派副手从第二版改虚构预算。", "actions": []any{map[string]any{"op": "delegate", "ref": "THIS", "kind": "revise", "documentId": alias[1], "baseVersion": 2, "prompt": "只改虚构第二版预算。"}}, "used": []any{}, "links": []any{}, "show": []any{}, "remember": false, "missingKeyInfo": false, "ask": nil, "memoryPlan": map[string]any{"depth": "light", "groups": []any{}}}))
+				return string(kernel.JSON(map[string]any{"reply": "已派副手从第二版改虚构预算。", "actions": []any{map[string]any{"op": "delegate", "ref": "THIS", "kind": "revise", "documentId": alias[1], "baseVersion": 2, "prompt": "只改虚构第二版预算。"}}, "used": []any{}, "links": []any{}, "show": []any{}, "remember": false, "missingKeyInfo": false, "ask": nil, "memoryPlan": map[string]any{"depth": "light", "groups": []any{}}}))
 			}
 			m.mu.Unlock()
 			code, raw, err := h.call(f.Context, "POST", "/v1/desk/turn", workspace.DeskTurnRequest{RequestID: string(memory.NewID()), ThingID: &p.ID, AgentID: "phase3", Text: "把第二版方案里的预算部分改保守一点"})

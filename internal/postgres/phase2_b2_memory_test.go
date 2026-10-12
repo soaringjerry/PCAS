@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -58,7 +59,7 @@ func b2Library(t *testing.T, s *Store, scope memory.Scope, n int) b2LibraryFixtu
 		date := at.AddDate(0, 0, -x)
 		nature := []string{"fact", "preference", "intention", "plan", "decision"}[x%5]
 		ref := memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}
-		req.Claims = append(req.Claims, memory.Claim{Revision: memory.Revision{Ref: ref, ExpressedAt: &date}, SubjectID: self.ID, Predicate: fmt.Sprintf("fixture-%03d", x), Value: asJSON(b2Label(x)), Nature: nature, Acquisition: "direct", Confirmation: "adopted"})
+		req.Claims = append(req.Claims, memory.Claim{Revision: memory.Revision{Ref: ref, ExpressedAt: &date}, SubjectID: self.ID, Predicate: fmt.Sprintf("fixture-%03d", x), Value: kernel.JSON(b2Label(x)), Nature: nature, Acquisition: "direct", Confirmation: "adopted"})
 		source := b2Source(t, s, scope, "memory-input", "user", b2Label(x), &date)
 		req.Evidence = append(req.Evidence, memory.Evidence{Source: source, Target: ref, Acquisition: "direct", Stance: "supports"})
 		if len(req.Claims) == 200 {
@@ -176,7 +177,7 @@ func TestPhase2B2_M2_SnapshotCapDoesNotCapSecretaryOrDeputy(t *testing.T) {
 	f := b1Model(t, s, `{"reply":"回忆结果","used":["M1"],"actions":[]}`)
 	g := b2Library(t, s, scope, b2Want[int](t, "M2", "total"))
 	oldest := g.Refs[0]
-	b2Exec(t, s, `UPDATE claim_revisions SET value=$1 WHERE owner_id=$2 AND claim_id=$3`, asJSON("成都旧记忆唯一蓝色灯塔5271"), string(scope.OwnerID), string(oldest.ID))
+	b2Exec(t, s, `UPDATE claim_revisions SET value=$1 WHERE owner_id=$2 AND claim_id=$3`, kernel.JSON("成都旧记忆唯一蓝色灯塔5271"), string(scope.OwnerID), string(oldest.ID))
 	st := b2Snapshot(t, s, scope)
 	b2Equal(t, len(st.Memories), b2Want[int](t, "M2", "snapshot_size"))
 	total, ok := b1Map(t, st)["memoryTotal"].(float64)
@@ -312,11 +313,11 @@ func TestPhase2B2_M7_NewDeputyVisibilityInitializesOnlyOnce(t *testing.T) {
 	// Construct a fresh deputy. Copying the existing agent would also copy
 	// its already-initialized memory marker, contradicting this fixture.
 	newAgent := workspace.Agent{ID: "B", Name: "新副手B", Enabled: false, Channel: initial.Agents[0].Channel, MemoryKinds: append([]string{}, initial.Agents[0].MemoryKinds...)}
-	b2Exec(t, s, `INSERT INTO workspace_agents(owner_id,id,document) VALUES($1,'B',$2)`, string(scope.OwnerID), asJSON(newAgent))
+	b2Exec(t, s, `INSERT INTO workspace_agents(owner_id,id,document) VALUES($1,'B',$2)`, string(scope.OwnerID), kernel.JSON(newAgent))
 	registry := s.models
 	registry.Config.Providers = append(registry.Config.Providers, ai.Provider{ID: "B", Name: "新副手B", Protocol: "openai", BaseURL: registry.Config.Providers[0].BaseURL, Model: "test", MaxOutput: 100, CostMode: "free"})
 	s.SetModels(registry)
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "B", Patch: asJSON(map[string]any{"enabled": true})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "B", Patch: kernel.JSON(map[string]any{"enabled": true})})
 	check := func(want []int) {
 		t.Helper()
 		st := b2Snapshot(t, s, scope)
@@ -336,8 +337,8 @@ func TestPhase2B2_M7_NewDeputyVisibilityInitializesOnlyOnce(t *testing.T) {
 	}
 	check([]int{0, 1})
 	workspaceCommand(t, s, scope, workspace.Command{Type: "setMemoryVisibility", ID: string(g.Refs[0].ID), AgentIDs: []string{"model", "manual"}})
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "B", Patch: asJSON(map[string]any{"enabled": false})})
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "B", Patch: asJSON(map[string]any{"enabled": true})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "B", Patch: kernel.JSON(map[string]any{"enabled": false})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "B", Patch: kernel.JSON(map[string]any{"enabled": true})})
 	check([]int{1})
 }
 func TestPhase2B2_M8_DeleteCleansOrphansButKeepsSharedAndSelf(t *testing.T) {
@@ -435,7 +436,7 @@ func TestPhase2B2_M11_ExportContainsNewTablesAndEventValues(t *testing.T) {
 	at := b2Anchor(t, "Asia/Shanghai")
 	b2Exec(t, s, `INSERT INTO source_extractions(owner_id,source_id,source_version,extractor,state,items) VALUES($1,$2,1,2,'done',1)`, string(scope.OwnerID), string(src.ID))
 	b2Exec(t, s, `INSERT INTO import_batches(owner_id,id,archive_id,name,state,total,stored) VALUES($1,$2,$3,'合成导出批次','done',1,1)`, string(scope.OwnerID), batch, string(src.ID))
-	b2Exec(t, s, `INSERT INTO model_usage(owner_id,id,at,purpose,model,input_tokens,output_tokens,cost,memory_refs,plan) VALUES($1,$2,$3,'extraction','synthetic',100,20,0,$4,'{}')`, string(scope.OwnerID), usage, at, asJSON([]memory.Ref{g.Refs[0]}))
+	b2Exec(t, s, `INSERT INTO model_usage(owner_id,id,at,purpose,model,input_tokens,output_tokens,cost,memory_refs,plan) VALUES($1,$2,$3,'extraction','synthetic',100,20,0,$4,'{}')`, string(scope.OwnerID), usage, at, kernel.JSON([]memory.Ref{g.Refs[0]}))
 	data, err := s.Export(context.Background(), scope, false, false)
 	if err != nil {
 		t.Fatal(err)

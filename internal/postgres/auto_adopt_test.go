@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +14,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -100,7 +102,7 @@ func TestAdoptionMatchesFrontend(t *testing.T) {
 const cases = JSON.parse(require('fs').readFileSync(0, 'utf8'));
 process.stdout.write(JSON.stringify(cases.map(c => ({lines: parseChecklist(c.output), as: ['task','idea','project'].map(kind => adoptAs({kind}, {kind:c.kind, output:c.output}).as)}))));`
 	cmd := exec.Command(node, "-e", script)
-	cmd.Stdin = strings.NewReader(string(asJSON(cases)))
+	cmd.Stdin = strings.NewReader(string(kernel.JSON(cases)))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("frontend oracle: %v: %s", err, out)
@@ -388,7 +390,7 @@ func TestAutoAdoptSkipsStaleAndEmpty(t *testing.T) {
 			run.Status, run.Output, run.StaleContext = "done", tc.output, tc.stale
 			err := pgx.BeginFunc(context.Background(), s.pool, func(tx pgx.Tx) error {
 				ctx := context.Background()
-				if _, err := tx.Exec(ctx, "UPDATE agent_runs SET status='done',document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, asJSON(run)); err != nil {
+				if _, err := tx.Exec(ctx, "UPDATE agent_runs SET status='done',document=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.ID, kernel.JSON(run)); err != nil {
 					return err
 				}
 				return s.autoAdoptRunTx(ctx, tx, scope, &run)

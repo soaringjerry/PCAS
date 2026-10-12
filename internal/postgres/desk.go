@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -54,7 +56,7 @@ func (s *Store) deskItemsContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 	if stable {
 		order = "created_at,id"
 	}
-	tasks, err := queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND status IN ('todo','doing','waiting') ORDER BY "+order+" LIMIT 40", string(scope.OwnerID))
+	tasks, err := kernel.QueryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='task' AND status IN ('todo','doing','waiting') ORDER BY "+order+" LIMIT 40", string(scope.OwnerID))
 	if err != nil {
 		return nil, workspace.Settings{}, nil, err
 	}
@@ -67,7 +69,7 @@ func (s *Store) deskItemsContextTx(ctx context.Context, tx pgx.Tx, scope memory.
 		}
 		dependencies = append(dependencies, refs...)
 	}
-	settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+	settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 	return tasks, settings, dependencies, err
 }
 func deskLocation(settings workspace.Settings) *time.Location {

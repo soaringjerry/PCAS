@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -19,7 +20,7 @@ func (s *Store) QueueSupersededRejudge(ctx context.Context, scope memory.Scope) 
 	}
 	count := 0
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, scope.OwnerID); err != nil {
+		if err := kernel.OwnerLock(ctx, tx, scope.OwnerID); err != nil {
 			return err
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority)
@@ -78,13 +79,13 @@ func finishRejudgeTx(ctx context.Context, tx pgx.Tx, j worker.Job, reason string
 	if err := discardPaidResultTx(ctx, tx, j); err != nil {
 		return err
 	}
-	return acknowledge(ctx, tx, j)
+	return kernel.Acknowledge(ctx, tx, j)
 }
 
 func (a compareSession) RejudgePair(ctx context.Context, j worker.Job, refs []memory.Ref) (json.RawMessage, bool, error) {
 	var input *rejudgeInput
 	err := pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		var e error
@@ -100,14 +101,14 @@ func (a compareSession) RejudgePair(ctx context.Context, j worker.Job, refs []me
 	if err != nil || input == nil {
 		return nil, false, err
 	}
-	return asJSON(input), true, nil
+	return kernel.JSON(input), true, nil
 }
 
 func (a compareSession) ApplyRejudge(ctx context.Context, j worker.Job, refs []memory.Ref, edges []comparison.Edge, valid bool) error {
 	conn := a.conn
 	if !valid {
 		err := backgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-			if err := lockJob(ctx, tx, j); err != nil {
+			if err := kernel.LockJob(ctx, tx, j); err != nil {
 				return err
 			}
 			if err := stageEventTx(ctx, tx, j.OwnerID, CompareStage, "failure", "rejudge_invalid_output", 1); err != nil {
@@ -118,10 +119,10 @@ func (a compareSession) ApplyRejudge(ctx context.Context, j worker.Job, refs []m
 		if err != nil {
 			return err
 		}
-		return &worker.JobError{Code: "rejudge_invalid_output", Until: time.Now().Add(retryDelay(j.Attempts))}
+		return &worker.JobError{Code: "rejudge_invalid_output", Until: time.Now().Add(kernel.RetryDelay(j.Attempts))}
 	}
 	return backgroundResultTx(ctx, conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		// Fence the original retirement and both record versions against user edits.

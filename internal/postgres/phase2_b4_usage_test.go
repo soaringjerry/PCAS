@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +15,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -128,7 +130,7 @@ func TestPhase2B4_L8_UsageIsVisibleBeforeResultTransactionAndSurvivesRollback(t 
 			s, scope := b4Store(t), owner()
 			f := b4Model(t, s)
 			reply := b4SecondUsageAmendment(t)["rollbackReply"]
-			f.set(string(asJSON(map[string]any{"reply": reply, "used": []string{}, "actions": []any{}})), 200)
+			f.set(string(kernel.JSON(map[string]any{"reply": reply, "used": []string{}, "actions": []any{}})), 200)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			lockKey := "b4-owned-result-gate-" + string(memory.NewID())
 			conn, err := s.pool.Acquire(ctx)
@@ -541,7 +543,7 @@ func TestPhase2B4_L4_LocalDaysAndSydneyDSTHaveExactSummaries(t *testing.T) {
 		t.Run(fmt.Sprintf("%d_%s", n, tc.Zone), func(t *testing.T) {
 			s, scope := b4Store(t), owner()
 			b4Model(t, s)
-			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": tc.Zone})})
+			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": tc.Zone})})
 			want := map[string]int{}
 			for i, instant := range tc.Instants {
 				out := mustTurn(t, s, scope, turnRequest(fmt.Sprintf("时区验收第%d次调用", i)))
@@ -656,7 +658,7 @@ func TestPhase2B4_L5_CurrentUnicodeExcerptDeletedRefAndEveryColumnPrivacy(t *tes
 func TestUsageSummarySeparatesPurposesAndOmitsEmptyDays(t *testing.T) {
 	s, scope := b4Store(t), owner()
 	f := b4Model(t, s)
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": "Asia/Shanghai"})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 	f.set(`{"reply":"秘书回答。","used":[],"actions":[]}`, 200)
 	mustTurn(t, s, scope, turnRequest("自然日用途汇总"))
 	// Rows of the retired legacy answer interface stay in stored usage. The

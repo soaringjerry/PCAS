@@ -3,10 +3,12 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"net/http"
 	"sync/atomic"
 	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -20,7 +22,7 @@ func TestHourlyLimitDeferralLeavesNoModelCallRecord(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) SELECT gen_random_uuid(),$1,0,$2 FROM generate_series(1,$3)`, string(scope.OwnerID), OrganizeStage, backgroundHourlyBudgets[OrganizeStage]); err != nil {
 		t.Fatal(err)
 	}
-	_, err := jobCalls(s).Generate(ctx, j, "organize", prompts.Must("organize"), "", asJSON(map[string]string{"test": "fictitious"}), nil)
+	_, err := jobCalls(s).Generate(ctx, j, "organize", prompts.Must("organize"), "", kernel.JSON(map[string]string{"test": "fictitious"}), nil)
 	var deferred *worker.JobError
 	if !errors.As(err, &deferred) || deferred.Code != "organize_hourly_limit" || !deferred.NoAttempt || deferred.Until.IsZero() || calls.Load() != 0 {
 		t.Fatal(err, calls.Load())

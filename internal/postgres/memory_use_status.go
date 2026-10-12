@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -110,7 +111,7 @@ func (s *Store) useStatusCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 		byID[m.ID] = m
 	}
 	for _, ref := range index {
-		if !oneOf(ref.Key, keys...) || !eligibleKeys[ref.Key] {
+		if !kernel.OneOf(ref.Key, keys...) || !eligibleKeys[ref.Key] {
 			continue
 		}
 		card := workspace.StatusCard{Key: ref.Key, Kind: ref.Kind, Name: ref.Name, BuiltAt: ref.BuiltAt, Stale: ref.Stale, Fields: []workspace.StatusCardField{}}

@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
@@ -91,7 +92,7 @@ func entityCandidateBatchesFor(names []entityCandidateName, version int, legacy 
 	for _, scope := range []string{"person", "place", "organization", "topic", "project", "place_topic", "organization_topic"} {
 		list := []entityCandidateName{}
 		for _, e := range names {
-			if e.Type == scope || scope == "place_topic" && oneOf(e.Type, "place", "topic") || scope == "organization_topic" && oneOf(e.Type, "organization", "topic") {
+			if e.Type == scope || scope == "place_topic" && kernel.OneOf(e.Type, "place", "topic") || scope == "organization_topic" && kernel.OneOf(e.Type, "organization", "topic") {
 				list = append(list, e)
 			}
 		}
@@ -120,9 +121,9 @@ func entityCandidateBatchesFor(names []entityCandidateName, version int, legacy 
 			for _, e := range entities {
 				identities = append(identities, []any{e.Ref.ID, e.Type, e.Name})
 			}
-			hash := sha256.Sum256(asJSON([]any{scope, identities}))
+			hash := sha256.Sum256(kernel.JSON([]any{scope, identities}))
 			if legacy {
-				hash = sha256.Sum256(asJSON([]any{b, refs}))
+				hash = sha256.Sum256(kernel.JSON([]any{b, refs}))
 			}
 			b.Marker = fmt.Sprintf("%s:%d:seen:%x", EntityCandidatesStage, version, hash)
 			out = append(out, b)
@@ -365,7 +366,7 @@ func (s *Store) AliasScanStore() aliasscan.Store { return aliasScanStore{s} }
 type aliasScanStore struct{ store *Store }
 
 func (a aliasScanStore) RetryLater(j worker.Job, code string) error {
-	return &worker.JobError{Code: code, Until: time.Now().Add(retryDelay(j.Attempts))}
+	return &worker.JobError{Code: code, Until: time.Now().Add(kernel.RetryDelay(j.Attempts))}
 }
 
 func (a aliasScanStore) Session(ctx context.Context) (aliasscan.Session, func(), error) {
@@ -402,7 +403,7 @@ func (a aliasScanSession) NextBatch(ctx context.Context, j worker.Job) (json.Raw
 	for _, e := range batch.Entities {
 		refs = append(refs, e.Ref)
 	}
-	return asJSON(struct {
+	return kernel.JSON(struct {
 		*entityCandidateBatch
 		Marker string `json:"marker"`
 	}{batch, batch.Marker}), refs, true, nil
@@ -410,10 +411,10 @@ func (a aliasScanSession) NextBatch(ctx context.Context, j worker.Job) (json.Raw
 
 func (a aliasScanSession) Finish(ctx context.Context, j worker.Job) error {
 	return backgroundWriteTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		return acknowledge(ctx, tx, j)
+		return kernel.Acknowledge(ctx, tx, j)
 	})
 }
 
@@ -438,7 +439,7 @@ func (a aliasScanSession) Apply(ctx context.Context, j worker.Job, record json.R
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':scan-queue:'||$1,0))", string(j.OwnerID)); err != nil {
 			return err
 		}
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		return fn(aliasScanUnit{ctx: ctx, tx: tx, job: j, batch: batch})
@@ -477,4 +478,4 @@ func (u aliasScanUnit) MarkScanned() error {
 }
 
 func (u aliasScanUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
-func (u aliasScanUnit) Acknowledge() error   { return acknowledge(u.ctx, u.tx, u.job) }
+func (u aliasScanUnit) Acknowledge() error   { return kernel.Acknowledge(u.ctx, u.tx, u.job) }

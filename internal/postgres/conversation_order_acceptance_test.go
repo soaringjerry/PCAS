@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -215,13 +216,13 @@ func q2Request(text, conversation string) workspace.DeskTurnRequest {
 	return req
 }
 func q2Settings(t *testing.T, s *Store, scope memory.Scope) {
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]any{"timezone": "UTC", "autoAccept": true})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"timezone": "UTC", "autoAccept": true})})
 }
 func q2HTTP(t *testing.T, s *Store, scope memory.Scope, method, path string, body any) *httptest.ResponseRecorder {
 	t.Helper()
 	token := strings.Repeat("q", 64)
 	api := httpapi.New(s, s, httpapi.NewOwnerToken(token, scope.OwnerID), func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s})
-	req := httptest.NewRequest(method, path, strings.NewReader(string(asJSON(body))))
+	req := httptest.NewRequest(method, path, strings.NewReader(string(kernel.JSON(body))))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -545,7 +546,7 @@ func TestConversationOrderAcceptance_DeletedRecoveryDoesNotResurrectThroughHTTP(
 		}
 	}
 	byRequest, err := peer.DeskTurnByRequest(ctx, scope, old.RequestID)
-	if err != nil || strings.Contains(string(asJSON(byRequest)), "橙色山脉") {
+	if err != nil || strings.Contains(string(kernel.JSON(byRequest)), "橙色山脉") {
 		t.Fatalf("Telegram request replay leaks deleted raw: %v %+v", err, byRequest)
 	}
 	exported, err := s.Export(ctx, scope, false, false)

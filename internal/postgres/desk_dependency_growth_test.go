@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -86,11 +87,11 @@ func TestUniqueRefsKeepsFirstOccurrenceOrder(t *testing.T) {
 	a := memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}
 	b := memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}
 	newer := memory.Ref{ID: a.ID, Version: 2, Kind: memory.ClaimKind}
-	got := uniqueRefs([]memory.Ref{a, b, a, newer, b, a})
+	got := kernel.UniqueRefs([]memory.Ref{a, b, a, newer, b, a})
 	if len(got) != 3 || got[0] != a || got[1] != b || got[2] != newer {
 		t.Fatal(got)
 	}
-	if got := uniqueRefs(nil); got == nil || len(got) != 0 {
+	if got := kernel.UniqueRefs(nil); got == nil || len(got) != 0 {
 		t.Fatal("nil input must give an empty, non-nil list", got)
 	}
 }

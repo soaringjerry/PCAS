@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 	"net/url"
 	"sort"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -25,7 +27,7 @@ func (s *Store) secretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 			refs = append(refs, memory.Ref{ID: memory.ID(m.ID), Version: m.Version})
 		}
 	}
-	metadata, err := secretaryTimelineMetadataTx(ctx, tx, scope, uniqueRefs(refs))
+	metadata, err := secretaryTimelineMetadataTx(ctx, tx, scope, kernel.UniqueRefs(refs))
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +136,7 @@ func secretaryTimelineMetadataTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 	if len(refs) == 0 {
 		return result, nil
 	}
-	rows, err := queryDocuments[secretaryTimelineMetadata](ctx, tx, `WITH cited AS (
+	rows, err := kernel.QueryDocuments[secretaryTimelineMetadata](ctx, tx, `WITH cited AS (
  SELECT c.*,rv.expressed_at FROM jsonb_to_recordset($2::jsonb) AS i(id uuid,version integer)
  JOIN claim_revisions c ON c.owner_id=$1 AND c.claim_id=i.id AND c.version=i.version
  JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
@@ -170,7 +172,7 @@ SELECT jsonb_build_object(
    FROM created_items w WHERE (w.claim_id,w.version)=(c.claim_id,c.version)),'[]'::jsonb),
  'changed',EXISTS(SELECT 1 FROM claim_revisions v WHERE v.owner_id=c.owner_id AND v.claim_id=c.claim_id
    AND v.version>1 AND v.version<=c.version AND v.change_type IN ('change','correction')))
-FROM cited c`, string(scope.OwnerID), asJSON(refs))
+FROM cited c`, string(scope.OwnerID), kernel.JSON(refs))
 	if err != nil {
 		return nil, err
 	}

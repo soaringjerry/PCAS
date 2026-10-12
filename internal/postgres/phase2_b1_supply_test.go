@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -42,13 +43,13 @@ func TestPhase2B1_P1_DeskTurnRawSourceAndDeletionControl(t *testing.T) {
 	found := 0
 	for _, card := range out.Turn.Cards {
 		if card.Kind == "timeline" {
-			b1Absent(t, string(asJSON(card)), string(source.ID))
+			b1Absent(t, string(kernel.JSON(card)), string(source.ID))
 		}
 		if card.Kind != "sources" {
 			continue
 		}
 		var items []map[string]any
-		if err := json.Unmarshal(asJSON(card.Items), &items); err != nil {
+		if err := json.Unmarshal(kernel.JSON(card.Items), &items); err != nil {
 			t.Fatal(err)
 		}
 		for _, item := range items {
@@ -113,8 +114,8 @@ func TestPhase2B1_P4_ClaimOnlyEmptySourceSection(t *testing.T) {
 	b1HasRef(t, b1Refs(t, s, scope, req.RequestID), src, false)
 	for _, c := range out.Turn.Cards {
 		if c.Kind == "sources" {
-			b1Contains(t, string(asJSON(c.Items)), `"kind":"claim"`)
-			b1Absent(t, string(asJSON(c.Items)), `"kind":"source"`)
+			b1Contains(t, string(kernel.JSON(c.Items)), `"kind":"claim"`)
+			b1Absent(t, string(kernel.JSON(c.Items)), `"kind":"source"`)
 		}
 	}
 }
@@ -338,7 +339,7 @@ func TestPhase2B1_P9_PublicReadsCannotForgeInternalAccess(t *testing.T) {
 			t.Errorf("internal scope marker %s is JSON-decodable", field.Name)
 		}
 		forged := outsider
-		if err := json.Unmarshal(asJSON(map[string]any{field.Name: true}), &forged); err != nil {
+		if err := json.Unmarshal(kernel.JSON(map[string]any{field.Name: true}), &forged); err != nil {
 			t.Fatal(err)
 		}
 		if reflect.ValueOf(forged).Field(i).Bool() {
@@ -356,7 +357,7 @@ func TestPhase2B1_P10_DeputyClaimFiltersAndSharedRawSources(t *testing.T) {
 	system := b1Source(t, s, scope, "快速记录", "成都类别过滤夹具", "memory-input")
 	hidden := b1Claim(t, s, scope, "成都隐藏偏好不吃香菜", "preference", "adopted", system)
 	allowed := b1Claim(t, s, scope, "成都可见事实旅程", "fact", "adopted", system)
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: asJSON(map[string]any{"memoryKinds": []string{"fact"}, "includeInferred": false})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: kernel.JSON(map[string]any{"memoryKinds": []string{"fact"}, "includeInferred": false})})
 	run := b1Run(t, s, scope, "model", "成都旅程偏好")
 	b1Contains(t, f.last(t).Prompt, b1Text(t, "trip", "text"), "成都可见事实旅程")
 	b1Absent(t, f.last(t).Prompt, "成都隐藏偏好不吃香菜")
@@ -436,7 +437,7 @@ func TestPhase2B1_P13_AdoptedSourceContentSurvivesForUserButExpiresForModels(t *
 	originalChecklist := ""
 	for _, task := range adopted.Tasks {
 		if task.ID == run.ThingID {
-			originalChecklist = string(asJSON(task.Checklist))
+			originalChecklist = string(kernel.JSON(task.Checklist))
 		}
 	}
 	b1Contains(t, originalChecklist, marker)
@@ -480,7 +481,7 @@ func TestPhase2B1_P13_AdoptedSourceContentSurvivesForUserButExpiresForModels(t *
 	for _, task := range after.Tasks {
 		if task.ID == run.ThingID {
 			found = true
-			if string(asJSON(task.Checklist)) != originalChecklist {
+			if string(kernel.JSON(task.Checklist)) != originalChecklist {
 				t.Error("stale source erased user-visible adopted checklist")
 			}
 		}
@@ -537,7 +538,7 @@ func TestPhase2B1_P10_ExclusionsInferenceAndProjectFiltersStayOnClaimsOnly(t *te
 	system := b1Source(t, s, scope, "快速记录", "成都过滤证据", "memory-input")
 	makeClaim := func(text, projectID, acquisition string) memory.Ref {
 		entity := memory.Entity{Revision: memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.EntityKind}}, Name: "用户", Type: "person"}
-		claim := memory.Claim{Revision: memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}}, SubjectID: entity.ID, Predicate: "成都过滤", Value: asJSON(text), Nature: "fact", Acquisition: acquisition, Confirmation: "adopted", Scope: map[string]json.RawMessage{"project_id": asJSON(projectID)}}
+		claim := memory.Claim{Revision: memory.Revision{Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.ClaimKind}}, SubjectID: entity.ID, Predicate: "成都过滤", Value: kernel.JSON(text), Nature: "fact", Acquisition: acquisition, Confirmation: "adopted", Scope: map[string]json.RawMessage{"project_id": kernel.JSON(projectID)}}
 		in := memory.CommitRequest{RequestID: memory.NewID(), Entities: []memory.Entity{entity}, Claims: []memory.Claim{claim}, Evidence: []memory.Evidence{{Source: system, Target: claim.Ref, Acquisition: acquisition, Stance: "supports"}}}
 		if _, err := s.Commit(context.Background(), scope, in); err != nil {
 			t.Fatal(err)
@@ -550,7 +551,7 @@ func TestPhase2B1_P10_ExclusionsInferenceAndProjectFiltersStayOnClaimsOnly(t *te
 	foreign := makeClaim("成都其他项目陈述", other, "direct")
 	inferred := makeClaim("成都推测陈述", project, "inferred")
 	workspaceCommand(t, s, scope, workspace.Command{Type: "toggleContextMemory", ThingID: task, MemoryID: string(excluded.ID)})
-	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: asJSON(map[string]any{"memoryKinds": []string{"fact"}, "includeInferred": false})})
+	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "model", Patch: kernel.JSON(map[string]any{"memoryKinds": []string{"fact"}, "includeInferred": false})})
 	st = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: task, AgentID: "model", Kind: "ask", Prompt: "成都当前项目事实"})
 	run := st.Runs[0]
 	if err := s.runAgentOnce(context.Background()); err != nil {
@@ -840,7 +841,7 @@ func TestPhase2B1_P15_SourceDependentAdoptionObeysVisibilityAndItemExclusion(t *
 			originalChecklist := ""
 			for _, item := range before.State.Tasks {
 				if item.ID == task {
-					originalChecklist = string(asJSON(item.Checklist))
+					originalChecklist = string(kernel.JSON(item.Checklist))
 				}
 			}
 			b1Contains(t, originalChecklist, fixture["adopted"])
@@ -858,7 +859,7 @@ func TestPhase2B1_P15_SourceDependentAdoptionObeysVisibilityAndItemExclusion(t *
 				t.Fatal(err)
 			}
 			for _, item := range st.Tasks {
-				if item.ID == task && string(asJSON(item.Checklist)) != originalChecklist {
+				if item.ID == task && string(kernel.JSON(item.Checklist)) != originalChecklist {
 					t.Error("R2a erased user-visible adopted content")
 				}
 			}
@@ -895,7 +896,7 @@ func TestPhase2B1_P3_BriefDateUsesWorkspaceTimezoneAcrossUTCDayBoundary(t *testi
 				}
 			}
 			for _, zone := range []string{"Asia/Shanghai", "UTC"} {
-				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]string{"timezone": zone})})
+				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": zone})})
 				want := b1Text(t, "brief_date_boundary", zone)
 				other := b1Text(t, "brief_date_boundary", "UTC")
 				if zone == "UTC" {

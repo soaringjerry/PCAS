@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -62,7 +63,7 @@ func TestPhase35C1C3SecretaryProjectCreationAndUndo(t *testing.T) {
 		}
 	}
 	var wire struct{ Creation *struct{ By string } }
-	_ = json.Unmarshal(asJSON(out.State.Projects[0]), &wire)
+	_ = json.Unmarshal(kernel.JSON(out.State.Projects[0]), &wire)
 	if wire.Creation == nil || wire.Creation.By != "secretary" {
 		t.Fatal("secretary project lost provenance")
 	}

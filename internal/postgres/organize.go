@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -160,7 +161,7 @@ func (s *Store) ScheduleOrganize(ctx context.Context, now time.Time) (int, error
 			if err := s.ensureOwner(ctx, tx, scope); err != nil {
 				return err
 			}
-			if err := extractionOwnerLock(ctx, tx, owner); err != nil {
+			if err := kernel.OwnerLock(ctx, tx, owner); err != nil {
 				return err
 			}
 			queued, err := enqueueOrganizeTx(ctx, tx, owner, now, OrganizeVersion)
@@ -258,10 +259,10 @@ func (a organizeSession) NextBatch(ctx context.Context, j worker.Job, version in
 	batch := organize.Batch{Memories: []organizeMemory{}}
 	found := false
 	err := pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
+		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		if _, err := seedOrganizeGroupsTx(ctx, tx, j.OwnerID); err != nil {
@@ -287,7 +288,7 @@ func (a organizeSession) NextBatch(ctx context.Context, j worker.Job, version in
 			return err
 		}
 		if len(batch.Memories) == 0 {
-			return acknowledge(ctx, tx, j)
+			return kernel.Acknowledge(ctx, tx, j)
 		}
 		if err := organizeCompareHourlyTx(ctx, tx, "organize_hourly_limit"); err != nil {
 			return err
@@ -306,10 +307,10 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 	version, batch, items, timezone := result.Version, result.Memories, result.Items, result.Timezone
 	exhausted := []memory.ID{}
 	err := backgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
+		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		// Lock every still-current row before creating groups or updating labels.
@@ -339,7 +340,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 				if err := tx.QueryRow(ctx, "UPDATE claims SET organize_attempts=organize_attempts+1 WHERE owner_id=$1 AND id=$2 RETURNING organize_attempts", string(j.OwnerID), string(m.Ref.ID)).Scan(&attempts); err != nil {
 					return err
 				}
-				if _, err := tx.Exec(ctx, "UPDATE claims SET organize_after=clock_timestamp()+$3*interval '1 second' WHERE owner_id=$1 AND id=$2", string(j.OwnerID), string(m.Ref.ID), retryDelay(attempts).Seconds()); err != nil {
+				if _, err := tx.Exec(ctx, "UPDATE claims SET organize_after=clock_timestamp()+$3*interval '1 second' WHERE owner_id=$1 AND id=$2", string(j.OwnerID), string(m.Ref.ID), kernel.RetryDelay(attempts).Seconds()); err != nil {
 					return err
 				}
 				exhausted = append(exhausted, m.Ref.ID)
@@ -401,7 +402,7 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 				return err
 			}
 		}
-		if err := acknowledge(ctx, tx, j); err != nil {
+		if err := kernel.Acknowledge(ctx, tx, j); err != nil {
 			return err
 		}
 		if err := discardPaidResultTx(ctx, tx, j); err != nil {
@@ -442,7 +443,7 @@ func (s *Store) reserveOrganizeCost(ctx context.Context, j worker.Job, cost floa
 		return "", backgroundWriteError(ctx, err)
 	}
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, "UPDATE background_usage SET job_id=$3 WHERE owner_id=$1 AND id=$2", string(j.OwnerID), id, string(j.ID))

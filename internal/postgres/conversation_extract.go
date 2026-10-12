@@ -3,10 +3,12 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -82,7 +84,7 @@ func (w *conversationWork) Prompt() string {
 	if w.ordinal > 0 {
 		input["earlier_memories"] = w.earlier
 	}
-	return string(asJSON(input))
+	return string(kernel.JSON(input))
 }
 
 func (w *conversationWork) HasOwnerText() bool {
@@ -118,10 +120,10 @@ func (s *Store) prepareConversation(ctx context.Context, j worker.Job, conversat
 	var ordinal, next int
 	prepared := false
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
+		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		var err error
@@ -143,7 +145,7 @@ func (s *Store) prepareConversation(ctx context.Context, j worker.Job, conversat
 				if err := retireConversationJobsTx(ctx, tx, j, conversation, run); err != nil {
 					return err
 				}
-				return acknowledge(ctx, tx, j)
+				return kernel.Acknowledge(ctx, tx, j)
 			}
 			var complete bool
 			if err := tx.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM source_contexts c
@@ -164,7 +166,7 @@ func (s *Store) prepareConversation(ctx context.Context, j worker.Job, conversat
 			if err := retireConversationJobsTx(ctx, tx, j, conversation, run); err != nil {
 				return err
 			}
-			return acknowledge(ctx, tx, j)
+			return kernel.Acknowledge(ctx, tx, j)
 		}
 		jobRun, segment, nextRef, err := extraction.ParseConversationStage(j.Stage)
 		if err != nil {
@@ -177,14 +179,14 @@ func (s *Store) prepareConversation(ctx context.Context, j worker.Job, conversat
 					return err
 				}
 			}
-			return acknowledge(ctx, tx, j)
+			return kernel.Acknowledge(ctx, tx, j)
 		}
 		ordinal, next = segment, nextRef
 		earlier, err = earlierConversationMemoriesTx(ctx, tx, j.OwnerID, run)
 		if err != nil {
 			return err
 		}
-		settings, err = queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID))
+		settings, err = kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID))
 		prepared = err == nil
 		return err
 	})
@@ -204,10 +206,10 @@ func (w *conversationWork) Apply(ctx context.Context, output conversationOutput)
 		return err
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := extractionOwnerLock(ctx, tx, j.OwnerID); err != nil {
+		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
 		}
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		fresh, err := archiveConversationSources(ctx, tx, j.OwnerID, conversation)
@@ -220,7 +222,7 @@ func (w *conversationWork) Apply(ctx context.Context, output conversationOutput)
 					return err
 				}
 			}
-			return acknowledge(ctx, tx, j)
+			return kernel.Acknowledge(ctx, tx, j)
 		}
 		if ordinal == 0 {
 			if err := s.replaceConversationMemoriesTx(ctx, tx, scope, sources); err != nil {
@@ -327,7 +329,7 @@ func (w *conversationWork) Apply(ctx context.Context, output conversationOutput)
 		if err := discardPaidResultTx(ctx, tx, j); err != nil {
 			return err
 		}
-		return acknowledge(ctx, tx, j)
+		return kernel.Acknowledge(ctx, tx, j)
 	})
 }
 

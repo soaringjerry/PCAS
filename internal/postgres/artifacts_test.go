@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -34,7 +35,7 @@ func TestEditedArtifactRetainsFieldProvenance(t *testing.T) {
 			workspaceCommand(t, s, scope, workspace.Command{Type: "adoptRun", ID: run.ID, As: "progress", Text: "私密事实生成的说明。"})
 			edit := workspace.Command{Type: "setNotes", ID: id, Text: "私密事实生成的说明！"}
 			if kind == "project" {
-				edit = workspace.Command{Type: "updateProject", ID: id, Patch: asJSON(map[string]any{"progress": "私密事实生成的说明！"})}
+				edit = workspace.Command{Type: "updateProject", ID: id, Patch: kernel.JSON(map[string]any{"progress": "私密事实生成的说明！"})}
 			}
 			workspaceCommand(t, s, scope, edit)
 			// Inspect the derived dependency separately from normal memory recall,

@@ -3,10 +3,12 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/blob"
@@ -37,7 +39,7 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 				t.Fatal(err)
 			}
 			s.SetBlobs(files)
-			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: asJSON(map[string]bool{"autoAccept": true, "wakeIdeas": true})})
+			workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]bool{"autoAccept": true, "wakeIdeas": true})})
 			st := workspaceCommand(t, s, scope, workspace.Command{Type: "addIdea", Title: "去成都"})
 			st = workspaceCommand(t, s, scope, workspace.Command{Type: "ideaShelve", ID: st.Ideas[0].ID, Condition: "旅行计划交上去了"})
 			idea := st.Ideas[0]
@@ -56,7 +58,7 @@ func TestImportedHistoryNeverBecomesCurrentAction(t *testing.T) {
 					// condition signals remain part of the present-day fixture.
 					delete(content, "signals")
 				}
-				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(asJSON(content))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 30}})
+				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(kernel.JSON(content))}}}, "usage": map[string]int{"prompt_tokens": 100, "completion_tokens": 30}})
 			}))
 			t.Cleanup(server.Close)
 			s.SetModels(&ai.Registry{HTTP: server.Client(), Config: ai.Configuration{Extraction: "model", Providers: []ai.Provider{{ID: "model", Name: "模型", Protocol: "openai", BaseURL: server.URL, Model: "test", MaxOutput: 100, CostMode: "free"}}}})

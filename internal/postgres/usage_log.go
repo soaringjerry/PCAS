@@ -5,12 +5,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"github.com/jackc/pgx/v5/pgconn"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -43,8 +45,8 @@ func recordUsageTx(ctx context.Context, tx pgx.Tx, usage modelUsage) error {
  (owner_id,id,at,purpose,agent_id,model,input_tokens,output_tokens,cost,turn_id,run_id,job_id,memory_refs,tier,plan,input_estimated,output_estimated,cost_estimated)
  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
  ON CONFLICT (owner_id,id) DO NOTHING`, string(usage.OwnerID), string(usage.ID), usage.At,
-		usage.Purpose, nullString(usage.AgentID), usage.Model, usage.InputTokens, usage.OutputTokens,
-		usage.Cost, nullString(usage.TurnID), nullString(usage.RunID), nullString(usage.JobID), asJSON(refs), usage.Tier, safeUsePlan(usage.Plan), usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated)
+		usage.Purpose, kernel.NullString(usage.AgentID), usage.Model, usage.InputTokens, usage.OutputTokens,
+		usage.Cost, kernel.NullString(usage.TurnID), kernel.NullString(usage.RunID), kernel.NullString(usage.JobID), kernel.JSON(refs), usage.Tier, safeUsePlan(usage.Plan), usage.InputEstimated, usage.OutputEstimated, usage.CostEstimated)
 	if err != nil || tag.RowsAffected() == 0 || usage.DurationMS == nil {
 		return err
 	}
@@ -69,12 +71,12 @@ func recordUsageTx(ctx context.Context, tx pgx.Tx, usage modelUsage) error {
 // UsageSummary groups calls using calendar dates in the owner's stored zone.
 // Date boundaries are constructed separately, so DST days can be 23 or 25 hours.
 func (s *Store) UsageSummary(ctx context.Context, scope memory.Scope, from, to string) (json.RawMessage, error) {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return nil, err
 	}
 	var out json.RawMessage
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 		if errors.Is(err, memory.ErrNotFound) {
 			settings.Timezone = "UTC"
 		} else if err != nil {
@@ -200,7 +202,7 @@ func parseUsageCursor(before string) (usageCursor, error) {
 // UsageCalls resolves all reference previews with one set query. The logged
 // version stays unchanged, while text comes from the record's current version.
 func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, before string) (json.RawMessage, error) {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return nil, err
 	}
 	if limit == 0 {
@@ -225,7 +227,7 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
  FROM model_usage u LEFT JOIN execution_timings e ON e.owner_id=u.owner_id AND e.id=coalesce(u.turn_id,u.run_id)
  AND e.kind=CASE WHEN u.turn_id IS NOT NULL THEN 'secretary' ELSE 'deputy' END
  WHERE u.owner_id=$1 AND ($2::timestamptz IS NULL OR (u.at,u.id)<($2,$3::uuid))
- ORDER BY u.at DESC,u.id DESC LIMIT $4`, string(scope.OwnerID), usageBefore(cursor), nullString(string(cursor.ID)), limit+1)
+ ORDER BY u.at DESC,u.id DESC LIMIT $4`, string(scope.OwnerID), usageBefore(cursor), kernel.NullString(string(cursor.ID)), limit+1)
 		if err != nil {
 			return err
 		}
@@ -253,7 +255,7 @@ func (s *Store) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 		if len(items) > limit {
 			items = items[:limit]
 			last := items[len(items)-1]
-			next = base64.RawURLEncoding.EncodeToString(asJSON(usageCursor{At: last.At, ID: last.ID}))
+			next = base64.RawURLEncoding.EncodeToString(kernel.JSON(usageCursor{At: last.At, ID: last.ID}))
 		}
 		if len(ids) == 0 {
 			return nil

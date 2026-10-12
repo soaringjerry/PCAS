@@ -3,6 +3,8 @@ package postgres
 import (
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestNextBudgetDayUsesLocalCalendar(t *testing.T) {
@@ -32,7 +34,7 @@ func TestNextBudgetDayUsesLocalCalendar(t *testing.T) {
 func TestRetryDelayMatchesBoundedSchedule(t *testing.T) {
 	want := []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, time.Hour, time.Hour}
 	for i, v := range want {
-		if got := retryDelay(i + 1); got != v {
+		if got := kernel.RetryDelay(i + 1); got != v {
 			t.Fatalf("attempt %d: %v", i+1, got)
 		}
 	}

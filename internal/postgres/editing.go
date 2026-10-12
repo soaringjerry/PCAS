@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -55,10 +56,10 @@ func (s *Store) memoryCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	}
 	prior := claim
 	if c.Type == "editMemory" {
-		if err := requireText(c.Text); err != nil {
+		if err := kernel.RequireText(c.Text); err != nil {
 			return err
 		}
-		claim.Value = asJSON(c.Text)
+		claim.Value = kernel.JSON(c.Text)
 	}
 	claim.Confirmation = "confirmed"
 	claim.Acquisition = "direct"
@@ -70,7 +71,7 @@ func (s *Store) memoryCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 	_ = json.Unmarshal(prior.Value, &before)
 	_ = json.Unmarshal(claim.Value, &after)
 	if c.Type == "editMemory" {
-		return sampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "correction", Prompt: before, Response: after, Origin: workspace.Origin{Label: "记忆纠正", MemoryID: c.ID}, Version: ref.Version, State: "candidate", Epistemic: "confirmed", CreatedAt: stamp()})
+		return sampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "correction", Prompt: before, Response: after, Origin: workspace.Origin{Label: "记忆纠正", MemoryID: c.ID}, Version: ref.Version, State: "candidate", Epistemic: "confirmed", CreatedAt: kernel.Stamp()})
 	}
 	return recordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: c.RequestID, Kind: "confirmation", At: time.Now()})
 }
@@ -92,7 +93,7 @@ func readClaim(ctx context.Context, tx pgx.Tx, scope memory.Scope, id memory.ID,
 }
 func (s *Store) Correct(ctx context.Context, scope memory.Scope, in memory.CorrectRequest) (memory.Ref, error) {
 	var out memory.Ref
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -136,10 +137,10 @@ func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 	if changeType == "" {
 		changeType = "correction"
 	}
-	if !oneOf(changeType, "correction", "change", "supplement", "evidence") {
+	if !kernel.OneOf(changeType, "correction", "change", "supplement", "evidence") {
 		return out, memory.ErrInvalid
 	}
-	if !c.SubjectID.Valid() || requireText(c.Predicate) != nil || !json.Valid(c.Value) || !oneOf(c.Nature, "fact", "preference", "intention", "plan", "decision") || !oneOf(c.Acquisition, "direct", "reported", "inferred", "execution") || !oneOf(c.Confirmation, "unknown", "candidate", "adopted", "confirmed", "disputed") {
+	if !c.SubjectID.Valid() || kernel.RequireText(c.Predicate) != nil || !json.Valid(c.Value) || !kernel.OneOf(c.Nature, "fact", "preference", "intention", "plan", "decision") || !kernel.OneOf(c.Acquisition, "direct", "reported", "inferred", "execution") || !kernel.OneOf(c.Confirmation, "unknown", "candidate", "adopted", "confirmed", "disputed") {
 		return out, memory.ErrInvalid
 	}
 	if c.Scope == nil {
@@ -148,7 +149,7 @@ func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 	if c.ValidTime.Precision == "" {
 		c.ValidTime.Precision = "unknown"
 	}
-	if !oneOf(c.ValidTime.Precision, "unknown", "instant", "day", "month", "year", "range") || c.ValidTime.From != nil && c.ValidTime.To != nil && c.ValidTime.From.After(*c.ValidTime.To) {
+	if !kernel.OneOf(c.ValidTime.Precision, "unknown", "instant", "day", "month", "year", "range") || c.ValidTime.From != nil && c.ValidTime.To != nil && c.ValidTime.From.After(*c.ValidTime.To) {
 		return out, memory.ErrInvalid
 	}
 	var entity bool
@@ -163,7 +164,7 @@ func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 	if _, err := tx.Exec(ctx, `INSERT INTO record_versions(owner_id,record_id,version,valid_from,valid_to,time_precision,expressed_at,actor) VALUES($1,$2,$3,$4,$5,$6,$7,'user')`, string(scope.OwnerID), string(out.ID), version, c.ValidTime.From, c.ValidTime.To, c.ValidTime.Precision, c.ExpressedAt); err != nil {
 		return out, err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,scope,nature,acquisition,confirmation,change_type,reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, string(scope.OwnerID), string(out.ID), version, string(c.SubjectID), c.Predicate, c.Value, asJSON(c.Scope), c.Nature, c.Acquisition, c.Confirmation, changeType, in.Reason); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO claim_revisions(owner_id,claim_id,version,subject_id,predicate,value,scope,nature,acquisition,confirmation,change_type,reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, string(scope.OwnerID), string(out.ID), version, string(c.SubjectID), c.Predicate, c.Value, kernel.JSON(c.Scope), c.Nature, c.Acquisition, c.Confirmation, changeType, in.Reason); err != nil {
 		return out, err
 	}
 
@@ -192,11 +193,11 @@ func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 		SELECT owner_id,gen_random_uuid(),source_id,source_version,target_id,$3,locator,acquisition,stance FROM evidence WHERE owner_id=$1 AND target_id=$2 AND target_version=$4`, string(scope.OwnerID), string(out.ID), version, prior.Version); err != nil {
 		return out, err
 	}
-	source, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "corrections", ExternalID: string(out.ID), ExternalVersion: fmt.Sprint(version), Title: "用户纠正", Text: string(asJSON(map[string]any{"before": prior.Value, "after": c.Value, "reason": in.Reason})), MediaType: "text/plain"})
+	source, err := s.ingestTx(ctx, tx, scope, memory.IngestRequest{Connector: "corrections", ExternalID: string(out.ID), ExternalVersion: fmt.Sprint(version), Title: "用户纠正", Text: string(kernel.JSON(map[string]any{"before": prior.Value, "after": c.Value, "reason": in.Reason})), MediaType: "text/plain"})
 	if err != nil {
 		return out, err
 	}
-	if _, err := tx.Exec(ctx, "INSERT INTO evidence(owner_id,id,source_id,source_version,target_id,target_version,locator,acquisition,stance) VALUES($1,$2,$3,$4,$5,$6,$7,'direct','supports')", string(scope.OwnerID), string(memory.NewID()), string(source.ID), source.Version, string(out.ID), out.Version, asJSON(map[string]string{"field": "after"})); err != nil {
+	if _, err := tx.Exec(ctx, "INSERT INTO evidence(owner_id,id,source_id,source_version,target_id,target_version,locator,acquisition,stance) VALUES($1,$2,$3,$4,$5,$6,$7,'direct','supports')", string(scope.OwnerID), string(memory.NewID()), string(source.ID), source.Version, string(out.ID), out.Version, kernel.JSON(map[string]string{"field": "after"})); err != nil {
 		return out, err
 	}
 	for _, e := range in.Evidence {
@@ -220,7 +221,7 @@ func (s *Store) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 	if err := invalidateTx(ctx, tx, scope, string(out.ID)); err != nil {
 		return out, err
 	}
-	return out, enqueue(ctx, tx, scope.OwnerID, out.ID, out.Version, "memory.index")
+	return out, kernel.Enqueue(ctx, tx, scope.OwnerID, out.ID, out.Version, "memory.index")
 }
 func invalidateTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) error {
 	for _, sql := range []string{
@@ -236,13 +237,13 @@ func invalidateTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string)
 	return refreshSummaryJobsTx(ctx, tx, scope.OwnerID, memory.ID(id))
 }
 func (s *Store) RecordUse(ctx context.Context, scope memory.Scope, in memory.UseEvent) error {
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return recordUseTx(ctx, tx, scope, in) })
 }
 func recordUseTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in memory.UseEvent) error {
-	if !in.Ref.ID.Valid() || in.Ref.Version < 1 || in.EventID == "" || len(in.EventID) > 200 || !oneOf(in.Kind, "user_mention", "confirmation", "adoption") || in.At.IsZero() || in.At.After(time.Now().Add(time.Minute)) {
+	if !in.Ref.ID.Valid() || in.Ref.Version < 1 || in.EventID == "" || len(in.EventID) > 200 || !kernel.OneOf(in.Kind, "user_mention", "confirmation", "adoption") || in.At.IsZero() || in.At.After(time.Now().Add(time.Minute)) {
 		return memory.ErrInvalid
 	}
 	var version int
@@ -270,7 +271,7 @@ func (s *Store) Delete(ctx context.Context, scope memory.Scope, in memory.Delete
 			return memory.ErrInvalid
 		}
 	}
-	if err := requireOwner(scope); err != nil {
+	if err := kernel.RequireOwner(scope); err != nil {
 		return err
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -593,7 +594,7 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		}
 	}
 	// Source previews are derived copies, so purge them from action records too.
-	items, err := queryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1", string(scope.OwnerID))
+	items, err := kernel.QueryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1", string(scope.OwnerID))
 	if err != nil {
 		return err
 	}
@@ -651,7 +652,7 @@ func (s *Store) deleteRecordsTx(ctx context.Context, tx pgx.Tx, scope memory.Sco
 		item.Evolution = evolution
 		if changed {
 			item.Version++
-			item.UpdatedAt = stamp()
+			item.UpdatedAt = kernel.Stamp()
 			item.Sources = kept
 			if err := saveItem(ctx, tx, scope, item); err != nil {
 				return err

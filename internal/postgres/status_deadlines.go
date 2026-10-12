@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 var statusISODate = regexp.MustCompile(`\b([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})\b`)
@@ -154,7 +155,7 @@ func statusTime(text string) (hour, minute int, note string, ok bool) {
 	if p[1] == "" && hour >= 1 && hour <= 12 && !strings.Contains(p[0], ":") {
 		return 0, 0, "未说明上午还是下午", true
 	}
-	if oneOf(p[1], "下午", "傍晚", "晚上", "夜里") && hour < 12 {
+	if kernel.OneOf(p[1], "下午", "傍晚", "晚上", "夜里") && hour < 12 {
 		hour += 12
 	}
 	if p[1] == "凌晨" && hour == 12 {
@@ -167,7 +168,7 @@ func statusTime(text string) (hour, minute int, note string, ok bool) {
 }
 
 func validateCardDeadline(d cardDeadline, m cardMemory, loc *time.Location, now time.Time) (cardDeadline, bool) {
-	if !oneOf(d.Kind, "deadline", "appointment", "recurring") || strings.TrimSpace(d.Title) == "" || utf8.RuneCountInString(d.Title) > 60 {
+	if !kernel.OneOf(d.Kind, "deadline", "appointment", "recurring") || strings.TrimSpace(d.Title) == "" || utf8.RuneCountInString(d.Title) > 60 {
 		return d, false
 	}
 	if d.Kind == "recurring" {

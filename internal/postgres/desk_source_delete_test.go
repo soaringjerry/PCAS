@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -71,7 +72,7 @@ func TestSecretaryOriginalSourceDeletionScrubsHistoryAndReplay(t *testing.T) {
 			token := strings.Repeat("f", 64)
 			api := httpapi.New(s, s, httpapi.NewOwnerToken(token, scope.OwnerID), func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s})
 			for _, endpoint := range []struct{ method, path string }{{"GET", "/v1/desk/turns?conversationId=" + first.ConversationID}, {"POST", "/v1/desk/turn"}} {
-				request := httptest.NewRequest(endpoint.method, endpoint.path, strings.NewReader(string(asJSON(req))))
+				request := httptest.NewRequest(endpoint.method, endpoint.path, strings.NewReader(string(kernel.JSON(req))))
 				request.Header.Set("Authorization", "Bearer "+token)
 				request.Header.Set("Content-Type", "application/json")
 				w := httptest.NewRecorder()

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -43,7 +44,7 @@ func TestPhase2B3_K1_SaidChronologyEventAndMentions(t *testing.T) {
 			t.Errorf("precision=%v", items[i]["eventPrecision"])
 		}
 		var mentions []struct{ EntityID, Name, Role string }
-		if err := json.Unmarshal(asJSON(items[i]["mentions"]), &mentions); err != nil {
+		if err := json.Unmarshal(kernel.JSON(items[i]["mentions"]), &mentions); err != nil {
 			t.Fatal(err)
 		}
 		got := map[string]string{}
@@ -64,7 +65,7 @@ func b3TurnPlan(t *testing.T, s *Store, scope memory.Scope, f *b1Fake, self, pla
 	for i := 0; i < n; i++ {
 		actions = append(actions, map[string]any{"op": "create_task", "title": fmt.Sprintf("%s事项%d", label, i)})
 	}
-	f.set(string(asJSON(map[string]any{"reply": "安排好了。", "actions": actions})))
+	f.set(string(kernel.JSON(map[string]any{"reply": "安排好了。", "actions": actions})))
 	req := turnRequest("成都安排原话" + label)
 	out := mustTurn(t, s, scope, req)
 	src := b1TurnSource(t, s, scope, req.RequestID)
@@ -114,7 +115,7 @@ func TestPhase2B3_K3_CorrectionAndChangeUseCurrentText(t *testing.T) {
 			at := b3Year(now, -1, time.March, 1)
 			ref := b3Claim(t, s, scope, b3ClaimSpec{Text: "以前的安排", Subject: self, Said: &at, Mentions: []b3Mention{{place, "place"}}})
 			text := "更改后的打算：改去音乐厅"
-			replacement := memory.Claim{SubjectID: self, Predicate: "验收事项", Value: asJSON(text), Nature: "plan", Acquisition: "direct", Confirmation: "confirmed"}
+			replacement := memory.Claim{SubjectID: self, Predicate: "验收事项", Value: kernel.JSON(text), Nature: "plan", Acquisition: "direct", Confirmation: "confirmed"}
 			updated, err := s.Correct(t.Context(), scope, memory.CorrectRequest{ChangeType: change, Target: ref, Replacement: replacement, Reason: "验收更改"})
 			if err != nil {
 				t.Fatal(err)
@@ -258,7 +259,7 @@ func TestPhase2B3_K7_RawOriginalStaysInEvidenceList(t *testing.T) {
 	for _, card := range out.Turn.Cards {
 		if card.Kind == "sources" {
 			var sources []workspace.DeskSourceItem
-			if err := json.Unmarshal(asJSON(card.Items), &sources); err != nil {
+			if err := json.Unmarshal(kernel.JSON(card.Items), &sources); err != nil {
 				t.Fatal(err)
 			}
 			for _, item := range sources {
@@ -294,7 +295,7 @@ func TestPhase2B3_K8_UnrelatedItemFromSameOriginalDoesNotChangeStatus(t *testing
 	refs := []workspace.SourceRef{{SourceID: string(source.ID), Version: source.Version}}
 	// Synthetic association with the same original, outside the secretary turn's
 	// action log; the real creation action belongs to the workspace command.
-	b3Exec(t, s, `UPDATE work_items SET document=jsonb_set(document,'{sources}',$3::jsonb) WHERE owner_id=$1 AND id=$2`, scope.OwnerID, other, string(asJSON(refs)))
+	b3Exec(t, s, `UPDATE work_items SET document=jsonb_set(document,'{sources}',$3::jsonb) WHERE owner_id=$1 AND id=$2`, scope.OwnerID, other, string(kernel.JSON(refs)))
 	for _, status := range []string{"todo", "cancelled"} {
 		workspaceCommand(t, s, scope, workspace.Command{Type: "setTaskStatus", ID: other, Status: status})
 		f.set(b3Used(ref))

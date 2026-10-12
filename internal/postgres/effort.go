@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 	"github.com/soaringjerry/PCAS/internal/workspace/effort"
@@ -17,7 +18,7 @@ func maintainTaskPlanTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item
 	if item.Kind != "task" {
 		return nil
 	}
-	settings, err := queryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
+	settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
 	if err != nil {
 		return err
 	}
@@ -29,7 +30,7 @@ func enqueueEffortTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor mem
 	if err != nil || !installed {
 		return 0, err
 	}
-	ids, err := queryDocuments[string](ctx, tx, `SELECT to_jsonb(p.id::text) FROM work_items p WHERE p.owner_id=$1 AND p.kind='project' AND EXISTS(SELECT 1 FROM work_items w WHERE w.owner_id=p.owner_id AND w.project_id=p.id AND w.kind='task' AND w.due_at IS NOT NULL AND (w.document->>'estimatedHours') IS NULL AND coalesce(w.document->>'effortSource','')<>'user') AND NOT EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=p.owner_id AND j.stage LIKE $2||':'||p.id::text||':%' AND j.state IN('queued','leased')) ORDER BY p.created_at,p.id`, string(owner), EffortStage)
+	ids, err := kernel.QueryDocuments[string](ctx, tx, `SELECT to_jsonb(p.id::text) FROM work_items p WHERE p.owner_id=$1 AND p.kind='project' AND EXISTS(SELECT 1 FROM work_items w WHERE w.owner_id=p.owner_id AND w.project_id=p.id AND w.kind='task' AND w.due_at IS NOT NULL AND (w.document->>'estimatedHours') IS NULL AND coalesce(w.document->>'effortSource','')<>'user') AND NOT EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=p.owner_id AND j.stage LIKE $2||':'||p.id::text||':%' AND j.state IN('queued','leased')) ORDER BY p.created_at,p.id`, string(owner), EffortStage)
 	if err != nil {
 		return 0, err
 	}
@@ -52,25 +53,25 @@ type effortStore struct{ store *Store }
 func (a effortStore) Load(ctx context.Context, j worker.Job, project string, wantTasks bool) (item workspace.Item, tasks []workspace.Item, done bool, err error) {
 	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
 	err = pgx.BeginTxFunc(ctx, a.store.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		var err error
 		item, err = getItem(ctx, tx, scope, project)
 		if errors.Is(err, memory.ErrNotFound) {
 			done = true
-			return acknowledge(ctx, tx, j)
+			return kernel.Acknowledge(ctx, tx, j)
 		}
 		if err != nil || !wantTasks {
 			return err
 		}
-		tasks, err = queryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND project_id=$2 AND kind='task' AND due_at IS NOT NULL AND document->>'estimatedHours' IS NULL AND coalesce(document->>'effortSource','')<>'user' ORDER BY due_at,id`, string(scope.OwnerID), project)
+		tasks, err = kernel.QueryDocuments[workspace.Item](ctx, tx, `SELECT document FROM work_items WHERE owner_id=$1 AND project_id=$2 AND kind='task' AND due_at IS NOT NULL AND document->>'estimatedHours' IS NULL AND coalesce(document->>'effortSource','')<>'user' ORDER BY due_at,id`, string(scope.OwnerID), project)
 		if err != nil {
 			return err
 		}
 		if len(tasks) == 0 {
 			done = true
-			return acknowledge(ctx, tx, j)
+			return kernel.Acknowledge(ctx, tx, j)
 		}
 		return nil
 	})
@@ -82,7 +83,7 @@ func (a effortStore) Apply(ctx context.Context, j worker.Job, fn func(effort.Uni
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
 		}
-		if err := lockJob(ctx, tx, j); err != nil {
+		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
 		return fn(effortUnit{ctx: ctx, tx: tx, job: j, scope: memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}})
@@ -97,7 +98,7 @@ type effortUnit struct {
 }
 
 func (u effortUnit) Location() (*time.Location, error) {
-	settings, err := queryDocument[workspace.Settings](u.ctx, u.tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(u.scope.OwnerID))
+	settings, err := kernel.QueryDocument[workspace.Settings](u.ctx, u.tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(u.scope.OwnerID))
 	return deskLocation(settings), err
 }
 
@@ -118,8 +119,8 @@ func (u effortUnit) Event(outcome, reason string, count int) error {
 func (u effortUnit) DiscardResult() error { return discardPaidResultTx(u.ctx, u.tx, u.job) }
 
 func (u effortUnit) Requeue(code string) error {
-	_, err := u.tx.Exec(u.ctx, `UPDATE memory_jobs SET state='queued',error_code=$4,available_at=clock_timestamp()+$3*interval '1 second',lease_token=NULL,lease_until=NULL WHERE id=$1 AND lease_token=$2`, string(u.job.ID), string(u.job.LeaseToken), retryDelay(u.job.Attempts).Seconds(), code)
+	_, err := u.tx.Exec(u.ctx, `UPDATE memory_jobs SET state='queued',error_code=$4,available_at=clock_timestamp()+$3*interval '1 second',lease_token=NULL,lease_until=NULL WHERE id=$1 AND lease_token=$2`, string(u.job.ID), string(u.job.LeaseToken), kernel.RetryDelay(u.job.Attempts).Seconds(), code)
 	return err
 }
 
-func (u effortUnit) Acknowledge() error { return acknowledge(u.ctx, u.tx, u.job) }
+func (u effortUnit) Acknowledge() error { return kernel.Acknowledge(u.ctx, u.tx, u.job) }

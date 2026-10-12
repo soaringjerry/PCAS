@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -118,7 +119,7 @@ func b1DatabaseRows(t *testing.T, s *Store, ignoreLegacy bool) map[string]string
 	rows.Close()
 	out := map[string]string{}
 	for _, name := range names {
-		if name == "schema_migrations" || ignoreLegacy && oneOf(name, tables...) {
+		if name == "schema_migrations" || ignoreLegacy && kernel.OneOf(name, tables...) {
 			continue
 		}
 		expr := "to_jsonb(t)"
@@ -156,7 +157,7 @@ func b1DatabaseColumns(t *testing.T, s *Store, before map[string]string) map[str
 		if err := rows.Scan(&table, &column); err != nil {
 			t.Fatal(err)
 		}
-		if _, exists := before[table]; exists && !oneOf(column, legacyColumns[table]...) {
+		if _, exists := before[table]; exists && !kernel.OneOf(column, legacyColumns[table]...) {
 			columns[table] = append(columns[table], column)
 		}
 	}

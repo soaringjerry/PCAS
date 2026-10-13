@@ -364,7 +364,22 @@ The cleanup succeeded and the record counts are equal. The API log and the worke
 
 The nightly evaluation is scheduled in the host's crontab at 15:30 UTC. It makes no call until a dedicated Codex home is signed in at `/root/PCAS-private/codex-eval`; the [nightly evaluation page](../tasks/foundation-nightly-evaluation.md) gives the limit and the rehearsal.
 
-Not checked on live: no background job ran after the release, and the table of recorded events has no row yet.
+At the time of the release no background job had run on live, and the table of recorded events had no row.
+
+### First Real Background Jobs After This Release
+
+The owner used the product on 2026-10-13 at 00:26 UTC: three secretary turns. These are the first real jobs on the paths that phase 3.9 moved out of storage.
+
+| Item | Result |
+|---|---|
+| Jobs from the three turns | 3 `source.chunk`, 3 `source.extract`, 3 `source.embed`, 3 `source.tokenize`, 4 `memory.summary`, 1 `memory.index`, 1 `memory.embed`, then 1 `memory.organize`, 1 `memory.entity_candidates`, and 5 `memory.compare`. Each job finished at its first attempt. |
+| Model calls | 3 extraction, 4 background embedding, 3 query embedding, 4 secretary, 1 organize, 1 alias scan, 5 compare. Each call returned and each reservation is settled. |
+| Scheduled jobs since the release | Handover, project handover, entity candidates, and topic project calls returned without a failure. |
+| Recorded events | 28 rows. The deepest chain has depth 3 (`source.chunk`, `source.extract`, `memory.summary`, then `memory.index` and `memory.embed`). The limit is 200. No job has the error `chain_limit`. |
+| Logs | The API and the worker wrote no warning and no error from 00:20 UTC to 00:44 UTC. |
+| Stage outcomes | 25 successes on that day. The other counts are the counted overflows of the recall budgets, which this release did not change. |
+
+Not yet observed on live: an attachment job (`source.parse`). The three turns had no attachment.
 
 ## Host Cleanup
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -67,9 +68,9 @@ func TestMeteredExtractionRecoversLostResponsesWithSeparateCalls(t *testing.T) {
 		}
 		secretaryModelReply(w, map[string]any{"items": []any{b2Item(text, text, "plan")}})
 	})
-	s.Models.Config.Providers[0].CostMode = ""
-	s.Models.Config.Providers[0].InputPerMillion = 1
-	s.Models.Config.Providers[0].OutputPerMillion = 1
+	registryOf(s).Config.Providers[0].CostMode = ""
+	registryOf(s).Config.Providers[0].InputPerMillion = 1
+	registryOf(s).Config.Providers[0].OutputPerMillion = 1
 	src := b2Source(t, s, scope, "desk", "user", text, nil)
 	b2OnlyExtraction(t, s, scope, src, 0)
 	j, err := s.Claim(context.Background(), time.Minute)
@@ -110,9 +111,9 @@ func TestPersistentStagePausesAtRecordedRecoveryLimitAfterRestart(t *testing.T) 
 		}
 		disconnectModelResponse(t, w)
 	})
-	s.Models.Config.Providers[0].CostMode = ""
-	s.Models.Config.Providers[0].InputPerMillion = 1
-	s.Models.Config.Providers[0].OutputPerMillion = 1
+	registryOf(s).Config.Providers[0].CostMode = ""
+	registryOf(s).Config.Providers[0].InputPerMillion = 1
+	registryOf(s).Config.Providers[0].OutputPerMillion = 1
 	ref := organizeTestMemory(t, s, scope, "Fictitious report interrupted by network failure.")
 	before, err := s.GetMemory(context.Background(), scope, string(ref.ID))
 	if err != nil {
@@ -120,7 +121,7 @@ func TestPersistentStagePausesAtRecordedRecoveryLimitAfterRestart(t *testing.T) 
 	}
 	j := organizeTestJob(t, s, scope)
 	for attempt := 1; attempt <= kernel.MaxAttempts; attempt++ {
-		peer, err := Open(context.Background(), s.Pool.Config().ConnConfig.ConnString())
+		peer, err := Open(context.Background(), s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -177,9 +178,9 @@ func TestUnknownRecoveryPausesWhenBudgetCannotCoverReplacement(t *testing.T) {
 		calls.Add(1)
 		disconnectModelResponse(t, w)
 	})
-	s.Models.Config.Providers[0].CostMode = ""
-	s.Models.Config.Providers[0].InputPerMillion = 1
-	s.Models.Config.Providers[0].OutputPerMillion = 1
+	registryOf(s).Config.Providers[0].CostMode = ""
+	registryOf(s).Config.Providers[0].InputPerMillion = 1
+	registryOf(s).Config.Providers[0].OutputPerMillion = 1
 	organizeTestMemory(t, s, scope, "Fictitious report with a limited budget.")
 	j := organizeTestJob(t, s, scope)
 	requireRecoveryFailure(t, (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(context.Background(), j), modelcall.ErrOutcomeUnknown.Error(), true)
@@ -209,9 +210,9 @@ func TestReservationWriteFailureDoesNotResetUnknownRecoveryCounter(t *testing.T)
 		}
 		organizeTestReply(t, w, r, "event")
 	})
-	s.Models.Config.Providers[0].CostMode = ""
-	s.Models.Config.Providers[0].InputPerMillion = 1
-	s.Models.Config.Providers[0].OutputPerMillion = 1
+	registryOf(s).Config.Providers[0].CostMode = ""
+	registryOf(s).Config.Providers[0].InputPerMillion = 1
+	registryOf(s).Config.Providers[0].OutputPerMillion = 1
 	organizeTestMemory(t, s, scope, "Fictitious report with an interrupted reservation write.")
 	j := organizeTestJob(t, s, scope)
 	ctx := context.Background()
@@ -283,7 +284,7 @@ func TestLateInterruptedCallCannotDeleteReplacementPaidResult(t *testing.T) {
 	if err != nil || replacement == nil || replacement.ID != j.ID {
 		t.Fatal(replacement, err)
 	}
-	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

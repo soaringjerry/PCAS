@@ -62,12 +62,12 @@ func TestPhase26A2SchedulerReportsConcreteLockFailure(t *testing.T) {
 func TestPhase26A2LongDeferralWarnsOnceAndResetsAfterCompletion(t *testing.T) {
 	f := phase26LoadFixture(t)
 	phase26NewModel(t, f)
-	phase26Isolate(t, f, kernel.OrganizeStage)
+	phase26Isolate(t, f, organize.Stage)
 	if _, err := f.Store.ScheduleOrganize(f.Context, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	phase26Isolate(t, f, kernel.OrganizeStage)
-	j := phase26ClaimStage(t, f, kernel.OrganizeStage)
+	phase26Isolate(t, f, organize.Stage)
+	j := phase26ClaimStage(t, f, organize.Stage)
 	if err := f.Store.Defer(f.Context, j, "fictitious_deferral", time.Now().Add(time.Minute), true); err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestPhase26A2LongDeferralWarnsOnceAndResetsAfterCompletion(t *testing.T) {
 		t.Fatalf("long-deferral alert must identify this job once: %s", log.String())
 	}
 	phase26Exec(t, f, `UPDATE memory_jobs SET available_at=now() WHERE id=$1`, j.ID)
-	retry := phase26ClaimStage(t, f, kernel.OrganizeStage)
+	retry := phase26ClaimStage(t, f, organize.Stage)
 	if err := (organize.Service{Store: f.Store.OrganizeStore(), Generator: jobCalls(f.Store), Version: kernel.OrganizeVersion}).Process(f.Context, retry); err != nil {
 		t.Fatal(err)
 	}

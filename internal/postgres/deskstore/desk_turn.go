@@ -79,11 +79,11 @@ func PointerValue(v *string) string {
 func (s *Desk) SecretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, conversationID string) (SecretaryContext, error) {
 	out := SecretaryContext{TargetItems: map[string]workspace.Item{}, ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
 	agentID := req.AgentID
-	if agentID == "" {
-		agentID = s.Models.ExtractionID()
-	}
 	if s.Models == nil {
 		return out, memory.ErrUnavailable
+	}
+	if agentID == "" {
+		agentID = s.Models.ExtractionID()
 	}
 	var err error
 	out.Agent, err = kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), agentID)
@@ -93,7 +93,7 @@ func (s *Desk) SecretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	if err != nil {
 		return out, err
 	}
-	if !out.Agent.Enabled || out.Agent.Channel == "manual" || !s.Models.Available(out.Agent.ID) {
+	if !out.Agent.Enabled || out.Agent.Channel == "manual" || !s.ModelAvailable(out.Agent.ID) {
 		return out, memory.ErrUnavailable
 	}
 	tasks, settings, deps, err := s.DeskItemsContextTx(ctx, tx, scope, out.Agent, true)
@@ -219,7 +219,7 @@ func (s *Desk) CheckDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 }
 func (s *Desk) SecretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *SecretaryContext, search secretary.Recall) (string, map[string]workspace.Memory, error) {
 	var prompt strings.Builder
-	loc := kernel.Location(c.Settings)
+	loc := c.Settings.Location()
 	c.Plan = memory.PlanQuery(req.Text, s.BusinessNow(), loc)
 	var projectID *string
 	if req.ThingID != nil {
@@ -579,7 +579,7 @@ func (t *secretarySession) Input(ctx context.Context, recall secretary.Recall) (
 	if err := s.store.checkSecretaryUseContextTx(ctx, s.tx, s.scope, *c); err != nil {
 		return nil, "verify", err
 	}
-	state := &secretary.Asking{Tier: c.Tier, Use: c.Use, Sent: sent, Input: prompt, Dependencies: c.Dependencies, Text: s.req.Text, Location: kernel.Location(c.Settings), Started: t.started}
+	state := &secretary.Asking{Tier: c.Tier, Use: c.Use, Sent: sent, Input: prompt, Dependencies: c.Dependencies, Text: s.req.Text, Location: c.Settings.Location(), Started: t.started}
 	if item, ok := c.Aliases["THIS"]; ok {
 		state.This = &item
 	}
@@ -712,7 +712,7 @@ func (t *secretaryTurn) Item(ctx context.Context, id string) (workspace.Item, er
 }
 
 func (t *secretaryTurn) Cards(ctx context.Context, answer SecretaryOutput, sent map[string]workspace.Memory) ([]workspace.DeskCard, error) {
-	return t.store.SecretaryCardsTx(ctx, t.tx, t.scope, answer, sent, t.c.Sources, t.c.Aliases, kernel.Location(t.c.Settings), t.c.Plan.Recall)
+	return t.store.SecretaryCardsTx(ctx, t.tx, t.scope, answer, sent, t.c.Sources, t.c.Aliases, t.c.Settings.Location(), t.c.Plan.Recall)
 }
 
 // Act does one action in a transaction of its own inside the turn, with its
@@ -739,7 +739,7 @@ func (t *secretaryTurn) Act(ctx context.Context, a SecretaryAction, aliases map[
 		_ = actionTx.Rollback(ctx)
 		return out, err
 	}
-	out.Receipt, out.Err = s.ExecuteSecretaryActionTx(actionCtx, actionTx, t.scope, a, aliases, c.Agent, kernel.Location(c.Settings), PointerValue(t.req.ThingID))
+	out.Receipt, out.Err = s.ExecuteSecretaryActionTx(actionCtx, actionTx, t.scope, a, aliases, c.Agent, c.Settings.Location(), PointerValue(t.req.ThingID))
 	if !secretary.Done(out.Receipt, out.Err) {
 		return out, actionTx.Rollback(ctx)
 	}

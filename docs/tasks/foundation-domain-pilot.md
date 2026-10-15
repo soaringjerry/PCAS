@@ -147,7 +147,7 @@ Three flows keep their order in storage and get their model steps from the appli
 | A workspace command that queues a run | `Store.ExecuteWith` searches memory before it takes the owner lock. | The query embedding. |
 | The deputy's run | `RunAgentJobs` and `RunDeputy` in `deputystore` recover interrupted runs and lease one run. | `deputy.Conduct` conducts the leased run through `deputy.Session`: the memory of the run, the answer call, the settlement, the self-check, the selection of the text, and the last write. A resumed run uses what its earlier attempt saved and repeats no paid call. Since 2026-10-12. |
 
-`internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. Compose it after the store has its models.
+`internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.
 Tests in the storage package compose the same services in `internal/postgres/compose_test.go`, at each call.
 
 ## Storage Packages
@@ -156,9 +156,18 @@ The PostgreSQL adapter is split by domain into storage packages over a shared ke
 Each storage package has a type over the kernel's `DB`. `Store` in `internal/postgres` embeds each type, so a caller of the store keeps its entry. A package that needs a lower package holds it; `newStore` composes them, and the test `TestComposedStoreHoldsEveryStoragePackage` fails when a held package is absent.
 A storage package depends only on the packages below it in this table. Go forbids an import cycle, so the order is enforced by the compiler.
 
+What the kernel needs from a domain comes through the composition:
+
+| Need | Source |
+|---|---|
+| The hourly call limit of a stage | Each domain package declares `HourlyCalls` next to its stage name. `internal/app/stagelimits.Hourly` collects them. `postgres.Open` requires the table, so a program cannot open the store without the limits. |
+| The configured models | The interface `kernel.Models` uses plain types and `memory.ModelInfo`. The provider registry implements it. `app.Compose` gives the registry to the store and keeps it for the gateway and the services. A store without models answers "not configured" through `DB.Model`, `DB.TextModel`, and `DB.ModelAvailable`. |
+| A stage name | The storage package uses the constant of the domain package that owns the stage. The kernel holds no stage name. |
+| The time zone of the settings | `workspace.Settings.Location`. |
+
 | Package | Content |
 |---|---|
-| `kernel` | `DB`: the connection pool, the configured models, the file store, the business clock, and the connection slots. The encoding of a document, the checks of a request, the reads of document rows, the lease and the queueing of a job, the owner lock, the hourly budget of each limited stage, the stage names and the rule versions, the record of a stage outcome, the transaction of a derived write, and the connection of a serialized call. No business rule and no table of one domain. |
+| `kernel` | `DB`: the connection pool, the model catalog, the file store, the business clock, the connection slots, and the hourly limits. The encoding of a document, the checks of a request, the reads of document rows, the lease and the queueing of a job, the owner lock, the check of a stage's hourly limit, the rule versions, the record of a stage outcome, the transaction of a derived write, and the connection of a serialized call. No business rule and no table of one domain. Since 2026-10-15 the kernel imports only `memory` and `worker`; the test `TestTheKernelDependsOnTheVocabularyOnly` enforces this. |
 | `memoryread`, `memorystore`, `usagelog`, `schedulestore`, `activitystore`, `ownerstore`, `itemstore`, `actionlog`, `sourcestore`, `accessstore`, `evidencestore` | Leaves: the reads of memories, derived memory material, usage records, the schedule view, the day activity, the first rows of an owner, the items table, the record of an action, sources, access checks, and evidence text. |
 | `claimstore` | The write of a memory with its evidence and its entities. |
 | `budgetstore` | The reservation of a call's cost, the health of the background stages, the timing record. |

@@ -11,6 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
@@ -148,16 +149,16 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	phase26Isolate(t, f, kernel.HandoverStage)
+	phase26Isolate(t, f, handover.Stage)
 	if _, err := s.ScheduleStatus(ctx, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	phase26Isolate(t, f, kernel.HandoverStage)
-	j := phase26ClaimStage(t, f, kernel.HandoverStage)
+	phase26Isolate(t, f, handover.Stage)
+	j := phase26ClaimStage(t, f, handover.Stage)
 	if err := (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
-	calls := model.calls(kernel.HandoverStage)
+	calls := model.calls(handover.Stage)
 	if len(calls) != 1 {
 		t.Fatal("handover made extra provider calls")
 	}
@@ -208,7 +209,7 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 		t.Fatal(err)
 	}
 	phase26Exec(t, f, `UPDATE claim_revisions SET value=to_jsonb('Fictitious changed requirement'::text) WHERE owner_id=$1 AND claim_id=$2`, f.Scope.OwnerID, f.Claims[2])
-	phase26Isolate(t, f, kernel.HandoverStage)
+	phase26Isolate(t, f, handover.Stage)
 	if n, err := s.ScheduleStatus(ctx, time.Now()); err != nil || n != 1 {
 		t.Fatalf("changed requirement not queued for hourly update: %d %v", n, err)
 	}
@@ -268,14 +269,14 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	if largestCalls != 78 || len(pairs) != 3 {
 		t.Fatalf("1200-member opportunity coverage calls=%d expected78 goldpairs=%d expected3", largestCalls, len(pairs))
 	}
-	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage} {
+	for _, stage := range []string{organize.Stage, comparison.Stage, interpstore.EntityCandidatesStage, handover.Stage} {
 		if _, err := phase26Schedule(ctx, s, stage); err != nil {
 			t.Fatal(err)
 		}
 	}
 	tables := []string{"memory_comparison_members", "memory_group_progress", "memory_jobs", "claims", "entity_versions"}
 	before := phase26Digest(t, f, tables)
-	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage} {
+	for _, stage := range []string{organize.Stage, comparison.Stage, interpstore.EntityCandidatesStage, handover.Stage} {
 		if _, err := phase26Schedule(ctx, s, stage); err != nil {
 			t.Fatal(err)
 		}
@@ -313,13 +314,13 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	}
 	t.Logf("complete plan batches=%d largest_group_calls=%d single_memory_affected_calls=%d; plan coverage is not actual provider billing", len(first), largestCalls, affected)
 	phase26LibraryPrecondition(t, f)
-	phase26Isolate(t, f, kernel.CompareStage)
+	phase26Isolate(t, f, comparison.Stage)
 	for i := 0; i < 4; i++ {
 		if _, err := s.ScheduleCompare(ctx, time.Now()); err != nil {
 			t.Fatal(err)
 		}
-		phase26Isolate(t, f, kernel.CompareStage)
-		j := phase26ClaimStage(t, f, kernel.CompareStage)
+		phase26Isolate(t, f, comparison.Stage)
+		j := phase26ClaimStage(t, f, comparison.Stage)
 		if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}

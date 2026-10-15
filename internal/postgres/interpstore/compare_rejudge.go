@@ -96,7 +96,7 @@ func (a compareSession) RejudgePair(ctx context.Context, j worker.Job, refs []me
 		if input == nil {
 			return finishRejudgeTx(ctx, tx, j, "inputs_changed")
 		}
-		return kernel.HourlyLimit(ctx, tx, kernel.CompareStage, "compare_hourly_limit")
+		return a.store.HourlyLimit(ctx, tx, comparison.Stage, "compare_hourly_limit")
 	})
 	if err != nil || input == nil {
 		return nil, false, err
@@ -111,7 +111,7 @@ func (a compareSession) ApplyRejudge(ctx context.Context, j worker.Job, refs []m
 			if err := kernel.LockJob(ctx, tx, j); err != nil {
 				return err
 			}
-			if err := kernel.StageEvent(ctx, tx, j.OwnerID, kernel.CompareStage, "failure", "rejudge_invalid_output", 1); err != nil {
+			if err := kernel.StageEvent(ctx, tx, j.OwnerID, comparison.Stage, "failure", "rejudge_invalid_output", 1); err != nil {
 				return err
 			}
 			return kernel.DiscardPaidResult(ctx, tx, j)
@@ -157,7 +157,7 @@ func (a compareSession) ApplyRejudge(ctx context.Context, j worker.Job, refs []m
 				return err
 			}
 		}
-		if err := kernel.StageEvent(ctx, tx, j.OwnerID, kernel.CompareStage, "success", "rejudge_"+outcome, 1); err != nil {
+		if err := kernel.StageEvent(ctx, tx, j.OwnerID, comparison.Stage, "success", "rejudge_"+outcome, 1); err != nil {
 			return err
 		}
 		return finishRejudgeTx(ctx, tx, j, outcome)

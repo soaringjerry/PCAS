@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
@@ -39,7 +40,7 @@ func TestInteractiveWorkerRecoversDeletedInputAccountingAfterRestart(t *testing.
 	if _, err := s.Pool.Exec(ctx, `DROP TRIGGER reject_continuation_usage ON model_usage; UPDATE desk_turn_order SET status='canceled'`); err != nil {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +103,7 @@ func TestInteractiveWorkerRejectsResponseFromReplacedDeputyLease(t *testing.T) {
 	request.Policy = policy
 	request.ExecutionID, request.RootExecutionID = memory.ID(run.ID), memory.ID(run.ID)
 	adapter := callstore.InteractiveCalls{Store: s.Calls}
-	provider, _ := s.Models.Get("model")
+	provider, _ := registryOf(s).Get("model")
 	invocation, err := adapter.Prepare(ctx, request, provider)
 	if err != nil {
 		t.Fatal(err)
@@ -201,7 +202,7 @@ func TestInteractiveWorkerClassifiesInterruptedCallsWithoutResubmission(t *testi
 			request := admittedInteractiveRequest(t, s, scope, "model")
 			ctx := context.Background()
 			adapter := callstore.InteractiveCalls{Store: s.Calls}
-			provider, _ := s.Models.Get("model")
+			provider, _ := registryOf(s).Get("model")
 			invocation, err := adapter.Prepare(ctx, request, provider)
 			if err != nil {
 				t.Fatal(err)

@@ -14,6 +14,7 @@ import (
 	"unicode"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
@@ -462,7 +463,7 @@ func phase26DisposableStore(t *testing.T) (*Store, context.Context) {
 	deadline := time.Now().Add(20 * time.Second)
 	var s *Store
 	for time.Now().Before(deadline) {
-		s, err = Open(ctx, dsn)
+		s, err = Open(ctx, dsn, stagelimits.Hourly())
 		if err == nil {
 			break
 		}

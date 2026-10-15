@@ -611,10 +611,10 @@ func TestStabilizationUndoU14_QueuedAndStartedDelegation(t *testing.T) {
 			scope := owner()
 			payload := `{"actions":[{"op":"delegate","ref":"new","title":"delegated","kind":"plan","prompt":"make a plan"}]}`
 			stabilizationUndoModel(t, s, &payload)
-			s.Models.Config.Providers[0].CostMode = "token"
-			s.Models.Config.Providers[0].InputPerMillion = 2
-			s.Models.Config.Providers[0].OutputPerMillion = 3
-			s.Models.Config.Providers[0].MaxOutput = 200
+			registryOf(s).Config.Providers[0].CostMode = "token"
+			registryOf(s).Config.Providers[0].InputPerMillion = 2
+			registryOf(s).Config.Providers[0].OutputPerMillion = 3
+			registryOf(s).Config.Providers[0].MaxOutput = 200
 			stabilizationUndoSnapshot(t, s, scope)
 			before := stabilizationUndoBusiness(t, s, scope, true)
 			out := stabilizationUndoTurn(t, s, scope, "新建并派副手")

@@ -420,10 +420,10 @@ func TestPhase2B1_P13_AdoptedSourceContentSurvivesForUserButExpiresForModels(t *
 	s, scope := b1Store(t), owner()
 	marker := "采纳的成都方案独特内容"
 	f := b1Model(t, s, "- [ ] "+marker)
-	second := s.Models.Config.Providers[0]
+	second := registryOf(s).Config.Providers[0]
 	second.ID = "model2"
 	second.Name = "另一个副手"
-	s.Models.Config.Providers = append(s.Models.Config.Providers, second)
+	registryOf(s).Config.Providers = append(registryOf(s).Config.Providers, second)
 	source := b1Trip(t, s, scope)
 	run := b1Run(t, s, scope, "model", "成都吃什么")
 	b1HasRef(t, run.ContextVersions, source, true)
@@ -671,9 +671,9 @@ func TestPhase2B1_P14_CapturedMemoryVisibilityClosesAndReopensOriginal(t *testin
 	s, scope := b1Store(t), owner()
 	fixture := b1R2aFixture(t, "P14")
 	f := b1Model(t, s, `{"reply":"R2a原回答固定标记","used":["S1"],"actions":[]}`)
-	second := s.Models.Config.Providers[0]
+	second := registryOf(s).Config.Providers[0]
 	second.ID, second.Name = "model2", "仍然可见的副手"
-	s.Models.Config.Providers = append(s.Models.Config.Providers, second)
+	registryOf(s).Config.Providers = append(registryOf(s).Config.Providers, second)
 	// Capture and adoption use the same public workspace commands as the UI.
 	st := workspaceCommand(t, s, scope, workspace.Command{Type: "capture", Text: fixture["raw"]})
 	candidate := st.Candidates[0]

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soaringjerry/PCAS/internal/postgres"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 )
 
 func TestResponseTableNamesEachStageOnceAndCoversEveryLimitedStage(t *testing.T) {
@@ -16,7 +16,7 @@ func TestResponseTableNamesEachStageOnceAndCoversEveryLimitedStage(t *testing.T)
 		}
 		seen[r.Stage] = true
 	}
-	for stage := range postgres.StageHourlyLimits() {
+	for stage := range stagelimits.Hourly() {
 		if !seen[stage] {
 			t.Errorf("stage %s has an hourly limit and no response row", stage)
 		}

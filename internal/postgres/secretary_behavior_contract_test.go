@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
@@ -390,7 +391,7 @@ func TestSecretaryLongReplyPreservesBodyAndActions(t *testing.T) {
 // A second Store has its own pool: only PostgreSQL can serialize these turns.
 func TestSecretaryCrossInstanceQueueAllowsOtherConversations(t *testing.T) {
 	s, scope := testStore(t), owner()
-	peer, err := Open(context.Background(), s.Pool.Config().ConnString())
+	peer, err := Open(context.Background(), s.Pool.Config().ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -591,7 +592,7 @@ func TestSecretaryCancelFailureAndIdempotentRetryReleaseLocks(t *testing.T) {
 
 func TestSecretaryConcurrentRetryAcrossInstancesExecutesOnce(t *testing.T) {
 	s, scope := testStore(t), owner()
-	peer, err := Open(context.Background(), s.Pool.Config().ConnString())
+	peer, err := Open(context.Background(), s.Pool.Config().ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

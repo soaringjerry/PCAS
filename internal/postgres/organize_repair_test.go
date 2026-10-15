@@ -123,7 +123,7 @@ func TestP3ReorganizeTenCasesOnlyRulesAndWithdrawalCounts(t *testing.T) {
 	}
 	found := false
 	for _, stage := range h.Stages {
-		if stage.Stage == kernel.OrganizeStage {
+		if stage.Stage == organize.Stage {
 			found = stage.Withdrawn.Deadlines == 10 && stage.Withdrawn.Requirements == 5
 		}
 	}

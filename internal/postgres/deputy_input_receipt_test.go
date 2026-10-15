@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -43,7 +44,7 @@ func TestDeputyInputIsDurableBeforeProviderSubmission(t *testing.T) {
 	if err := s.Pool.QueryRow(ctx, `SELECT purpose,output FROM background_model_results WHERE owner_id=$1 AND job_id=$2`, string(scope.OwnerID), string(paid.InvocationID)).Scan(&purpose, &output); err != nil || purpose != "deputy" || output != paid.Output {
 		t.Fatal("returned result did not complete its input receipt", purpose, output, err)
 	}
-	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +90,7 @@ func TestDeputyInterruptedInputCannotBecomeARecoveredResult(t *testing.T) {
 		t.Error("interrupted input recovery submitted another model call")
 	})
 	request := leasedDeputyAnswer(t, s, scope)
-	provider, _ := s.Models.Get("model")
+	provider, _ := registryOf(s).Get("model")
 	adapter := callstore.InteractiveCalls{Store: s.Calls}
 	invocation, err := adapter.Prepare(ctx, request, provider)
 	if err != nil {
@@ -105,7 +106,7 @@ func TestDeputyInterruptedInputCannotBecomeARecoveredResult(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET lease_until=clock_timestamp()-interval '1 second' WHERE owner_id=$1 AND id=$2`, string(scope.OwnerID), string(request.ExecutionID)); err != nil {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

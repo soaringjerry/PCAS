@@ -57,7 +57,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 	}
 	m.mu.Lock()
 	m.Reply = func(call phase26Call) string {
-		if call.Stage == kernel.CompareStage {
+		if call.Stage == comparison.Stage {
 			return `{"duplicates":[],"superseded":[]}`
 		}
 		return m.goldReply(call)
@@ -65,23 +65,23 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 	m.mu.Unlock()
 	start := time.Now()
 	for i := 0; i < 40; i++ {
-		phase26Isolate(t, f, kernel.CompareStage)
+		phase26Isolate(t, f, comparison.Stage)
 		if _, err := f.Store.ScheduleCompare(ctx, time.Now()); err != nil {
 			t.Fatal(err)
 		}
-		phase26Isolate(t, f, kernel.CompareStage)
-		j := phase26ClaimStage(t, f, kernel.CompareStage)
+		phase26Isolate(t, f, comparison.Stage)
+		j := phase26ClaimStage(t, f, comparison.Stage)
 		if err := (comparison.Service{Store: f.Store.CompareStore(), Generator: jobCalls(f.Store), Version: kernel.CompareVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 		if (i+1)%10 == 0 {
-			t.Logf("single edited memory actual_provider_calls=%d elapsed=%s", len(m.calls(kernel.CompareStage)), time.Since(start))
+			t.Logf("single edited memory actual_provider_calls=%d elapsed=%s", len(m.calls(comparison.Stage)), time.Since(start))
 		}
 	}
-	if len(m.calls(kernel.CompareStage)) != 40 {
-		t.Errorf("actual comparison calls=%d expected40", len(m.calls(kernel.CompareStage)))
+	if len(m.calls(comparison.Stage)) != 40 {
+		t.Errorf("actual comparison calls=%d expected40", len(m.calls(comparison.Stage)))
 	}
-	for _, call := range m.calls(kernel.CompareStage) {
+	for _, call := range m.calls(comparison.Stage) {
 		var b interpstore.ComparisonBatch
 		if err := json.Unmarshal([]byte(call.Prompt), &b); err != nil {
 			t.Fatal(err)

@@ -6,44 +6,34 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/currentstate/datereview"
-	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
-	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
-	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/worker"
-	"github.com/soaringjerry/PCAS/internal/workspace/effort"
-	"github.com/soaringjerry/PCAS/internal/workspace/projecthandover"
-	"github.com/soaringjerry/PCAS/internal/workspace/topicproject"
 )
-
-// DateTidyHourly is the number of date reviews that can reserve a call in
-// one hour.
-const DateTidyHourly = 30
-
-// HourlyBudgets is the number of calls that each limited background stage can
-// reserve in one hour. Contract 4.1: unused capacity is never borrowed by
-// another stage. A stage that is absent has no stage limit.
-var HourlyBudgets = map[string]int{
-	organize.Stage:         40,
-	comparison.Stage:       40,
-	comparison.EntityStage: 30,
-	aliasscan.Stage:        6,
-	handover.Stage:         2,
-	projecthandover.Stage:  10,
-	effort.Stage:           10,
-	topicproject.Stage:     2,
-	datereview.Stage:       DateTidyHourly,
-}
 
 // BaseStage is the stage of a job without what follows its first colon.
 func BaseStage(stage string) string { return strings.SplitN(stage, ":", 2)[0] }
 
+// Limited reports whether the stage has an hourly call limit. A limited stage
+// keeps its paid results and retries until it succeeds or its input changes.
+func (d *DB) Limited(stage string) bool {
+	_, ok := d.hourly[BaseStage(stage)]
+	return ok
+}
+
+// HourlyLimits returns a copy of the number of calls that each limited stage
+// can reserve in one hour.
+func (d *DB) HourlyLimits() map[string]int {
+	out := make(map[string]int, len(d.hourly))
+	for stage, limit := range d.hourly {
+		out[stage] = limit
+	}
+	return out
+}
+
 // HourlyLimit returns the queue's deferral with code when the stage has used
 // its calls of the last hour. The deferral ends when the oldest call leaves
 // the hour.
-func HourlyLimit(ctx context.Context, tx pgx.Tx, stage, code string) error {
-	limit, ok := HourlyBudgets[stage]
+func (d *DB) HourlyLimit(ctx context.Context, tx pgx.Tx, stage, code string) error {
+	limit, ok := d.hourly[stage]
 	if !ok {
 		return nil
 	}

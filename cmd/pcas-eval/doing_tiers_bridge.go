@@ -13,6 +13,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/app"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 )
 
@@ -78,8 +79,8 @@ func (b *tierBridge) registry() *ai.Registry {
 	return &ai.Registry{HTTP: b.server.Client(), Config: ai.Configuration{Extraction: "v2-tiers", Providers: []ai.Provider{{ID: "v2-tiers", Name: "档位评测", Protocol: "openai", BaseURL: b.server.URL, Model: "v2-tiers", CostMode: "free"}}}}
 }
 
-func (b *tierBridge) configure(store *postgres.Store) {
-	store.SetModels(b.registry())
+func (b *tierBridge) configure(store *postgres.Store) app.Store {
+	return app.Compose(store, b.registry())
 }
 
 func tierContextSections(prompt string) (string, error) {

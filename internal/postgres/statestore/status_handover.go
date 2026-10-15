@@ -76,7 +76,7 @@ func EnqueueStatusHandoversTx(ctx context.Context, tx pgx.Tx, anchors map[memory
 		}
 		id := memory.NewID()
 		if _, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at)
- VALUES($1,$2,$3,$4,$5,$6,$7)`, string(id), string(owner), string(anchor.ID), anchor.Version, fmt.Sprintf("%s:%d:%s", kernel.HandoverStage, HandoverVersion, id), kernel.HandoverPriority, due); err != nil {
+ VALUES($1,$2,$3,$4,$5,$6,$7)`, string(id), string(owner), string(anchor.ID), anchor.Version, fmt.Sprintf("%s:%d:%s", handover.Stage, HandoverVersion, id), kernel.HandoverPriority, due); err != nil {
 			return count, err
 		}
 		count++

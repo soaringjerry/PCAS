@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -16,8 +17,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 	if now.IsZero() {
 		return 0, memory.ErrInvalid
 	}
-	p, ok := s.Models.Get(s.Models.ExtractionID())
-	if !ok || p.Embedding || p.Transcription {
+	if _, ok := s.TextModel(); !ok {
 		return 0, nil
 	}
 	count := 0
@@ -70,7 +70,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			return err
 		})
 		if err != nil {
-			if s.ScheduleYielded(ctx, owner, kernel.HandoverStage, err) {
+			if s.ScheduleYielded(ctx, owner, handover.Stage, err) {
 				continue
 			}
 			return count, err

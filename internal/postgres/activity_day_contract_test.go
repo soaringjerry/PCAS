@@ -59,8 +59,8 @@ func TestDayActivityAnswersWhatHappenedItsCostAndItsReasons(t *testing.T) {
 	secretaryModel(t, s, func(w http.ResponseWriter, _ *http.Request) {
 		secretaryModelReply(w, `{"reply":"Fictitious reply.","actions":[{"op":"create_task","title":"Fictitious task one"},{"op":"create_task","title":"Fictitious task two"}]}`)
 	})
-	s.Models.Config.Providers[0].CostMode = ""
-	s.Models.Config.Providers[0].InputPerMillion, s.Models.Config.Providers[0].OutputPerMillion = 2, 4
+	registryOf(s).Config.Providers[0].CostMode = ""
+	registryOf(s).Config.Providers[0].InputPerMillion, registryOf(s).Config.Providers[0].OutputPerMillion = 2, 4
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]string{"timezone": "Asia/Shanghai"})})
 
 	// One paid call leads to two actions. One of them is reversed.
@@ -79,7 +79,7 @@ func TestDayActivityAnswersWhatHappenedItsCostAndItsReasons(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, `INSERT INTO model_usage(owner_id,id,purpose,agent_id,model,input_tokens,output_tokens,cost) VALUES($1,gen_random_uuid(),'extraction','model','fictitious',100,10,0.0005)`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	provider, _ := s.Models.Get("model")
+	provider, _ := registryOf(s).Get("model")
 	pending := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "vision", Stage: "image", Provider: provider, Estimate: 0.02, Operation: "vision", Inputs: 1}
 	pending.RootExecutionID = pending.ExecutionID
 	if _, err := (callstore.DirectCalls{Store: s.Calls}).Begin(ctx, pending); err != nil {

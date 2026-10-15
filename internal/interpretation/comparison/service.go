@@ -15,6 +15,10 @@ import (
 // "memory.compare:<rule version>:<nonce>".
 const Stage = "memory.compare"
 
+// HourlyCalls is the number of statement comparisons that can reserve a model call in one
+// hour. Unused capacity is not lent to another stage.
+const HourlyCalls = 40
+
 // Store opens the job's session.
 type Store interface {
 	// Session holds the one connection that scans and comparisons share.

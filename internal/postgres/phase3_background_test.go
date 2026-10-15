@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -314,23 +315,23 @@ func TestPhase3G7T4NewStageIndependentBudgets(t *testing.T) {
 			phase3Finding(t, map[string]string{"project_handover": "S-P3-001", "effort": "S-P3-005"}[logical])
 			f := phase3LoadFixture(t)
 			stage := phase3StageName(t, logical)
-			if kernel.HourlyBudgets[stage] != 10 {
-				t.Fatalf("%s budget=%d want10", stage, kernel.HourlyBudgets[stage])
+			if stagelimits.Hourly()[stage] != 10 {
+				t.Fatalf("%s budget=%d want10", stage, stagelimits.Hourly()[stage])
 			}
 			phase26Exec(t, f.phase26LoadedFixture, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) SELECT gen_random_uuid(),$1,0,$2 FROM generate_series(1,10)`, f.Scope.OwnerID, stage)
-			err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return kernel.HourlyLimit(f.Context, tx, stage, "phase3_limit") })
+			err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return f.Store.HourlyLimit(f.Context, tx, stage, "phase3_limit") })
 			var deferred *worker.JobError
 			if !errors.As(err, &deferred) || !deferred.NoAttempt {
 				t.Fatal("exhausted independent stage borrowed capacity", err)
 			}
-			for other, limit := range kernel.HourlyBudgets {
+			for other, limit := range stagelimits.Hourly() {
 				if other == stage {
 					continue
 				}
 				if limit <= 0 {
 					t.Fatal("invalid stage limit")
 				}
-				if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return kernel.HourlyLimit(f.Context, tx, other, "phase3_limit") }); err != nil {
+				if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return f.Store.HourlyLimit(f.Context, tx, other, "phase3_limit") }); err != nil {
 					t.Errorf("%s consumed %s budget: %v", stage, other, err)
 				}
 			}
@@ -498,7 +499,7 @@ func TestPhase3G3NewStagesPaidResultsRetryWriteWithoutNewModel(t *testing.T) {
 			if err := tx.Rollback(f.Context); err != nil {
 				t.Fatal(err)
 			}
-			restarted, err := Open(f.Context, f.Store.Pool.Config().ConnString())
+			restarted, err := Open(f.Context, f.Store.Pool.Config().ConnString(), stagelimits.Hourly())
 			if err != nil {
 				t.Fatal(err)
 			}

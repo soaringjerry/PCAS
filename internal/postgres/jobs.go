@@ -92,7 +92,7 @@ func (s *Store) Block(ctx context.Context, job worker.Job, code string) error {
 
 func (s *Store) Retry(ctx context.Context, job worker.Job, code string) error {
 	state := "queued"
-	if job.Attempts >= kernel.MaxAttempts && !kernel.PersistentBackgroundStage(job.Stage) {
+	if job.Attempts >= kernel.MaxAttempts && !s.Limited(job.Stage) {
 		state = "failed"
 	}
 	return s.finishAttempt(ctx, job, state, code, kernel.RetryDelay(job.Attempts))

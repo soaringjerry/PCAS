@@ -6,8 +6,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/worker"
-	"github.com/soaringjerry/PCAS/internal/workspace"
-	"github.com/soaringjerry/PCAS/internal/workspace/projecthandover"
 )
 
 // Share the organizer's session lock across the model call. No owner lock is
@@ -46,8 +44,6 @@ func (s *DB) OrganizeCallConnection(ctx context.Context, busy string, wait time.
 func OrganizeRequiredSQL(category, version string) string {
 	return "(CASE WHEN " + version + "::int=3 AND " + category + "<>'rule' THEN 2 ELSE " + version + "::int END)"
 }
-
-func EmptyProjectHandover(id string) workspace.ProjectHandover { return projecthandover.Empty(id) }
 
 func StatusCallLock(ctx context.Context, s *DB) (func(), error) {
 	_, release, err := s.OrganizeCallConnection(ctx, "status_busy", StatusInterval)

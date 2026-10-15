@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
@@ -116,7 +117,7 @@ func TestQ5BackgroundProcess(t *testing.T) {
 			}
 		}
 	}()
-	s, err := Open(ctx, os.Getenv("PCAS_Q5_DATABASE"))
+	s, err := Open(ctx, os.Getenv("PCAS_Q5_DATABASE"), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,6 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -138,7 +139,7 @@ func q2Context(t *testing.T) context.Context {
 }
 func q2Peer(t *testing.T, s *Store) *Store {
 	t.Helper()
-	peer, err := Open(context.Background(), s.Pool.Config().ConnString())
+	peer, err := Open(context.Background(), s.Pool.Config().ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

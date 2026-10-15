@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -91,7 +92,7 @@ func TestHandoverUsesIndependentRollingLimit(t *testing.T) {
 	fake := b1Model(t, s, string(kernel.JSON(statestore.HandoverOutput{Sections: sections})))
 	statusTestMemories(t, s, scope, 3)
 	job := handoverTestJob(t, s, scope)
-	seedStageUsage(t, s, scope, kernel.HandoverStage, 2)
+	seedStageUsage(t, s, scope, handover.Stage, 2)
 	err := (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, job)
 	failure, ok := err.(*worker.JobError)
 	if !ok || failure.Code != "memory.handover_hourly_limit" || !failure.NoAttempt || len(fake.all()) != 0 {
@@ -100,7 +101,7 @@ func TestHandoverUsesIndependentRollingLimit(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, `UPDATE background_usage SET created_at=now()-interval '61 minutes' WHERE id=(SELECT id FROM background_usage WHERE stage='memory.handover' ORDER BY id LIMIT 1)`); err != nil {
 		t.Fatal(err)
 	}
-	for stage, limit := range map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, interpstore.EntityCandidatesStage: 6} {
+	for stage, limit := range map[string]int{organize.Stage: 40, comparison.Stage: 40, comparison.EntityStage: 30, interpstore.EntityCandidatesStage: 6} {
 		seedStageUsage(t, s, scope, stage, limit)
 	}
 	if err := (handover.Service{Store: s.HandoverStore(), Generator: jobCalls(s)}).Process(ctx, job); err != nil || len(fake.all()) != 1 {

@@ -9,7 +9,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -88,7 +87,7 @@ func (s *Desk) secretaryHandoverEvidenceTx(ctx context.Context, tx pgx.Tx, scope
 			if alias == "" {
 				alias = fmt.Sprintf("M%d", len(sent)+1)
 				sent[alias] = m
-				fmt.Fprintf(b, "\n交接说明依据当前记忆 [%s / trust=%s] %s\n", alias, m.Trust, m.Text+contextbuilder.MemorySuffix(m, kernel.Location(c.Settings)))
+				fmt.Fprintf(b, "\n交接说明依据当前记忆 [%s / trust=%s] %s\n", alias, m.Trust, m.Text+contextbuilder.MemorySuffix(m, c.Settings.Location()))
 			}
 			labels[m.ID] = alias
 			c.Dependencies = append(c.Dependencies, memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind})

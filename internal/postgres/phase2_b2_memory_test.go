@@ -314,7 +314,7 @@ func TestPhase2B2_M7_NewDeputyVisibilityInitializesOnlyOnce(t *testing.T) {
 	// its already-initialized memory marker, contradicting this fixture.
 	newAgent := workspace.Agent{ID: "B", Name: "新副手B", Enabled: false, Channel: initial.Agents[0].Channel, MemoryKinds: append([]string{}, initial.Agents[0].MemoryKinds...)}
 	b2Exec(t, s, `INSERT INTO workspace_agents(owner_id,id,document) VALUES($1,'B',$2)`, string(scope.OwnerID), kernel.JSON(newAgent))
-	registry := s.Models
+	registry := registryOf(s)
 	registry.Config.Providers = append(registry.Config.Providers, ai.Provider{ID: "B", Name: "新副手B", Protocol: "openai", BaseURL: registry.Config.Providers[0].BaseURL, Model: "test", MaxOutput: 100, CostMode: "free"})
 	s.SetModels(registry)
 	workspaceCommand(t, s, scope, workspace.Command{Type: "updateAgent", ID: "B", Patch: kernel.JSON(map[string]any{"enabled": true})})

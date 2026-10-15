@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/soaringjerry/PCAS/internal/ai"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/ai"
 )
 
 func TestCodexAdapterRecordsAndReplaysExactReplyAndUsage(t *testing.T) {

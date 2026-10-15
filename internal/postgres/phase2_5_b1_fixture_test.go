@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
@@ -80,7 +81,7 @@ func phase25B1NewFixtureTimeout(t *testing.T, timeout time.Duration) *phase25B1F
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
-	store, err := postgres.Open(ctx, dsn)
+	store, err := postgres.Open(ctx, dsn, stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

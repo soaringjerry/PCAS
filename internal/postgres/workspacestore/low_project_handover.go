@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/projecthandover"
 )
 
 func StudioInstalledTx(ctx context.Context, tx pgx.Tx) (bool, error) {
@@ -19,7 +19,7 @@ func StudioInstalledTx(ctx context.Context, tx pgx.Tx) (bool, error) {
 }
 
 func ProjectHandoverTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (workspace.ProjectHandover, error) {
-	out := kernel.EmptyProjectHandover(id)
+	out := projecthandover.Empty(id)
 	var raw json.RawMessage
 	var written *time.Time
 	err := tx.QueryRow(ctx, `SELECT h.body,h.written_at,h.input_events<>(SELECT count(*) FROM project_input_events e WHERE e.owner_id=h.owner_id AND e.project_id=h.project_id)

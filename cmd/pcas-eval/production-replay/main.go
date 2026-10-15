@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/app"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
@@ -226,7 +227,7 @@ func run(ctx context.Context, args []string) (runErr error) {
 	}
 	transport.limit = m.HTTPCallLimit
 	models.HTTP = &http.Client{Transport: transport, Timeout: 3 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	store, err := postgres.Open(ctx, dsn)
+	store, err := postgres.Open(ctx, dsn, stagelimits.Hourly())
 	if err != nil {
 		return err
 	}
@@ -234,7 +235,7 @@ func run(ctx context.Context, args []string) (runErr error) {
 	if err := store.CheckSchema(ctx); err != nil {
 		return err
 	}
-	store.SetModels(models)
+	composed := app.Compose(store, models)
 	if m.BusinessTime != nil {
 		at := *m.BusinessTime
 		store.SetBusinessClock(func() time.Time { return at })
@@ -273,7 +274,7 @@ func run(ctx context.Context, args []string) (runErr error) {
 			var request workspace.DeskTurnRequest
 			opErr = json.Unmarshal(op.Request, &request)
 			if opErr == nil {
-				result.Result, opErr = app.Secretary(store).DeskTurn(work, scope, request)
+				result.Result, opErr = app.Secretary(composed).DeskTurn(work, scope, request)
 			}
 		case "ingest":
 			var request memory.IngestRequest
@@ -290,10 +291,10 @@ func run(ctx context.Context, args []string) (runErr error) {
 			var request workspace.Command
 			opErr = json.Unmarshal(op.Request, &request)
 			if opErr == nil {
-				result.Result, opErr = app.New(store).Execute(work, scope, request)
+				result.Result, opErr = app.New(composed).Execute(work, scope, request)
 			}
 		case "deputy":
-			result.Result, opErr = processDeputy(work, store, pool, copy.Owner, op.RunID)
+			result.Result, opErr = processDeputy(work, composed, pool, copy.Owner, op.RunID)
 		case "background":
 			var ref memory.Ref
 			if op.SourceFrom != "" {
@@ -303,7 +304,7 @@ func run(ctx context.Context, args []string) (runErr error) {
 			opErr = err
 			if err == nil {
 				result.Result = job
-				opErr = processNamed(work, store, job)
+				opErr = processNamed(work, composed, job)
 			}
 		}
 		cancel()

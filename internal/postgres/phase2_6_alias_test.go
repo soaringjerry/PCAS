@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
@@ -59,12 +60,12 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM entity_alias_candidates WHERE owner_id=$1 AND left_id=least($2::uuid,$3::uuid) AND right_id=greatest($2::uuid,$3::uuid)`, f.Scope.OwnerID, f.Entities[0], f.Entities[4]).Scan(&proposed); err != nil || proposed != 1 {
 		t.Fatalf("model-only candidate count=%d err=%v", proposed, err)
 	}
-	phase26Isolate(t, f, kernel.EntityCompareStage)
-	if _, err := phase26Schedule(ctx, s, kernel.EntityCompareStage); err != nil {
+	phase26Isolate(t, f, comparison.EntityStage)
+	if _, err := phase26Schedule(ctx, s, comparison.EntityStage); err != nil {
 		t.Fatal(err)
 	}
-	phase26Isolate(t, f, kernel.EntityCompareStage)
-	j := phase26ClaimStage(t, f, kernel.EntityCompareStage)
+	phase26Isolate(t, f, comparison.EntityStage)
+	j := phase26ClaimStage(t, f, comparison.EntityStage)
 	// A held legacy-card table lock must have no effect on a negative decision.
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
@@ -121,17 +122,17 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 	if err := phase26Process(ctx, s, scan); err != nil {
 		t.Fatal(err)
 	}
-	phase26Isolate(t, f, kernel.EntityCompareStage)
-	if _, err := phase26Schedule(ctx, s, kernel.EntityCompareStage); err != nil {
+	phase26Isolate(t, f, comparison.EntityStage)
+	if _, err := phase26Schedule(ctx, s, comparison.EntityStage); err != nil {
 		t.Fatal(err)
 	}
-	phase26Isolate(t, f, kernel.EntityCompareStage)
-	j = phase26ClaimStage(t, f, kernel.EntityCompareStage)
+	phase26Isolate(t, f, comparison.EntityStage)
+	j = phase26ClaimStage(t, f, comparison.EntityStage)
 	if err := phase26Process(ctx, s, j); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.calls(kernel.EntityCompareStage)) != 2 || len(m.calls(interpstore.EntityCandidatesStage)) != 2 {
-		t.Errorf("rename recheck provider counts confirm=%d scan=%d", len(m.calls(kernel.EntityCompareStage)), len(m.calls(interpstore.EntityCandidatesStage)))
+	if len(m.calls(comparison.EntityStage)) != 2 || len(m.calls(interpstore.EntityCandidatesStage)) != 2 {
+		t.Errorf("rename recheck provider counts confirm=%d scan=%d", len(m.calls(comparison.EntityStage)), len(m.calls(interpstore.EntityCandidatesStage)))
 	}
 	t.Logf("negative decision ignores held card locks; elapsed=%s; count change causes zero recheck; rename causes one scan + one confirmation", time.Since(start))
 }

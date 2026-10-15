@@ -302,11 +302,7 @@ func (s *Interp) ScheduleEntityCandidates(ctx context.Context, now time.Time) (i
 	if now.IsZero() {
 		return 0, memory.ErrInvalid
 	}
-	if s.Models == nil {
-		return 0, nil
-	}
-	p, ok := s.Models.Get(s.Models.ExtractionID())
-	if !ok || p.Embedding || p.Transcription {
+	if _, ok := s.TextModel(); !ok {
 		return 0, nil
 	}
 	rows, err := s.Pool.Query(ctx, `SELECT DISTINCT r.owner_id::text FROM memory_records r JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version) WHERE r.state='active' AND ev.entity_type IN('person','place','organization','topic','project')`)

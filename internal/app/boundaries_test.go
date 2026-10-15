@@ -42,6 +42,29 @@ func TestDomainPackagesDoNotDependOnThePostgreSQLAdapter(t *testing.T) {
 	}
 }
 
+// The kernel is the lowest storage package: every storage package depends on
+// it. It depends on the shared vocabulary only, never on a domain, a model
+// provider, or a prompt. A domain gives storage what it needs through the
+// composition (the hourly limits, the model catalog).
+var kernelImports = map[string]bool{
+	"github.com/soaringjerry/PCAS/internal/memory": true,
+	"github.com/soaringjerry/PCAS/internal/worker": true,
+}
+
+func TestTheKernelDependsOnTheVocabularyOnly(t *testing.T) {
+	command := exec.Command("go", "list", "-f", `{{join .Imports "\n"}}`, "./internal/postgres/kernel")
+	command.Dir = "../.."
+	output, err := command.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, imported := range strings.Fields(string(output)) {
+		if strings.HasPrefix(imported, "github.com/soaringjerry/PCAS/") && !kernelImports[imported] {
+			t.Errorf("the kernel imports %s", imported)
+		}
+	}
+}
+
 // A storage package keeps the records of model calls. It must not make a
 // model call: the domain package that owns a flow builds the request and
 // calls the gateway, and internal/app builds the gateway. Add each storage

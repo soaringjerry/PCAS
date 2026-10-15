@@ -295,19 +295,23 @@ func (a extractionStore) Configured() error {
 }
 
 func (a extractionStore) Ready() error {
-	p, ok := a.store.Models.Get(a.store.Models.ExtractionID())
-	if !ok || p.Embedding || p.Transcription {
+	p, ok := a.store.TextModel()
+	if !ok {
 		return &worker.JobError{Code: "provider_not_configured"}
 	}
-	if !a.store.Models.Available(p.ID) {
+	if !a.store.ModelAvailable(p.ID) {
 		return &worker.JobError{Code: "provider_unavailable", Retry: true}
 	}
 	return nil
 }
 
 func (a extractionStore) Unpaid(text string) bool {
-	p, ok := a.store.Models.Get(a.store.Models.ExtractionID())
-	return ok && p.Reserve(text) == 0
+	if a.store.Models == nil {
+		return false
+	}
+	id := a.store.Models.ExtractionID()
+	_, ok := a.store.Model(id)
+	return ok && a.store.Models.Estimate(id, text) == 0
 }
 
 func (a extractionStore) Input(ctx context.Context, j worker.Job, source memory.SourceResult) (extraction.Input, error) {

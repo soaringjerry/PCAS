@@ -179,13 +179,13 @@ func runDoingTiers(args []string) error {
 		defer cleanup()
 		bridge := newTierBridge(model, *fake)
 		defer bridge.server.Close()
-		bridge.configure(store)
+		composed := bridge.configure(store)
 		seeded, err := seedTierSuite(ctx, store, pool, s)
 		if err != nil {
 			return fmt.Errorf("tier_seed_failed")
 		}
 		prepareCtx, prepareCancel := context.WithTimeout(ctx, *prepareTimeout)
-		preparation, err = prepareTierSuite(prepareCtx, store, pool, seeded.Scope, bridge, *output+".prepare.json")
+		preparation, err = prepareTierSuite(prepareCtx, composed, pool, seeded.Scope, bridge, *output+".prepare.json")
 		prepareCancel()
 		if err != nil {
 			return err

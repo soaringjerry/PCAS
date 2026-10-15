@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -76,7 +77,7 @@ func orderedCurrentInput(r *http.Request) string {
 }
 func orderedPeer(t *testing.T, s *Store) *Store {
 	t.Helper()
-	peer, err := Open(context.Background(), s.Pool.Config().ConnString())
+	peer, err := Open(context.Background(), s.Pool.Config().ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

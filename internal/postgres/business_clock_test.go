@@ -62,7 +62,7 @@ func TestSecretaryUsesBusinessDateAndActualUsageTime(t *testing.T) {
 		if _, _, err := s.SecretaryPrompt(ctx, tx, scope, req, &c, s.Recall); err != nil {
 			return err
 		}
-		loc := kernel.Location(c.Settings)
+		loc := c.Settings.Location()
 		want := time.Date(2024, 12, 31, 0, 0, 0, 0, loc)
 		if c.Plan.Time == nil || !c.Plan.Time.From.Equal(want) || !c.Plan.Time.To.Equal(want.AddDate(0, 0, 1)) {
 			t.Fatal("yesterday must use the fixed business date in the owner's timezone", c.Plan.Time)

@@ -87,7 +87,7 @@ func (s *Workspace) SnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		}
 		switch item.Kind {
 		case "task":
-			item.StartDate, err = effort.StartDate(item.Due, item.EstimatedHours, kernel.Location(out.Settings))
+			item.StartDate, err = effort.StartDate(item.Due, item.EstimatedHours, out.Settings.Location())
 			if err != nil {
 				return out, err
 			}
@@ -128,10 +128,10 @@ func (s *Workspace) SnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		if a.Channel == "manual" {
 			a.Available = true
 		}
-		if p, ok := s.Models.Get(a.ID); ok {
+		if p, ok := s.Model(a.ID); ok {
 			a.Default = a.ID == s.Models.ExtractionID()
 			a.Protocol = p.Protocol
-			a.Available = s.Models.Available(a.ID)
+			a.Available = s.ModelAvailable(a.ID)
 			a.InputPrice = p.InputPerMillion
 			a.OutputPrice = p.OutputPerMillion
 			a.MaxOutput = p.MaxOutput
@@ -142,7 +142,7 @@ func (s *Workspace) SnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 			}
 		}
 	}
-	if s.Models != nil && s.Models.ChatGPT != nil && s.Models.ChatGPT.DefaultReady() {
+	if s.Models != nil && s.Models.DirectDefault() {
 		// Preserve per-agent visibility/preferences; only reorder the default.
 		for i, a := range out.Agents {
 			if a.ID == "chatgpt-direct" {

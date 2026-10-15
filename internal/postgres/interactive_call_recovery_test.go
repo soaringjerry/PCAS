@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
@@ -110,7 +111,7 @@ func TestInteractiveAccountingRecoveryKeepsOriginalUsageIdentity(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, `DROP TRIGGER reject_interactive_usage ON model_usage`); err != nil {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +229,7 @@ func TestInteractiveUnknownFailureKeepsBudgetAndBoundedRetry(t *testing.T) {
 	if !errors.Is(err, modelcall.ErrOutcomeUnknown) || !errors.As(err, &first) || !secretary.RetryableModelError(err) {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -77,7 +77,7 @@ func MaintainTaskPlanTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item
 	if err != nil {
 		return err
 	}
-	return effort.PlanTask(item, settings, kernel.Location(settings))
+	return effort.PlanTask(item, settings, settings.Location())
 }
 
 // DeleteItem removes one item row. The caller removes what refers to the item

@@ -176,7 +176,7 @@ func organizeTestJob(t *testing.T, s *Store, scope memory.Scope) worker.Job {
 		t.Fatal(err)
 	}
 	j, err := s.Claim(context.Background(), 5*time.Minute)
-	if err != nil || j == nil || !strings.HasPrefix(j.Stage, kernel.OrganizeStage+":") {
+	if err != nil || j == nil || !strings.HasPrefix(j.Stage, organize.Stage+":") {
 		t.Fatal("lease organizer", j, err)
 	}
 	return *j
@@ -627,7 +627,7 @@ func TestOrganizeUnavailableDoesNotConsumeAttemptsAndBudgetDefers(t *testing.T) 
 	ref := organizeTestMemory(t, s, scope, "虚构霜叶喜欢蓝色水杯。")
 	channelKey := "PCAS_TEST_O1_CHANNEL_AVAILABLE"
 	t.Setenv(channelKey, "")
-	s.Models.Config.Providers[0].KeyEnv = channelKey
+	registryOf(s).Config.Providers[0].KeyEnv = channelKey
 	j := organizeTestJob(t, s, scope)
 	for range 2 {
 		err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j)
@@ -644,7 +644,7 @@ func TestOrganizeUnavailableDoesNotConsumeAttemptsAndBudgetDefers(t *testing.T) 
 		t.Fatal(calls, err)
 	}
 	t.Setenv(channelKey, "synthetic-channel-key")
-	s.Models.Config.Providers[0].InputPerMillion = 1
+	registryOf(s).Config.Providers[0].InputPerMillion = 1
 	if _, err := s.Pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','0') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}

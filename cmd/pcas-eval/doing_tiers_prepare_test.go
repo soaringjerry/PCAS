@@ -27,12 +27,12 @@ func TestTierPreparationAndRestoreValidateLibraryState(t *testing.T) {
 	}}
 	bridge := newTierBridge(doing.FakeModel{}, true)
 	defer bridge.server.Close()
-	bridge.configure(store)
+	composed := bridge.configure(store)
 	seeded, err := seedTierSuite(ctx, store, pool, suite)
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := prepareTierSuite(ctx, store, pool, seeded.Scope, bridge, filepath.Join(t.TempDir(), "prepare.json"))
+	p, err := prepareTierSuite(ctx, composed, pool, seeded.Scope, bridge, filepath.Join(t.TempDir(), "prepare.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

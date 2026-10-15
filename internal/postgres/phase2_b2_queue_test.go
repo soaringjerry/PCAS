@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -111,7 +112,7 @@ func TestPhase2B2_F2_SubscriptionRetriesUnavailableAndStopsAtFive(t *testing.T) 
 		b2Equal(t, b2Job(t, s, scope, src).Code, "model_output_invalid")
 		b2Ready(t, s, scope, src)
 		// Configuration remains present; the provider reports pre-dispatch unavailability.
-		goodRegistry := s.Models
+		goodRegistry := registryOf(s)
 		goodRegistry.Config.Providers[0].KeyEnv = "PCAS_B2_UNAVAILABLE_KEY"
 		t.Setenv("PCAS_B2_UNAVAILABLE_KEY", "")
 		start = time.Now()
@@ -132,7 +133,7 @@ func TestPhase2B2_F2_SubscriptionRetriesUnavailableAndStopsAtFive(t *testing.T) 
 		src := b2Source(t, s, scope, "desk", "user", text, nil)
 		b2OnlyExtraction(t, s, scope, src, 0)
 		f := b1Model(t, s, nil)
-		goodRegistry := s.Models
+		goodRegistry := registryOf(s)
 		goodRegistry.Config.Providers[0].KeyEnv = "PCAS_B2_UNAVAILABLE_KEY"
 		t.Setenv("PCAS_B2_UNAVAILABLE_KEY", "")
 		w := b2Worker(s)
@@ -291,7 +292,7 @@ func TestPhase2B2_F5_ConcurrentBackfillCapAndHourlyRecovery(t *testing.T) {
 	for _, ref := range archives {
 		b2Exec(t, s, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority) VALUES(gen_random_uuid(),$1,$2,$3,'source.extract',10)`, string(scope.OwnerID), string(ref.ID), ref.Version)
 	}
-	peer, err := Open(context.Background(), s.Pool.Config().ConnConfig.ConnString())
+	peer, err := Open(context.Background(), s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +437,7 @@ func TestPhase2B2WorkerChild(t *testing.T) {
 	if os.Getenv("PCAS_B2_WORKER_CHILD") != "1" {
 		return
 	}
-	s, err := Open(context.Background(), os.Getenv("PCAS_B2_WORKER_DSN"))
+	s, err := Open(context.Background(), os.Getenv("PCAS_B2_WORKER_DSN"), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

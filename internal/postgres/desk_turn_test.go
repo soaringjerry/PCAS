@@ -186,8 +186,8 @@ func TestSecretaryFallbackPersistsOriginal(t *testing.T) {
 				s.SetModels(nil)
 			}
 			if mode == "budget" {
-				s.Models.Config.Providers[0].InputPerMillion = 1
-				s.Models.Config.Providers[0].CostMode = ""
+				registryOf(s).Config.Providers[0].InputPerMillion = 1
+				registryOf(s).Config.Providers[0].CostMode = ""
 				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": 0})})
 			}
 			out := mustTurn(t, s, scope, req)

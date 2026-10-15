@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/schedulestore"
@@ -13,12 +14,12 @@ import (
 
 // Program validation does not attempt to understand the original date language.
 // Unusable model dates are retained as unclear with their original wording.
-func WriteOrganizedDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, m kernel.CardMemory, output []kernel.CardDeadline, timezone string) error {
+func WriteOrganizedDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, m kernel.CardMemory, output []organize.Deadline, timezone string) error {
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
 		return err
 	}
-	normalized := []kernel.CardDeadline{}
+	normalized := []organize.Deadline{}
 	for _, d := range output {
 		if !kernel.OneOf(d.Kind, "deadline", "appointment", "recurring", "unclear") || strings.TrimSpace(d.Title) == "" {
 			return memory.ErrInvalid

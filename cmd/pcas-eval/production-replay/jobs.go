@@ -64,7 +64,7 @@ func (q *selectedQueue) Claim(context.Context, time.Duration) (*worker.Job, erro
 	return job, nil
 }
 
-func processNamed(ctx context.Context, s *postgres.Store, job worker.Job) error {
+func processNamed(ctx context.Context, s app.Store, job worker.Job) error {
 	// Replay supports the stages below. Each one uses the production handler.
 	handlers := map[string]worker.Handler{}
 	production := app.Handlers(s)
@@ -77,7 +77,7 @@ func processNamed(ctx context.Context, s *postgres.Store, job worker.Job) error 
 	}
 	var observed error
 	wrapped := func(ctx context.Context, job worker.Job) error { observed = handler(ctx, job); return observed }
-	queue := &selectedQueue{Store: s, job: &job}
+	queue := &selectedQueue{Store: s.Store, job: &job}
 	// The private operation result preserves the handler error. Avoid a second
 	// unrestricted log containing copied job identities on the public terminal.
 	w := worker.New(queue, map[string]worker.Handler{strings.SplitN(job.Stage, ":", 2)[0]: wrapped}, slog.New(slog.NewJSONHandler(io.Discard, nil)))
@@ -87,7 +87,7 @@ func processNamed(ctx context.Context, s *postgres.Store, job worker.Job) error 
 
 // The production worker chooses its next queued run. Refuse competing work
 // rather than changing the copy's queue or exposing another model submission.
-func processDeputy(ctx context.Context, s *postgres.Store, pool *pgxpool.Pool, owner, runID memory.ID) (workspace.Run, error) {
+func processDeputy(ctx context.Context, s app.Store, pool *pgxpool.Pool, owner, runID memory.ID) (workspace.Run, error) {
 	var run workspace.Run
 	var selected bool
 	var pending int

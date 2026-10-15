@@ -12,10 +12,12 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -76,10 +78,10 @@ func phase26HTTPUserRequests(t *testing.T, f *phase26LoadedFixture, s *Store) ma
 	}
 }
 func TestBackgroundStagesAllowConcurrentHTTPScale(t *testing.T) {
-	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, kernel.EntityCompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage} {
+	for _, stage := range []string{organize.Stage, comparison.Stage, comparison.EntityStage, interpstore.EntityCandidatesStage, handover.Stage} {
 		t.Run(stage, func(t *testing.T) { phase26ConcurrentCase(t, stage, false, true) })
 	}
 }
 func TestLargeEntityMergeAllowsConcurrentHTTPScale(t *testing.T) {
-	phase26ConcurrentCase(t, kernel.EntityCompareStage, true, true)
+	phase26ConcurrentCase(t, comparison.EntityStage, true, true)
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -68,7 +69,7 @@ func TestSelectedCodexCallRecordsRegisteredModeAndExactUsageLink(t *testing.T) {
 	if err := (callstore.BackgroundCalls{Store: s.Calls}).Save(ctx, request, paid); err != nil {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -17,7 +18,7 @@ import (
 )
 
 func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T) {
-	for _, stage := range []string{kernel.CompareStage, kernel.EntityCompareStage, interpstore.EntityCandidatesStage} {
+	for _, stage := range []string{comparison.Stage, comparison.EntityStage, interpstore.EntityCandidatesStage} {
 		t.Run(stage, func(t *testing.T) {
 			s, scope, ctx := testStore(t), owner(), context.Background()
 			fake := b1Model(t, s, `{}`)
@@ -26,7 +27,7 @@ func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T
 			table := ""
 			response := ""
 			switch stage {
-			case kernel.CompareStage:
+			case comparison.Stage:
 				compareFixture(t, s, scope, "虚构研究记录甲", "虚构研究记录乙")
 				job = compareJob(t, s, scope, false, kernel.CompareVersion)
 				process = func(s *Store, ctx context.Context, j worker.Job) error {
@@ -34,7 +35,7 @@ func TestPaidBackgroundResultsSurviveBusinessWriteFailureAndRestart(t *testing.T
 				}
 				table = "memory_comparison_batches"
 				response = `{"duplicates":[],"superseded":[]}`
-			case kernel.EntityCompareStage:
+			case comparison.EntityStage:
 				a, _ := compareEntityFixture(t, s, scope, "Al", "虚构阿蓝负责器材")
 				b, _ := compareEntityFixture(t, s, scope, "虚构齐鹤", "虚构齐鹤负责盆栽")
 				aliasProposalFixture(t, s, scope, a, b, kernel.EntityCompareVersion)
@@ -69,7 +70,7 @@ CREATE TRIGGER fictional_write_failure BEFORE INSERT ON `+table+` FOR EACH ROW E
 			if _, err := s.Pool.Exec(ctx, "DROP TRIGGER fictional_write_failure ON "+table); err != nil {
 				t.Fatal(err)
 			}
-			reopened, err := Open(ctx, s.Pool.Config().ConnString())
+			reopened, err := Open(ctx, s.Pool.Config().ConnString(), stagelimits.Hourly())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -122,7 +123,7 @@ func TestPersistentBackgroundFailureKeepsIncreasingAttempts(t *testing.T) {
 		if err := s.Defer(ctx, job, failure.Code, failure.Until, failure.NoAttempt); err != nil {
 			t.Fatal(err)
 		}
-		if !kernel.PersistentBackgroundStage(job.Stage) {
+		if !s.Limited(job.Stage) {
 			t.Fatal("background failure can exhaust")
 		}
 	}

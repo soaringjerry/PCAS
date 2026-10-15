@@ -16,6 +16,10 @@ import (
 // is "memory.entity_compare:<rule version>:<nonce>".
 const EntityStage = "memory.entity_compare"
 
+// EntityHourlyCalls is the number of entity comparisons that can reserve a
+// model call in one hour.
+const EntityHourlyCalls = 30
+
 // EntityStore opens the job's session.
 type EntityStore interface {
 	// Session holds the one connection that scans and comparisons share.

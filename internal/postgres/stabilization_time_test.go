@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
@@ -404,7 +405,7 @@ func TestR9_RestartAndReentryNeverDuplicateNoticeOrSend(t *testing.T) {
 	// Close the pool and reopen the same test schema, retaining only DB state.
 	dsn := s.Pool.Config().ConnString()
 	s.Close()
-	restarted, err := Open(context.Background(), dsn)
+	restarted, err := Open(context.Background(), dsn, stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -604,7 +605,7 @@ func TestR5_SuppressionSurvivesRestartAndContinuousUndo(t *testing.T) {
 	}
 	dsn := s.Pool.Config().ConnString()
 	s.Close()
-	restarted, err := Open(context.Background(), dsn)
+	restarted, err := Open(context.Background(), dsn, stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -657,7 +658,7 @@ func TestR5_FutureAndRecentRemindersRestoreButOrdinaryLateTaskCatchesUp(t *testi
 			}
 			dsn := s.Pool.Config().ConnString()
 			s.Close()
-			restarted, err := Open(context.Background(), dsn)
+			restarted, err := Open(context.Background(), dsn, stagelimits.Hourly())
 			if err != nil {
 				t.Fatal(err)
 			}

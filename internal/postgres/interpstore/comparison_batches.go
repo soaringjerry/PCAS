@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
@@ -207,7 +208,7 @@ func nextComparisonBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID, vers
 
 func writeComparisonReceiptTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int, b ComparisonBatch, valid bool) error {
 	if !valid {
-		if err := kernel.StageEvent(ctx, tx, owner, kernel.CompareStage, "failure", "compare_invalid_output", 1); err != nil {
+		if err := kernel.StageEvent(ctx, tx, owner, comparison.Stage, "failure", "compare_invalid_output", 1); err != nil {
 			return err
 		}
 		var attempts int

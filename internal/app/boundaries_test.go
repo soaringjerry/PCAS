@@ -24,6 +24,8 @@ var domainPackages = []string{
 	"./internal/retrieval",
 	"./internal/modelcall/...",
 	"./internal/prompts",
+	"./internal/connectors",
+	"./internal/notify",
 }
 
 func TestDomainPackagesDoNotDependOnThePostgreSQLAdapter(t *testing.T) {

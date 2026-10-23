@@ -176,6 +176,8 @@ The memory that a turn or a run is given is completed by `contextbuilder.FinishU
 
 The owner's cards of a turn (`secretary.Cards`, `secretary.Links`), what a turn reads of an attachment and its receipt (`secretary.AttachmentInput`, `secretary.AttachmentReceipt`), and the closing of a remembered date (in `secretary.Execute`) are in the secretary domain. `workspace.DeadlineClose` names how a date is closed.
 
+A connector sync runs in `internal/connectors` (`connectors.Sync`): the HTTP poll and the inbox folder with their limits (8 MiB a read, 100 records a poll, 1,000 files and 10,000 records a folder) and the cursor rules. Storage keeps the lease and `finishSync`. The rules of a project file are in `internal/input/projectfile`. `internal/connectors` and `internal/notify` are in the domain boundary test.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

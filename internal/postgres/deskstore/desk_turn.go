@@ -337,9 +337,9 @@ func (t *secretarySession) KeepSentence(ctx context.Context, unordered bool) err
 
 func (t *secretarySession) SaveSentence(ctx context.Context) error {
 	s := t.secretaryAsk
-	original := workspace.SourceRef{Label: "秘书原话", Excerpt: s.req.Text, At: kernel.Stamp()}
+	original := workspace.SourceRef{Label: secretary.Original, Excerpt: s.req.Text, At: kernel.Stamp()}
 	if t.text != "" && s.req.SmokeID == "" {
-		ref, err := s.store.IngestTx(ctx, s.tx, s.scope, memory.IngestRequest{Connector: "desk", ExternalID: s.req.RequestID, ExternalVersion: "1", Title: "秘书原话", Text: s.req.Text, MediaType: "text/plain"})
+		ref, err := s.store.IngestTx(ctx, s.tx, s.scope, memory.IngestRequest{Connector: "desk", ExternalID: s.req.RequestID, ExternalVersion: "1", Title: secretary.Original, Text: s.req.Text, MediaType: "text/plain"})
 		if err != nil {
 			return err
 		}
@@ -433,7 +433,7 @@ func (t *secretaryTurn) Cards(ctx context.Context, answer SecretaryOutput, sent 
 func (t *secretaryTurn) Act(ctx context.Context, a SecretaryAction, aliases map[string]workspace.Item) (secretary.ActionOutcome, error) {
 	s, c := t.store, t.c
 	out := secretary.ActionOutcome{ActionID: string(memory.NewID())}
-	actionCtx := actionlog.WithActionLog(kernel.WithActor(usestore.WithMemoryTier(ctx, c.Tier), "secretary"), out.ActionID, "desk", t.turnID, "秘书："+a.Op)
+	actionCtx := actionlog.WithActionLog(kernel.WithActor(usestore.WithMemoryTier(ctx, c.Tier), "secretary"), out.ActionID, "desk", t.turnID, secretary.ActionSummary(a.Op))
 	projectReceipts := []workspace.DeskReceipt{}
 	actionCtx = context.WithValue(actionCtx, kernel.SecretaryCreationKey{}, t.original)
 	actionCtx = context.WithValue(actionCtx, secretaryProjectReceiptsKey{}, &projectReceipts)
@@ -533,9 +533,9 @@ func (s *Desk) DeskTurnsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c
 func RefreshDeskTurnTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn *workspace.SecretaryTurn, run workspace.Run, erased, originalDeleted bool) {
 	turn.Outdated = false
 	if erased {
-		turn.Reply = "（这条回答依据的记忆已变更）"
+		turn.Reply = secretary.ErasedReply
 		if originalDeleted {
-			turn.Reply = "（内容已删除）"
+			turn.Reply = secretary.DeletedReply
 		}
 		turn.Cards = []workspace.DeskCard{}
 		return

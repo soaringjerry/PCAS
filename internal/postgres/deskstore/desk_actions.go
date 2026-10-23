@@ -59,7 +59,7 @@ func (s *Desk) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.S
 		}
 		log, _ := ctx.Value(actionlog.ActionLogKey{}).(actionlog.ActionLog)
 		actionID := string(memory.NewID())
-		projectCtx := actionlog.WithActionLog(ctx, actionID, "desk", log.TurnID, "建了项目「"+name+"」")
+		projectCtx := actionlog.WithActionLog(ctx, actionID, "desk", log.TurnID, secretary.ProjectMade(name))
 		projectCtx = context.WithValue(projectCtx, kernel.SecretaryHistoryKey{}, nil)
 		if err = actionlog.BeginActionLogTx(projectCtx, tx); err != nil {
 			return "", err
@@ -74,7 +74,7 @@ func (s *Desk) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.S
 			return "", err
 		}
 		if receipts, ok := ctx.Value(secretaryProjectReceiptsKey{}).(*[]workspace.DeskReceipt); ok {
-			*receipts = append(*receipts, workspace.DeskReceipt{ActionID: &actionID, Op: "create_project", Text: "建了项目「" + name + "」", ThingID: &id, Undoable: true, Status: "done"})
+			*receipts = append(*receipts, workspace.DeskReceipt{ActionID: &actionID, Op: "create_project", Text: secretary.ProjectMade(name), ThingID: &id, Undoable: true, Status: "done"})
 		}
 		return id, nil
 	}

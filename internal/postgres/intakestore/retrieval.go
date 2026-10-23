@@ -87,19 +87,19 @@ func (s *Intake) RecallWith(ctx context.Context, scope memory.Scope, in memory.R
 			out.Coverage.Gaps = append(out.Coverage.Gaps, gap)
 		}
 	} else {
-		out.Coverage.Gaps = append(out.Coverage.Gaps, "未配置语义索引；模糊措辞的覆盖尚不完整")
+		out.Coverage.Gaps = append(out.Coverage.Gaps, retrieval.GapNoVector)
 	}
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		return s.RecallTx(ctx, tx, scope, in, b, query, fts, vector, model, offset, fingerprint, tokens, &out)
 	})
 	if len(out.Coverage.PendingSources) > 0 {
-		out.Coverage.Gaps = append(out.Coverage.Gaps, "部分资料尚未完成索引或抽取；可通过原文继续追溯")
+		out.Coverage.Gaps = append(out.Coverage.Gaps, retrieval.GapPending)
 	}
 	if len(out.Coverage.Gaps) > 0 {
 		out.Coverage.Complete = false
 	}
 	if len(out.Memories) == 0 {
-		out.FollowUps = append(out.FollowUps, "减少日期或属性限制，使用原文关键词再查")
+		out.FollowUps = append(out.FollowUps, retrieval.FollowUpRelax)
 	}
 	return out, err
 }
@@ -278,9 +278,7 @@ func (s *Intake) RecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 		if claimBudgetFull {
 			continue
 		}
-		if role != "" || branch != "" {
-			text = "[原文角色=" + role + "；分支=" + branch + "] " + text
-		}
+		text = retrieval.ContextLabel(role, branch, text)
 		out.Coverage.Gaps = append(out.Coverage.Gaps, gaps...)
 		if consumed >= b.Candidates || summary.Len()+len(text) > b.Tokens*3 && consumed > 0 {
 			out.Coverage.Complete = false
@@ -293,7 +291,7 @@ func (s *Intake) RecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 		}
 		if len([]rune(text)) > b.Tokens {
 			text = retrieval.MatchedExcerpt(text, query, tokens, b.Tokens)
-			out.Coverage.Gaps = append(out.Coverage.Gaps, "部分原文超出上下文预算，请展开来源")
+			out.Coverage.Gaps = append(out.Coverage.Gaps, retrieval.GapSourceBudget)
 		}
 		fmt.Fprintf(&summary, "[%s@%d] %s\n", ref.ID, ref.Version, text)
 		out.Memories = append(out.Memories, ref)
@@ -324,7 +322,7 @@ func (s *Intake) RecallTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 	}
 	for _, ref := range related {
 		if len(out.Memories) >= b.Candidates {
-			out.Coverage.Gaps = append(out.Coverage.Gaps, "关系展开达到候选预算，可继续展开相关对象")
+			out.Coverage.Gaps = append(out.Coverage.Gaps, retrieval.GapRelationBudget)
 			break
 		}
 		var body string
@@ -470,7 +468,7 @@ func (s *Intake) Expand(ctx context.Context, scope memory.Scope, in memory.Expan
 				}
 				out.Sources = append(out.Sources, source)
 			default:
-				out.Coverage.Gaps = append(out.Coverage.Gaps, "此对象请通过关联的经历或原文查看")
+				out.Coverage.Gaps = append(out.Coverage.Gaps, retrieval.GapViaEpisode)
 			}
 			if in.Evidence {
 				ev, err := EvidenceTx(ctx, tx, scope, ref)

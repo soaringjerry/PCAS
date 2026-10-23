@@ -9,11 +9,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
-const comparisonBlockSize = kernel.CompareLimit / 2
+const comparisonBlockSize = comparison.BatchLimit / 2
 
 type ComparisonBatch struct {
 	Rule        int             `json:"rule"`
@@ -38,7 +39,7 @@ func SyncComparisonMembersTx(ctx context.Context, tx pgx.Tx, owner memory.ID) er
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(m.owner_id,m.claim_id,m.claim_version)
  WHERE m.owner_id=$1 AND cl.organized>=`+kernel.OrganizeRequiredSQL("(SELECT ov.category FROM claim_revisions ov WHERE (ov.owner_id,ov.claim_id,ov.version)=(m.owner_id,m.claim_id,m.claim_version))", "$2")+` AND NOT EXISTS(
  SELECT 1 FROM memory_comparison_members p WHERE (p.owner_id,p.group_key,p.claim_id)=(m.owner_id,m.key,m.claim_id))
- ON CONFLICT(owner_id,group_key,claim_id) DO NOTHING`, string(owner), kernel.OrganizeVersion)
+ ON CONFLICT(owner_id,group_key,claim_id) DO NOTHING`, string(owner), organize.RuleVersion)
 	return err
 }
 
@@ -51,7 +52,7 @@ func ComparisonPlanTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
  JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(m.owner_id,m.claim_id,m.claim_version)
  WHERE m.owner_id=$1 AND cl.organized>=`+kernel.OrganizeRequiredSQL("(SELECT ov.category FROM claim_revisions ov WHERE (ov.owner_id,ov.claim_id,ov.version)=(m.owner_id,m.claim_id,m.claim_version))", "$2")+`
- ORDER BY CASE WHEN m.key='self:rule' THEN 0 WHEN m.kind='self' THEN 1 ELSE 2 END,m.key,p.position`, string(owner), kernel.OrganizeVersion, comparisonBlockSize, version)
+ ORDER BY CASE WHEN m.key='self:rule' THEN 0 WHEN m.kind='self' THEN 1 ELSE 2 END,m.key,p.position`, string(owner), organize.RuleVersion, comparisonBlockSize, version)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +169,7 @@ func nextComparisonBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID, vers
 		}
 	}
 	rows, err = tx.Query(ctx, `SELECT m.key,m.claim_id::text,m.claim_version FROM status_current_members m
- JOIN claims cl ON(cl.owner_id,cl.id)=(m.owner_id,m.claim_id) WHERE m.owner_id=$1 AND cl.organized>=`+kernel.OrganizeRequiredSQL("(SELECT ov.category FROM claim_revisions ov WHERE (ov.owner_id,ov.claim_id,ov.version)=(m.owner_id,m.claim_id,m.claim_version))", "$2")+``, string(owner), kernel.OrganizeVersion)
+ JOIN claims cl ON(cl.owner_id,cl.id)=(m.owner_id,m.claim_id) WHERE m.owner_id=$1 AND cl.organized>=`+kernel.OrganizeRequiredSQL("(SELECT ov.category FROM claim_revisions ov WHERE (ov.owner_id,ov.claim_id,ov.version)=(m.owner_id,m.claim_id,m.claim_version))", "$2")+``, string(owner), organize.RuleVersion)
 	if err != nil {
 		return nil, err
 	}

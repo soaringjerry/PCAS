@@ -8,8 +8,6 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"net/url"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/connectors"
@@ -52,19 +50,8 @@ func (s *Intake) ConfigureConnection(ctx context.Context, scope memory.Scope, in
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	if strings.TrimSpace(in.Name) == "" || len(in.Name) > 200 || !kernel.OneOf(in.Kind, "webhook", "poll", "folder") || in.IntervalSeconds < 15 || in.IntervalSeconds > 86400 {
-		return out, memory.ErrInvalid
-	}
-	if in.Kind == "poll" {
-		u, e := url.Parse(in.URL)
-		if e != nil || !kernel.OneOf(u.Scheme, "https", "http") || u.Host == "" || u.User != nil || u.Fragment != "" || len(in.URL) > 4096 {
-			return out, memory.ErrInvalid
-		}
-	} else if in.URL != "" || in.TokenEnv != "" {
-		return out, memory.ErrInvalid
-	}
-	if in.TokenEnv != "" && (!strings.HasPrefix(in.TokenEnv, "PCAS_CONNECTOR_") || strings.ContainsAny(in.TokenEnv, " \n\r=\x00")) {
-		return out, memory.ErrInvalid
+	if err := connectors.CheckConfiguration(in); err != nil {
+		return out, err
 	}
 	var hash []byte
 	if in.ID == "" {
@@ -251,7 +238,7 @@ func (s *Intake) ImportBatchTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		}
 	}
 	if out.Blocked > 0 {
-		out.Gaps = append(out.Gaps, "已删除的来源被阻止重新导入")
+		out.Gaps = append(out.Gaps, connectors.GapBlocked)
 	}
 	return out, nil
 }
@@ -338,13 +325,17 @@ func redactArchivesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 	if len(ids) == 0 {
 		return nil
 	}
-	for _, sql := range []string{
-		`INSERT INTO blob_cleanup_jobs(owner_id,blob_key) SELECT owner_id,blob_key FROM source_versions WHERE owner_id=$1 AND source_id=ANY($2::uuid[]) AND blob_key IS NOT NULL ON CONFLICT DO NOTHING`,
-		`INSERT INTO source_contexts(owner_id,source_id,source_version,gaps) SELECT owner_id,source_id,version,'["原始归档因包含已删除内容而清理；其余独立记录可展开"]'::jsonb FROM source_versions WHERE owner_id=$1 AND source_id=ANY($2::uuid[]) AND NOT attachment_redacted ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET gaps=source_contexts.gaps||excluded.gaps`,
-		`UPDATE source_versions SET blob_key=NULL,attachment_redacted=true WHERE owner_id=$1 AND source_id=ANY($2::uuid[])`,
-		`UPDATE memory_jobs SET state='done',lease_token=NULL,lease_until=NULL,error_code='archive_redacted' WHERE owner_id=$1 AND record_id=ANY($2::uuid[]) AND stage='source.parse' AND state!='leased'`,
+	gaps := kernel.JSON([]string{connectors.GapArchiveGone})
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO blob_cleanup_jobs(owner_id,blob_key) SELECT owner_id,blob_key FROM source_versions WHERE owner_id=$1 AND source_id=ANY($2::uuid[]) AND blob_key IS NOT NULL ON CONFLICT DO NOTHING`, []any{string(scope.OwnerID), ids}},
+		{`INSERT INTO source_contexts(owner_id,source_id,source_version,gaps) SELECT owner_id,source_id,version,$3::jsonb FROM source_versions WHERE owner_id=$1 AND source_id=ANY($2::uuid[]) AND NOT attachment_redacted ON CONFLICT(owner_id,source_id,source_version) DO UPDATE SET gaps=source_contexts.gaps||excluded.gaps`, []any{string(scope.OwnerID), ids, gaps}},
+		{`UPDATE source_versions SET blob_key=NULL,attachment_redacted=true WHERE owner_id=$1 AND source_id=ANY($2::uuid[])`, []any{string(scope.OwnerID), ids}},
+		{`UPDATE memory_jobs SET state='done',lease_token=NULL,lease_until=NULL,error_code='archive_redacted' WHERE owner_id=$1 AND record_id=ANY($2::uuid[]) AND stage='source.parse' AND state!='leased'`, []any{string(scope.OwnerID), ids}},
 	} {
-		if _, err := tx.Exec(ctx, sql, string(scope.OwnerID), ids); err != nil {
+		if _, err := tx.Exec(ctx, q.sql, q.args...); err != nil {
 			return err
 		}
 	}

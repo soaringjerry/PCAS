@@ -83,7 +83,7 @@ func TestOrganizeSkeletonUpgradePreservesData(t *testing.T) {
 		t.Fatal("unexpected group facets", facets, err)
 	}
 	state, err := s.Snapshot(ctx, scope)
-	if err != nil || state.Organize != (workspace.Organize{Done: 0, Total: 1, Version: kernel.OrganizeVersion}) {
+	if err != nil || state.Organize != (workspace.Organize{Done: 0, Total: 1, Version: organize.RuleVersion}) {
 		t.Fatal("unexpected organize snapshot", state.Organize, err)
 	}
 }
@@ -221,7 +221,7 @@ func TestOrganizeBatchesReadFiltersAndCorrection(t *testing.T) {
 	workspaceCommand(t, s, scope, workspace.Command{Type: "addProject", Name: "流萤项目"})
 	for range 2 {
 		j := organizeTestJob(t, s, scope)
-		if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j); err != nil {
+		if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -229,7 +229,7 @@ func TestOrganizeBatchesReadFiltersAndCorrection(t *testing.T) {
 		t.Fatal("expected 40+5", calls.Load())
 	}
 	state, err := s.Snapshot(ctx, scope)
-	if err != nil || state.Organize != (workspace.Organize{Done: 45, Total: 45, Version: kernel.OrganizeVersion}) {
+	if err != nil || state.Organize != (workspace.Organize{Done: 45, Total: 45, Version: organize.RuleVersion}) {
 		t.Fatal(state.Organize, err)
 	}
 	facets, err := s.MemoryFacets(ctx, scope)
@@ -270,9 +270,9 @@ func TestOrganizeBatchesReadFiltersAndCorrection(t *testing.T) {
 	if err != nil || state.Organize.Done != 44 {
 		t.Fatal(state.Organize, err)
 	}
-	prior := kernel.OrganizeVersion
-	kernel.OrganizeVersion++
-	t.Cleanup(func() { kernel.OrganizeVersion = prior })
+	prior := organize.RuleVersion
+	organize.RuleVersion++
+	t.Cleanup(func() { organize.RuleVersion = prior })
 	state, err = s.Snapshot(ctx, scope)
 	if err != nil || state.Organize.Done != 0 || state.Memories[0].Category != "rule" || len(state.Memories[0].Groups) != 2 {
 		t.Fatal(state.Organize, err)
@@ -290,7 +290,7 @@ func TestOrganizeBadOutputAndExhaustion(t *testing.T) {
 			t.Fatal(err)
 		}
 		j := organizeTestJob(t, s, scope)
-		if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j); err != nil {
+		if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 		var got, version int
@@ -330,14 +330,14 @@ func TestOrganizeConcurrentInvocationAndDeletion(t *testing.T) {
 	kept := organizeTestMemory(t, s, scope, "虚构云杉的季度汇报第二项记录。")
 	j := organizeTestJob(t, s, scope)
 	go func() {
-		done <- (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j)
+		done <- (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j)
 	}()
 	select {
 	case <-entered:
 	case <-time.After(5 * time.Second):
 		t.Fatal("model did not start")
 	}
-	err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j)
+	err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j)
 	var failure *worker.JobError
 	if !errors.As(err, &failure) || failure.Code != "organize_busy" || !failure.NoAttempt {
 		close(release)
@@ -372,7 +372,7 @@ func TestOrganizeTransactionRollbackAndRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j); err == nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j); err == nil {
 		t.Fatal("expected failure")
 	}
 	for _, ref := range []memory.Ref{first, second} {
@@ -386,7 +386,7 @@ func TestOrganizeTransactionRollbackAndRecovery(t *testing.T) {
 	}
 	// Reprocessing the same fenced task reuses its paid output and recovers
 	// all still-outdated claims after the result transaction rolls back.
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	for _, ref := range []memory.Ref{first, second} {
@@ -426,7 +426,7 @@ func TestOrganizeConfiguredChannelAndHourlyLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j)
+	err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j)
 	var failure *worker.JobError
 	if !errors.As(err, &failure) || failure.Code != "organize_hourly_limit" || failure.Until.IsZero() || !failure.NoAttempt {
 		t.Fatal(err)
@@ -434,7 +434,7 @@ func TestOrganizeConfiguredChannelAndHourlyLimit(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, "UPDATE background_usage SET created_at=now()-interval '2 hours'"); err != nil {
 		t.Fatal(err)
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	if m, err := s.GetMemory(ctx, scope, string(ref.ID)); err != nil || m.Category != "taste" {
@@ -491,7 +491,7 @@ func TestOrganizeMissingInvalidAndUnknownNumbers(t *testing.T) {
 		organizeTestMemory(t, s, scope, fmt.Sprintf("虚构霜叶的第%d条盆栽观察。", i))
 	}
 	j := organizeTestJob(t, s, scope)
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := s.Pool.Query(ctx, `SELECT cl.organized,cl.organize_attempts,c.category FROM claims cl
@@ -511,7 +511,7 @@ func TestOrganizeMissingInvalidAndUnknownNumbers(t *testing.T) {
 			t.Fatal(err)
 		}
 		if i == 1 || i == 4 {
-			if version != kernel.OrganizeVersion || attempts != 0 {
+			if version != organize.RuleVersion || attempts != 0 {
 				t.Fatal(i, version, attempts)
 			}
 		} else if version != 0 || attempts != 1 || category != "unknown" {
@@ -592,7 +592,7 @@ func TestOrganizeModelDeclaredGroupsHaveNoLexicalOrThreeGroupLimit(t *testing.T)
 		organizeTestMemory(t, s, scope, "虚构霜叶的季度汇报、盆栽观察、书店走访、蓝杯计划和阅读记录都在推进。")
 	}
 	j := organizeTestJob(t, s, scope)
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	var names []string
@@ -630,7 +630,7 @@ func TestOrganizeUnavailableDoesNotConsumeAttemptsAndBudgetDefers(t *testing.T) 
 	registryOf(s).Config.Providers[0].KeyEnv = channelKey
 	j := organizeTestJob(t, s, scope)
 	for range 2 {
-		err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j)
+		err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j)
 		var failure *worker.JobError
 		if !errors.As(err, &failure) || failure.Code != "provider_unavailable" || !failure.NoAttempt {
 			t.Fatal(err)
@@ -648,7 +648,7 @@ func TestOrganizeUnavailableDoesNotConsumeAttemptsAndBudgetDefers(t *testing.T) 
 	if _, err := s.Pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','0') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j)
+	err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j)
 	var failure *worker.JobError
 	if !errors.As(err, &failure) || failure.Code != "budget_deferred" || failure.Until.Before(time.Now()) || !failure.NoAttempt {
 		t.Fatal(err)
@@ -656,7 +656,7 @@ func TestOrganizeUnavailableDoesNotConsumeAttemptsAndBudgetDefers(t *testing.T) 
 	if _, err := s.Pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','10') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	if m, err := s.GetMemory(ctx, scope, string(ref.ID)); err != nil || m.Category != "taste" {
@@ -679,7 +679,7 @@ func TestOrganizeCorrectionDuringCallSkipsOnlyCorrectedVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	j := organizeTestJob(t, s, scope)
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	m, err := s.GetMemory(ctx, scope, string(corrected.ID))
@@ -734,7 +734,7 @@ func TestOrganizeLiveSynthetic(t *testing.T) {
 			break
 		}
 		j := organizeTestJob(t, s, scope)
-		if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j); err != nil {
+		if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 	}

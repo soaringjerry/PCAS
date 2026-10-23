@@ -201,3 +201,23 @@ func TestChangedEvidenceDropsTheAnswer(t *testing.T) {
 		t.Fatal(err, f.calls, f.saved, f.end)
 	}
 }
+
+func TestTheInputOfATopicSaysWhereItCutText(t *testing.T) {
+	if text, n := ClipMemory(strings.Repeat("长", MemoryCharacters+3)); n != 3 || !strings.HasSuffix(text, "（原文还有内容，拿不准请用 uncertain）") {
+		t.Fatal(n, text[len(text)-30:])
+	}
+	if text, n := ClipGoal("短目标"); n != 0 || text != "短目标" {
+		t.Fatal(n, text)
+	}
+}
+
+func TestAGroupIsJudgedWhenItIsBigLivelyAndAProjectOrAGoalWithADate(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	recent, old := now.Add(-24*time.Hour), now.Add(-Alive-time.Hour)
+	if !Eligible(10, "project", false, false, recent, now) || !Eligible(12, "topic", true, true, time.Time{}, now) {
+		t.Fatal("an eligible group was left out")
+	}
+	if Eligible(9, "project", true, true, recent, now) || Eligible(12, "topic", true, false, recent, now) || Eligible(12, "project", false, false, old, now) {
+		t.Fatal("an ineligible group was judged")
+	}
+}

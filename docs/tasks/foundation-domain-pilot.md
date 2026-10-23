@@ -156,6 +156,34 @@ Two run commands are decided in the deputy domain and executed by a unit of stor
 
 The context and the model input of a secretary turn are built in the secretary domain: `secretary.Gather` reads the agent, the items by alias, the history, and counts what the context leaves out; `secretary.Compose` writes the document catalog, the workspace, the memories, the sources, the evidence, the evidence behind the project handover, and the request. `deskstore.inputUnit` gives both their reads.
 
+A workspace command is applied by `command.Apply` in `internal/workspace/command`: the checks of each command, the delegation that makes a task and queues its draft, the quick note, the documents, the settings, the agents, the exclusion of a memory from an item, the samples, the retry of a failed job, and the deletion of an item. `commandstore.commandUnit` gives it its reads and writes. The memory commands, the run commands, and undo keep their storage entries, which the unit calls.
+
+The job flow of an imported conversation is in the extraction domain: `extraction.PrepareConversation` starts or restarts a run and returns the segment, `extraction.ApplyConversation` replaces or withdraws automatic memories, decides each item, records the processed messages, and queues the next segment, and `extraction.FailedConversation` marks the rest of a stopped run. `intakestore.conversationUnit` reads and writes under the owner lock and the job's lease.
+
+The source context of the memories that an input gives is chosen by `contextbuilder.Evidence`; `evidencestore` reads the anchors and the windows.
+
+When the owner is reminded is decided in `internal/workspace/reminder`: `reminder.Check` records the daily review, the triggers of a task that have come (the start reminder once, while the task waits), and the shelved ideas that wake by their time or a found condition; `reminder.ApplySignals` wakes an idea from a sign in a new source; `reminder.Suppressed` keeps an undo from sending an old reminder again. Storage keeps the owner loop, the lock, and the invalidation of obsolete notices.
+
+How a notice is pushed is `internal/notify`: `notify.Window` (24 hours), `Delivery.Due` and `Delivery.Failed` (five attempts after one, five, and thirty minutes; a target that is gone stops at once), and `notify.Compose`. `Store.DispatchNotices` keeps the lock of each notice and the read just before each send.
+
+The end of a run is decided in the deputy domain: `deputy.Finish` writes the output, the failure text, the stale and revoked cases, the groups the run did not read, the notice, and what became of each paid call; `deputy.FinishRevision` does the same for a paid revision with its own checks. The texts of an interrupted run are `deputy` constants, which the journal recovery matches as a parameter instead of a copied sentence.
+
+An undo is decided by `command.Undo`: once, within thirty days, while no later action changed the rows and no queued run started; a project that the secretary made returns its items to no project; a reopened task keeps its passed reminders silent. `commandstore.undoUnit` keeps the fingerprints, the locks, and the restores.
+
+The answer for one source is written by `extraction.ApplySource`: each item is decided, a memory is remembered and its candidate accepted, a task or an idea goes to `extraction.CaptureItem` (made at once only when said plainly and now, at most 20 automatic tasks per source or conversation, titles up to 2,000 bytes; otherwise a candidate with its reasons), and the quick note closes once anything was taken. `intakestore.sourceUnit` and `captureUnit` read and write.
+
+The memory that a turn or a run is given is completed by `contextbuilder.FinishUse`: the groups the agent may read, the project's handover and group, the requirements that apply everywhere within 6,000 characters (confirmed, then repeated, then the latest), the remembered dates, and the recalled memories; a scoped requirement waits for recall. `contextbuilder.ChooseGroups` proposes groups by reciprocal rank. `usestore.useUnit` reads.
+
+The owner's cards of a turn (`secretary.Cards`, `secretary.Links`), what a turn reads of an attachment and its receipt (`secretary.AttachmentInput`, `secretary.AttachmentReceipt`), and the closing of a remembered date (in `secretary.Execute`) are in the secretary domain. `workspace.DeadlineClose` names how a date is closed.
+
+A connector sync runs in `internal/connectors` (`connectors.Sync`): the HTTP poll and the inbox folder with their limits (8 MiB a read, 100 records a poll, 1,000 files and 10,000 records a folder) and the cursor rules. Storage keeps the lease and `finishSync`. The rules of a project file are in `internal/input/projectfile`. `internal/connectors` and `internal/notify` are in the domain boundary test.
+
+Background work is put into the owner's words by `internal/workspace/activity`: job titles and problems, the library's job list, the notes of the agents, and the home page's "while you were away" lines. Storage reads the rows; the notice and review IDs are still made in SQL so that they keep their bytes.
+
+The schedule view is built by `internal/currentstate/schedule` (`schedule.Build`, `schedule.InProgress`): the repeats of a recurring arrangement, what is unclear, what is overdue, and the undated tasks of the home page. The rules of a model's dates for a memory are `organize.NormalizeDeadlines`, with `organize.LegacyRule` and `organize.Clock` next to `organize.ScheduleRule`.
+
+The sentences of a recall's coverage and the label of an original are `retrieval` constants and `retrieval.ContextLabel`; the clipping of a topic's model input is `topicproject.ClipGoal` and `topicproject.ClipMemory`; the title of an item that must be authorized again is `workspace.ReauthorizeTitle`. One model-input label stays in storage with a reason: the label of the best fragment of a source (`[片段 …；字符 …]`) is made in the recall SQL that chooses the fragment, and moves when that query moves.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.
@@ -190,7 +218,7 @@ What the kernel needs from a domain comes through the composition:
 | `interpstore` | Organizing, the alias scan, and the comparison of statements and entities. |
 | `usestore` | The memory that a turn or a run is given, and its checks. |
 | `deputystore` | The reads and writes of a run request and of an adoption, the lease and the recovery of a run, the journal reads of its calls, the last write of a run, and the revision of a document. `deputy.Request`, `deputy.Adopt`, and `deputy.Conduct` decide; this package gives them units and one leased run as a `deputy.Session`. |
-| `commandstore` | The dispatch of a workspace command, the undo of an action, and the entry that executes a command. |
+| `commandstore` | The reads and writes of a workspace command, the undo of an action, and the entry that executes a command. `command.Apply` decides. |
 | `deskstore` | The secretary: admission and order of a turn, the turn in its transaction, the reads of its context and its model input, attachments of a request, and the cleanup of a check-only turn. |
 | `internal/postgres` | The composition of the store, the migrations, the queue, the schedulers, the notification channels, and five small adapters (about 2,000 lines). |
 

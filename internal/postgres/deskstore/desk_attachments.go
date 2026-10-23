@@ -2,13 +2,11 @@ package deskstore
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 
 	"github.com/soaringjerry/PCAS/internal/input/attachment"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
-	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -52,16 +50,9 @@ func (s *Desk) PrepareDeskAttachments(ctx context.Context, scope memory.Scope, r
 		}
 		a := DeskAttachment{Ref: ref, Media: original.Source.MediaType}
 		parsed, parseErr := s.ReadAttachmentWith(ctx, scope, ref, nil, read)
-		image := strings.HasPrefix(a.Media, "image/")
-		if parseErr != nil || image && parsed.Representation != "vision" {
+		a.Context, a.Warning = secretary.AttachmentInput(original.Source.Title, a.Media, parsed.Representation, parsed.Text, parseErr)
+		if a.Warning != "" {
 			slog.WarnContext(ctx, "secretary attachment retained", "stage", "parse", "error_type", secretary.ErrorType("model", parseErr))
-			if image {
-				a.Warning = "图片存好了，但我现在看不了图；请检查模型通道，或把要办的内容写成文字。"
-			} else {
-				a.Warning = "文件存好了，但暂时没读出内容；请检查资料处理状态，或把要办的内容写成文字。"
-			}
-		} else {
-			a.Context = fmt.Sprintf("附件 %s（%s）：\n%s", original.Source.Title, parsed.Representation, intakestore.BoundedAttachmentText(parsed.Text, 12000))
 		}
 		out = append(out, a)
 	}
@@ -69,12 +60,7 @@ func (s *Desk) PrepareDeskAttachments(ctx context.Context, scope memory.Scope, r
 }
 
 func (s *Desk) DeskAttachmentReceiptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, turn string, a DeskAttachment) (workspace.DeskReceipt, error) {
-	text := "存了一份文件"
-	if strings.HasPrefix(a.Media, "image/") {
-		text = "存了一张图片"
-	} else if strings.HasPrefix(a.Media, "audio/") {
-		text = "存了一段音频"
-	}
+	text := secretary.AttachmentReceipt(a.Media)
 	actionID, sourceID := string(memory.NewID()), string(a.Ref.ID)
 	// A source receipt uses the regular action ID, expiry and undo endpoint; its
 	// narrowly typed change deletes the source through normal propagation.

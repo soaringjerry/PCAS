@@ -52,7 +52,7 @@ func New(ctx context.Context, c workspace.Command, origin Origin, fx Effects) (w
 		item.History = []workspace.Revision{}
 	}
 	if kind == "task" && c.Text != "" {
-		if err := requireText(c.Text); err != nil {
+		if err := RequireText(c.Text); err != nil {
 			return item, err
 		}
 		item.Notes = c.Text

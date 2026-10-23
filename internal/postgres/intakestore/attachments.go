@@ -31,7 +31,7 @@ func (s *Intake) IngestAttachment(ctx context.Context, scope memory.Scope, in me
 	if err != nil {
 		return result, err
 	}
-	in.Text = "[附件原件；正文尚未解析。校验标识：" + strings.Split(strings.Split(key, "/")[1], "-")[0] + "]"
+	in.Text = attachment.Placeholder(strings.Split(strings.Split(key, "/")[1], "-")[0])
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
 		result, err = s.IngestAttachmentTx(ctx, tx, scope, in, key)

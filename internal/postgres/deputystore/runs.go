@@ -6,11 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
-	"github.com/soaringjerry/PCAS/internal/ai"
-	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
@@ -143,7 +140,7 @@ func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr er
 		return true
 	})
 	recoverableSQL := `EXISTS(SELECT 1 FROM background_model_results b WHERE b.owner_id=agent_runs.owner_id AND b.job_id=agent_runs.id AND b.purpose='revise') OR EXISTS(SELECT 1 FROM model_calls c WHERE c.owner_id=agent_runs.owner_id AND c.execution_id=agent_runs.id AND c.stage='answer' AND c.input_manifest->>'budgetOwner'='deputy_run' AND c.input_manifest->>'origin'=agent_runs.document->>'createdAt' AND ((c.result_receipt->'billing' IS NOT NULL AND c.result_receipt->'billing'<>'null'::jsonb) OR (c.outcome='failed' AND c.accounting_state IN ('not_reserved','settled'))))`
-	_, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET status='failed',lease_until=NULL,lease_token=NULL,document=document||jsonb_build_object('status','failed','error','进程中断，结果和用量未确认；未自动重试','finishedAt',now()) WHERE status='running' AND lease_until<now() AND NOT (`+recoverableSQL+`)`)
+	_, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET status='failed',lease_until=NULL,lease_token=NULL,document=document||jsonb_build_object('status','failed','error',$1::text,'finishedAt',now()) WHERE status='running' AND lease_until<now() AND NOT (`+recoverableSQL+`)`, deputy.Interrupted)
 	if err != nil {
 		return err
 	}
@@ -170,9 +167,7 @@ func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr er
 		if err := modelcall.DecodeStrict(data, &run); err != nil {
 			return err
 		}
-		if !kernel.OneOf(run.MemoryTier, "light", "medium", "heavy") {
-			run.MemoryTier = "heavy"
-		}
+		run.MemoryTier = deputy.Tier(run.MemoryTier)
 		if run.Kind == "revise" {
 			cached, err = s.PaidModelResult(ctx, worker.Job{ID: memory.ID(run.ID), OwnerID: scope.OwnerID})
 			if err != nil {
@@ -193,7 +188,7 @@ func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr er
 			if err := usestore.CheckQueuedUseRunPromptTx(ctx, tx, scope, run); err != nil {
 				run.Status = "failed"
 				run.Cost = 0
-				run.Error = "记忆或授权已变化，请重新生成"
+				run.Error = deputy.ContextChanged
 				_, err = tx.Exec(ctx, "UPDATE agent_runs SET status='failed',reserved_cost=0,document=$3 WHERE owner_id=$1 AND id=$2", ownerID, id, kernel.JSON(run))
 				return err
 			}
@@ -201,7 +196,7 @@ func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr er
 		if run.Kind == "revise" && cached == nil && savedRow == nil {
 			if err := validateReviseTargetTx(ctx, tx, scope, run); err != nil {
 				run.Status = "failed"
-				run.Error = "目标文档已改变或不存在，请重新发起修改"
+				run.Error = deputy.TargetChanged
 				_, e := tx.Exec(ctx, "UPDATE agent_runs SET status='failed',document=$3,reserved_cost=0 WHERE owner_id=$1 AND id=$2", ownerID, id, kernel.JSON(run))
 				return e
 			}
@@ -229,7 +224,7 @@ func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr er
 		}
 		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelcall.PersistenceTimeout)
 		defer cancel()
-		_, _ = s.Pool.Exec(persist, `UPDATE agent_runs SET lease_until=clock_timestamp(),document=document||jsonb_build_object('error','处理未完成；已保存的模型结果将复用，不会自动重复生成') WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND lease_token=$4 AND status='running'`, string(scope.OwnerID), run.ID, run.CreatedAt, token)
+		_, _ = s.Pool.Exec(persist, `UPDATE agent_runs SET lease_until=clock_timestamp(),document=document||jsonb_build_object('error',$5::text) WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND lease_token=$4 AND status='running'`, string(scope.OwnerID), run.ID, run.CreatedAt, token, deputy.WriteIncomplete)
 	}()
 	execution := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Policy: callstore.InteractiveCallPolicy{Kind: "deputy", Token: token, Origin: run.CreatedAt, AgentID: run.AgentID, ThingID: run.ThingID}}
 	ctx = modelcall.WithExecution(ctx, execution)
@@ -330,14 +325,7 @@ func (r *runSession) SaveSelection(ctx context.Context, request modelcall.Reques
 // Finish writes the end of the run in one transaction under the owner lock.
 // A run whose lease was lost is left as it is.
 func (r *runSession) Finish(ctx context.Context, end deputy.End) error {
-	s, scope, run, token, timing, u := r.store, r.scope, *r.run, r.token, r.timing, end.Use
-	generationErr, verifyErr, cost, selfcheckFallback := end.GenerationErr, end.VerifyErr, end.Cost, end.SelfcheckFallback
-	mainInvocation, reviewInvocation := end.Answer, end.Review
-	result := ai.Result{Text: end.Text, Searches: end.Searches}
-	savedErrorCode := ""
-	if end.Saved != nil {
-		savedErrorCode = end.Saved.ErrorCode
-	}
+	s, scope, run, token, timing := r.store, r.scope, *r.run, r.token, r.timing
 	timing.BeginWrite(run.MemoryTier)
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(scope.OwnerID)); err != nil {
@@ -354,105 +342,49 @@ func (r *runSession) Finish(ctx context.Context, end deputy.End) error {
 			if _, err := tx.Exec(ctx, "INSERT INTO run_dependencies(owner_id,run_id,memory_id,memory_version) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING", string(scope.OwnerID), run.ID, string(ref.ID), ref.Version); err != nil {
 				return err
 			}
-			if !kernel.OneOf(string(ref.ID), run.ContextMemoryIDs...) {
-				run.ContextMemoryIDs = append(run.ContextMemoryIDs, string(ref.ID))
-			}
 		}
-		current.ContextMemoryIDs = run.ContextMemoryIDs
-		current.ContextVersions = run.ContextVersions
-		current.ProjectHandoverWrittenAt = run.ProjectHandoverWrittenAt
-		current.MemoryGroups = run.MemoryGroups
-		current.MemoryTier = run.MemoryTier
-		current.MemoryContextRange = run.MemoryContextRange
-		current.Brief = run.Brief
-		current.FinishedAt = kernel.Stamp()
-		current.Status = "done"
-		current.Output = result.Text
-		current.Searches = result.Searches
-		if generationErr != nil {
-			current.Status = "failed"
-			current.Error = "模型调用未完成，结果和用量可能未确认；请检查登录、额度与服务配置"
-			if verifyErr != nil {
-				current.Error = "生成前记忆或授权已变化，请重新生成"
-			}
-			var capability *ai.CapabilityError
-			if errors.As(generationErr, &capability) {
-				current.Error = "模型通道不支持必需能力：" + capability.Capability
-			}
-			var provider *siwc.ProviderError
-			if errors.As(generationErr, &provider) {
-				current.Error = provider.Message()
-				current.ProviderError = kernel.JSON(provider)
-			}
-		}
-		current.Cost = cost
-		if usestore.CheckUseRunPromptTx(ctx, tx, scope, current) != nil {
-			current.StaleContext = true
-		}
-		if accessstore.VerifyRunAccessTx(ctx, tx, scope, current) != nil {
-			current.StaleContext = true
-			current.Status = "failed"
-			current.Output = ""
-			current.Error = "生成期间授权已撤回或资料已删除，请重新生成"
-		}
-		if current.Output != "" && u.Coverage != nil && len(u.Coverage.Skipped) > 0 {
-			current.Output += "\n这几组没来得及看：" + strings.Join(u.Coverage.Skipped, "、")
-		}
-
+		ending := deputy.Finish(ctx, finishUnit{tx: tx, scope: scope}, current, run, end, time.Now())
+		current = ending.Run
 		if _, err := tx.Exec(ctx, "UPDATE agent_runs SET status=$4,reserved_cost=$5,document=$6,lease_until=NULL,lease_token=NULL WHERE owner_id=$1 AND id=$2 AND lease_token=$3", string(scope.OwnerID), run.ID, token, current.Status, current.Cost, kernel.JSON(current)); err != nil {
 			return err
 		}
 		if err := s.AutoAdoptRunTx(ctx, tx, scope, &current); err != nil {
 			return err
 		}
-		// Work handed off is reported back where reminders go, so the person who
-		// asked from their phone hears how it ended without opening the page.
-		noticeReason := deputy.NoticeReason(current)
-		if current.Status == "done" && u.Coverage != nil && len(u.Coverage.Notices) > 0 {
-			noticeReason += "\n" + strings.Join(u.Coverage.Notices, "\n")
-		}
-		application, why := "applied", ""
-		if current.Status != "done" || current.StaleContext {
-			application, why = "not_applicable", "run_failed_or_stale"
-		}
-		if generationErr != nil && savedErrorCode != "" {
-			why = savedErrorCode
-		}
-		if err := (callstore.InteractiveCalls{Store: s.Calls}).RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, mainInvocation, application, why); err != nil {
+		calls := callstore.InteractiveCalls{Store: s.Calls}
+		if err := calls.RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, end.Answer, ending.Answer.Outcome, ending.Answer.Reason); err != nil {
 			return err
 		}
-		if generationErr == nil && run.MemoryTier != "light" {
-			application := "applied"
-			if selfcheckFallback != "" {
-				application = "skipped"
-			}
-			if current.Status != "done" {
-				application = "not_applicable"
-			}
-			if err := (callstore.InteractiveCalls{Store: s.Calls}).RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, reviewInvocation, application, selfcheckFallback); err != nil {
+		if ending.RecordReview {
+			if err := calls.RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, end.Review, ending.Review.Outcome, ending.Review.Reason); err != nil {
 				return err
 			}
 		}
-		if selfcheckFallback != "" {
-			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "selfcheck", "failure", selfcheckFallback, 1); err != nil {
+		if ending.SelfcheckFailure != "" {
+			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "selfcheck", "failure", ending.SelfcheckFailure, 1); err != nil {
 				return err
 			}
-			if current.Status == "done" {
-				if selfcheckFallback == "selfcheck_output_rejected" {
-					noticeReason += "\n自查结果未采用，保留了原稿。"
-				} else {
-					noticeReason += "\n自查未完成，保留了原稿。"
-				}
-			}
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,now(),$4) ON CONFLICT DO NOTHING`,
-			string(scope.OwnerID), current.ThingID, kernel.RunNoticePrefix+current.ID, noticeReason); err != nil {
-			return err
 		}
 		// Delivery triggers expose background results without changing the
 		// revision used to authorize checkbox, reminder and bulk commands.
-		return nil
+		_, err = tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,now(),$4) ON CONFLICT DO NOTHING`,
+			string(scope.OwnerID), current.ThingID, kernel.RunNoticePrefix+current.ID, ending.Notice)
+		return err
 	})
+}
+
+// finishUnit checks a run at its end in the transaction of its last write.
+type finishUnit struct {
+	tx    pgx.Tx
+	scope memory.Scope
+}
+
+func (u finishUnit) PromptCurrent(ctx context.Context, run workspace.Run) bool {
+	return usestore.CheckUseRunPromptTx(ctx, u.tx, u.scope, run) == nil
+}
+
+func (u finishUnit) Permitted(ctx context.Context, run workspace.Run) bool {
+	return accessstore.VerifyRunAccessTx(ctx, u.tx, u.scope, run) == nil
 }
 
 func (s *Deputy) AutoAdoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run) error {

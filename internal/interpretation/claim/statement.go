@@ -145,3 +145,11 @@ func Scope(s Statement) map[string]string {
 	}
 	return scope
 }
+
+// The titles of the records that the owner's own words about memory leave.
+const (
+	ConfirmedTitle  = "用户确认的记忆"
+	CorrectionTitle = "用户纠正"
+	// SelfName is the name of the owner's own entity.
+	SelfName = "我"
+)

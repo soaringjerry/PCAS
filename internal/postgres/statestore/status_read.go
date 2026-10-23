@@ -220,7 +220,7 @@ func (s *State) About(ctx context.Context, scope memory.Scope, key string) (work
 		for _, d := range dates.Items {
 			note := d.TimeNote
 			if d.Expired {
-				note = strings.TrimSpace(note + " 已过期，不知是否完成")
+				note = strings.TrimSpace(note + " " + workspace.ExpiredNote)
 			}
 			out.Deadlines = append(out.Deadlines, workspace.Deadline{ID: d.ID, Kind: d.Kind, At: d.At, Recurrence: d.Recurrence, Title: d.Title, TimeNote: note, MemoryID: d.MemoryID})
 		}

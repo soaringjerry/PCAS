@@ -9,7 +9,6 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -24,10 +23,10 @@ func TestCompareUnavailableBudgetAndSharedOrganizeLock(t *testing.T) {
 	key := "PCAS_TEST_COMPARE_CHANNEL_AVAILABLE"
 	t.Setenv(key, "")
 	registryOf(s).Config.Providers[0].KeyEnv = key
-	j := compareJob(t, s, scope, false, kernel.CompareVersion)
+	j := compareJob(t, s, scope, false, comparison.RuleVersion)
 	assertDeferred := func(code string) {
 		t.Helper()
-		err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j)
+		err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: comparison.RuleVersion}).Process(ctx, j)
 		var e *worker.JobError
 		if !errors.As(err, &e) || e.Code != code || !e.NoAttempt || e.Until.Before(time.Now()) {
 			t.Fatal(code, err)
@@ -62,10 +61,10 @@ func TestCompareUnavailableBudgetAndSharedOrganizeLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	locker.Release()
-	if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j); err != nil {
+	if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: comparison.RuleVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
-	compareState(t, s, scope, refs, []string{"", ""}, kernel.CompareVersion)
+	compareState(t, s, scope, refs, []string{"", ""}, comparison.RuleVersion)
 	if len(f.all()) != 1 {
 		t.Fatal("unexpected calls", len(f.all()))
 	}
@@ -76,7 +75,7 @@ func TestCompareHourlyCapIsIndependent(t *testing.T) {
 	ctx := context.Background()
 	f := b1Model(t, s, `{"duplicates":[],"superseded":[]}`)
 	compareFixture(t, s, scope, "合成每小时上限记忆", "合成每小时另一条记忆")
-	j := compareJob(t, s, scope, false, kernel.CompareVersion)
+	j := compareJob(t, s, scope, false, comparison.RuleVersion)
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		for i := 0; i < 40; i++ {
 			record := j
@@ -101,7 +100,7 @@ func TestCompareHourlyCapIsIndependent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j)
+	err = (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: comparison.RuleVersion}).Process(ctx, j)
 	var failure *worker.JobError
 	if !errors.As(err, &failure) || failure.Code != "compare_hourly_limit" || !failure.NoAttempt {
 		t.Fatal(err)
@@ -141,20 +140,20 @@ func TestCompareRuleEpochComesFromProgramNotQueueAndRemovedModelSkips(t *testing
 	ctx := context.Background()
 	b1Model(t, s, `{"duplicates":[],"superseded":[]}`)
 	refs := compareFixture(t, s, scope, "虚构规则纪元记忆", "虚构规则纪元另一条记忆")
-	j := compareJob(t, s, scope, false, kernel.CompareVersion+7)
-	if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j); err != nil {
+	j := compareJob(t, s, scope, false, comparison.RuleVersion+7)
+	if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: comparison.RuleVersion}).Process(ctx, j); err != nil {
 		t.Fatal(err)
 	}
-	compareState(t, s, scope, refs, []string{"", ""}, kernel.CompareVersion)
+	compareState(t, s, scope, refs, []string{"", ""}, comparison.RuleVersion)
 	if _, err := s.Pool.Exec(ctx, "UPDATE claims SET compared=0 WHERE owner_id=$1", string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Pool.Exec(ctx, "DELETE FROM memory_comparison_batches WHERE owner_id=$1", scope.OwnerID); err != nil {
 		t.Fatal(err)
 	}
-	j = compareJob(t, s, scope, false, kernel.CompareVersion)
+	j = compareJob(t, s, scope, false, comparison.RuleVersion)
 	s.Models = nil
-	err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j)
+	err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: comparison.RuleVersion}).Process(ctx, j)
 	var failure *worker.JobError
 	if !errors.As(err, &failure) || failure.Code != "provider_unavailable" || !failure.NoAttempt {
 		t.Fatal(err)

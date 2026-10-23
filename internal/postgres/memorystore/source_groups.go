@@ -9,6 +9,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/activity"
 )
 
 // The library lists where material came from, not every record: everything
@@ -48,44 +49,14 @@ FROM (SELECT * FROM imports UNION ALL SELECT * FROM others) g ORDER BY g.at DESC
 	defer rows.Close()
 	out := []workspace.Source{}
 	for rows.Next() {
-		var source workspace.Source
-		var connector, title, archive string
+		var id, connector, title, archive string
+		var items int
 		var at time.Time
 		var blocked, pending bool
-		if err := rows.Scan(&source.ID, &connector, &source.ItemCount, &at, &title, &blocked, &pending, &archive); err != nil {
+		if err := rows.Scan(&id, &connector, &items, &at, &title, &blocked, &pending, &archive); err != nil {
 			return nil, err
 		}
-		switch {
-		case strings.HasPrefix(source.ID, "import:"):
-			source.Kind, source.Name = "import", archive
-			if source.Name == "" {
-				source.Name = "导入的聊天记录"
-			}
-		case source.ID == "said":
-			source.Kind, source.Name = "said", "跟秘书说的话"
-		case source.ID == "memory-input":
-			source.Kind, source.Name = "note", "添加记忆时写的话"
-		case source.ID == "capture":
-			source.Kind, source.Name = "capture", "快速记录"
-		case source.ID == "telegram":
-			source.Kind, source.Name = "telegram", "从 Telegram 发来的"
-		default:
-			source.Kind, source.Name, source.Single = "file", title, true
-			if strings.TrimSpace(source.Name) == "" {
-				source.Name = "没有标题的资料"
-			}
-		}
-		source.Status = "connected"
-		// Background work on some of many originals is ordinary and says
-		// nothing about the entry; only a single document reports it.
-		if pending && source.Single {
-			source.Status, source.Note = "syncing", "原文可读，还在处理"
-		}
-		if blocked {
-			source.Status, source.Note = "failed", "原文可读，部分处理未完成；展开后台任务查看缺口"
-		}
-		source.LastSyncAt = at.UTC().Format(time.RFC3339Nano)
-		out = append(out, source)
+		out = append(out, activity.SourceGroup(id, title, archive, items, at, blocked, pending))
 	}
 	return out, rows.Err()
 }

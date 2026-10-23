@@ -9,7 +9,9 @@ package datereview
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
@@ -204,3 +206,25 @@ func apply(u Unit, job worker.Job, class string, input Input, clipped int, outpu
 	}
 	return finish()
 }
+
+// TidiedSummary is the home page's line for the dates that a review put away.
+func TidiedSummary(n int) string {
+	return fmt.Sprintf("收拾了日程：%d 条过了期或不作数的，不再显示", n)
+}
+
+// The input of a review. The open tasks and ideas are shown so that the
+// model does not make a second copy; the secretary is shown the same 40 and
+// 20, and what is left out is counted. Other open rows with the same title
+// are shown so that one thing read twice is shown once: the newest five, as
+// a title repeated more often is a fixed arrangement with its own rule.
+const (
+	TaskTitles     = 40
+	IdeaTitles     = 20
+	TextCharacters = 1200
+	SameTitles     = 5
+	SameCharacters = 300
+)
+
+// PastAfter is how long a dated row is left alone after its day is over, so
+// that something due last night is still the owner's to tick on the home page.
+const PastAfter = 24 * time.Hour

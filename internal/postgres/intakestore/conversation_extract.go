@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"strconv"
-	"strings"
-	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
@@ -26,12 +24,6 @@ type (
 	conversationOutput  = extraction.ConversationOutput
 )
 
-type earlierConversationMemory struct {
-	Ref   int        `json:"ref"`
-	Text  string     `json:"text"`
-	Claim memory.Ref `json:"-"`
-}
-
 func EnqueueConversationTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor memory.Ref, run string, segment, next int) error {
 	_, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority)
  VALUES($1,$2,$3,$4,$5,9) ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`,
@@ -39,7 +31,7 @@ func EnqueueConversationTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anch
 	return err
 }
 
-func earlierConversationMemoriesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, run string) ([]earlierConversationMemory, error) {
+func earlierConversationMemoriesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, run string) ([]extraction.EarlierMemory, error) {
 	rows, err := tx.Query(ctx, `SELECT (c.scope->>'conversation_ref')::int,c.value #>> '{}',r.id::text,r.version
  FROM claim_revisions c JOIN memory_records r ON(r.owner_id,r.id,r.version)=(c.owner_id,c.claim_id,c.version)
  JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version)
@@ -51,9 +43,9 @@ func earlierConversationMemoriesTx(ctx context.Context, tx pgx.Tx, owner memory.
 		return nil, err
 	}
 	defer rows.Close()
-	out := []earlierConversationMemory{}
+	out := []extraction.EarlierMemory{}
 	for rows.Next() {
-		item := earlierConversationMemory{Claim: memory.Ref{Kind: memory.ClaimKind}}
+		item := extraction.EarlierMemory{Claim: memory.Ref{Kind: memory.ClaimKind}}
 		if err := rows.Scan(&item.Ref, &item.Text, &item.Claim.ID, &item.Claim.Version); err != nil {
 			return nil, err
 		}
@@ -65,147 +57,35 @@ func earlierConversationMemoriesTx(ctx context.Context, tx pgx.Tx, owner memory.
 // conversationWork is one prepared segment of an imported conversation. The
 // extraction service asks the model between its preparation and Apply.
 type conversationWork struct {
-	store            *Intake
-	job              worker.Job
-	scope            memory.Scope
-	conversation     string
-	run              string
-	sources, current []memory.SourceResult
-	segments         []conversationSegment
-	earlier          []earlierConversationMemory
-	settings         workspace.Settings
-	ordinal, next    int
+	extraction.ConversationSegmentWork
+	store *Intake
+	job   worker.Job
 }
 
-func (w *conversationWork) segment() conversationSegment { return w.segments[w.ordinal] }
-
-func (w *conversationWork) Prompt() string {
-	segment := w.segment()
-	input := map[string]any{"messages": segment.Messages, "context_messages": segment.Context, "timezone": w.settings.Timezone}
-	if w.ordinal > 0 {
-		input["earlier_memories"] = w.earlier
-	}
-	return string(kernel.JSON(input))
-}
-
-func (w *conversationWork) HasOwnerText() bool {
-	for _, message := range w.segment().Messages {
-		if message.Role == "user" && strings.TrimSpace(message.Text) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-func (w *conversationWork) Refs() []memory.Ref {
-	segment := w.segment()
-	refs := []memory.Ref{}
-	for _, message := range append(append([]conversationMessage{}, segment.Context...), segment.Messages...) {
-		refs = append(refs, w.current[message.Index-1].Source.Ref)
-	}
-	for _, item := range w.earlier {
-		refs = append(refs, item.Claim)
-	}
-	return refs
+// Apply writes the answer of the segment in one transaction.
+func (w *conversationWork) Apply(ctx context.Context, output conversationOutput) error {
+	return w.store.inConversation(ctx, w.job, func(u *conversationUnit) error {
+		return extraction.ApplyConversation(ctx, u, w.ConversationSegmentWork, output)
+	})
 }
 
 // prepareConversation reads the job's segment under the job's lease. It
 // returns nil when the job finished without a segment to extract.
 func (s *Intake) prepareConversation(ctx context.Context, j worker.Job, conversation string) (*conversationWork, error) {
-	scope := memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}
-	var sources, current []memory.SourceResult
-	var segments []conversationSegment
-	var earlier []earlierConversationMemory
-	var settings workspace.Settings
-	var run string
-	var ordinal, next int
-	prepared := false
-	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
-			return err
-		}
-		if err := kernel.LockJob(ctx, tx, j); err != nil {
-			return err
-		}
-		var err error
-		sources, err = ArchiveConversationSources(ctx, tx, j.OwnerID, conversation)
-		if err != nil {
-			return err
-		}
-		current = extraction.CurrentBranch(sources)
-		segments = extraction.SplitConversation(current)
-		run = extraction.ConversationRun(sources)
-		if !strings.HasPrefix(j.Stage, ConversationExtractionPrefix) {
-			if len(segments) == 0 {
-				if err := s.replaceConversationMemoriesTx(ctx, tx, scope, sources); err != nil {
-					return err
-				}
-				if err := writeConversationStatesTx(ctx, tx, j.OwnerID, sources, ""); err != nil {
-					return err
-				}
-				if err := retireConversationJobsTx(ctx, tx, j, conversation, run); err != nil {
-					return err
-				}
-				return kernel.Acknowledge(ctx, tx, j)
-			}
-			var complete bool
-			if err := tx.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM source_contexts c
- JOIN memory_records r ON(r.owner_id,r.id,r.version)=(c.owner_id,c.source_id,c.source_version)
- WHERE c.owner_id=$1 AND c.conversation_key=$2 AND r.state='active'
- AND NOT EXISTS(SELECT 1 FROM source_extractions x WHERE(x.owner_id,x.source_id,x.source_version)=(c.owner_id,c.source_id,c.source_version) AND x.extractor>=$3 AND x.state IN('done','empty')))`, string(j.OwnerID), conversation, ConversationExtractorVersion).Scan(&complete); err != nil {
-				return err
-			}
-			if !complete {
-				// Only one segment is runnable at a time. Its successor is scheduled
-				// in the same transaction as its results, acknowledgement and ref counter.
-				if err := EnqueueConversationTx(ctx, tx, j.OwnerID, current[0].Source.Ref, run, 0, 1); err != nil {
-					return err
-				}
-			}
-			// Segment continuation is durable now; sibling message entrances no
-			// longer need to wait at the head of the queue until the final segment.
-			if err := retireConversationJobsTx(ctx, tx, j, conversation, run); err != nil {
-				return err
-			}
-			return kernel.Acknowledge(ctx, tx, j)
-		}
-		jobRun, segment, nextRef, err := extraction.ParseConversationStage(j.Stage)
-		if err != nil {
-			return err
-		}
-		if jobRun != run || segment >= len(segments) {
-			// A changed conversation gets a new manifest, never stale model results.
-			if len(current) > 0 {
-				if err := EnqueueConversationTx(ctx, tx, j.OwnerID, current[0].Source.Ref, run, 0, 1); err != nil {
-					return err
-				}
-			}
-			return kernel.Acknowledge(ctx, tx, j)
-		}
-		ordinal, next = segment, nextRef
-		earlier, err = earlierConversationMemoriesTx(ctx, tx, j.OwnerID, run)
-		if err != nil {
-			return err
-		}
-		settings, err = kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID))
-		prepared = err == nil
+	var work *extraction.ConversationSegmentWork
+	err := s.inConversation(ctx, j, func(u *conversationUnit) (err error) {
+		work, err = extraction.PrepareConversation(ctx, u, j, conversation)
 		return err
 	})
-	if err != nil || !prepared {
+	if err != nil || work == nil {
 		return nil, err
 	}
-	return &conversationWork{store: s, job: j, scope: scope, conversation: conversation, run: run, sources: sources, current: current, segments: segments, earlier: earlier, settings: settings, ordinal: ordinal, next: next}, nil
+	return &conversationWork{ConversationSegmentWork: *work, store: s, job: j}, nil
 }
 
-// Apply writes the statements of the segment, queues the next segment, and
-// finishes the job. The output is empty for a segment that needed no call.
-func (w *conversationWork) Apply(ctx context.Context, output conversationOutput) error {
-	s, j, scope, conversation, run := w.store, w.job, w.scope, w.conversation, w.run
-	sources, current, segments, segment, ordinal, next := w.sources, w.current, w.segments, w.segment(), w.ordinal, w.next
-	loc, err := time.LoadLocation(w.settings.Timezone)
-	if err != nil {
-		return err
-	}
+// inConversation runs fn in one transaction under the owner lock and the
+// job's lease.
+func (s *Intake) inConversation(ctx context.Context, j worker.Job, fn func(*conversationUnit) error) error {
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
@@ -213,125 +93,91 @@ func (w *conversationWork) Apply(ctx context.Context, output conversationOutput)
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		fresh, err := ArchiveConversationSources(ctx, tx, j.OwnerID, conversation)
-		if err != nil {
-			return err
-		}
-		if extraction.ConversationRun(fresh) != run {
-			if live := extraction.CurrentBranch(fresh); len(live) > 0 {
-				if err := EnqueueConversationTx(ctx, tx, j.OwnerID, live[0].Source.Ref, extraction.ConversationRun(fresh), 0, 1); err != nil {
-					return err
-				}
-			}
-			return kernel.Acknowledge(ctx, tx, j)
-		}
-		if ordinal == 0 {
-			if err := s.replaceConversationMemoriesTx(ctx, tx, scope, sources); err != nil {
-				return err
-			}
-		} else {
-			// Re-read so a user confirmation/edit during generation is protected.
-			eligible, err := earlierConversationMemoriesTx(ctx, tx, j.OwnerID, run)
-			if err != nil {
-				return err
-			}
-			withdraw := map[int]bool{}
-			for _, ref := range output.Withdraw {
-				withdraw[ref] = true
-			}
-			for _, item := range eligible {
-				if withdraw[item.Ref] {
-					if err := s.DeleteRecordsTx(context.WithValue(ctx, RetainUndoneAnswersKey{}, true), tx, scope, memory.DeleteRequest{Targets: []memory.Ref{item.Claim}}); err != nil {
-						return err
-					}
-				}
-			}
-		}
-		grounding := ""
-		allowed := map[int]conversationMessage{}
-		for _, message := range segment.Messages {
-			allowed[message.Index] = message
-			grounding += "\n" + message.Text
-		}
-		for _, message := range segment.Context {
-			grounding += "\n" + message.Text
-		}
-		seenOutputQuotes := map[string]bool{}
-		for _, raw := range output.Items {
-			decision, source := extraction.DecideConversation(raw, allowed, current, grounding, loc)
-			item := decision.Item
-			if decision.Action == extraction.Skip {
-				continue
-			}
-			if decision.Action == extraction.Capture {
-				var imported bool
-				if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2)", string(j.OwnerID), string(source.Source.Ref.ID)).Scan(&imported); err != nil {
-					return err
-				}
-				if err := s.captureActionTx(ctx, tx, scope, source, item, imported, ""); err != nil {
-					return err
-				}
-				continue
-			}
-			in := claimstore.Statement{Text: item.Text, Nature: item.Nature, Subject: decision.Subject, SubjectType: decision.SubjectType, Predicate: item.Predicate, Confirmation: decision.Confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: source.Source.Ref, Structured: true, ExpressedAt: extraction.ExpressedAt(source), ExtractionRun: run, ExtractionRef: next,
-				EventFrom: decision.EventFrom, EventTo: decision.EventTo, EventPrecision: decision.EventPrecision, Mentions: decision.Mentions}
-			// The model can extract several independent memories from one
-			// quotation. Later siblings must not overwrite the first item.
-			quoteKey := string(in.Source.ID) + "/" + in.Quote
-			in.AllowNewAtQuote = seenOutputQuotes[quoteKey]
-			seenOutputQuotes[quoteKey] = true
-			ref, err := s.RememberTx(ctx, tx, scope, in)
-			if errors.Is(err, memory.ErrBlocked) {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			var assigned bool
-			if err := tx.QueryRow(ctx, `SELECT coalesce(scope->>'conversation_extraction'=$4 AND scope->>'conversation_ref'=$5,false) FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, string(j.OwnerID), string(ref.ID), ref.Version, run, strconv.Itoa(next)).Scan(&assigned); err != nil {
-				return err
-			}
-			if assigned {
-				next++
-			}
-		}
-		processed := []memory.SourceResult{}
-		for _, message := range segment.Messages {
-			if message.Part == message.Parts {
-				processed = append(processed, current[message.Index-1])
-			}
-		}
-		for _, source := range sources {
-			if source.Context.Branch == "historical" {
-				processed = append(processed, source)
-			}
-		}
-		if err := writeConversationStatesTx(ctx, tx, j.OwnerID, processed, ""); err != nil {
-			return err
-		}
-		if err := retireConversationJobsTx(ctx, tx, j, conversation, run); err != nil {
-			return err
-		}
-		if ordinal+1 < len(segments) {
-			anchor := current[segments[ordinal+1].Messages[0].Index-1].Source.Ref
-			if err := EnqueueConversationTx(ctx, tx, j.OwnerID, anchor, run, ordinal+1, next); err != nil {
-				return err
-			}
-		} else {
-			// Withdrawals may change earlier sources' item counts. Refresh the
-			// completed conversation, and retire redundant per-message jobs.
-			if err := writeConversationStatesTx(ctx, tx, j.OwnerID, sources, ""); err != nil {
-				return err
-			}
-			if err := retireConversationJobsTx(ctx, tx, j, conversation, run); err != nil {
-				return err
-			}
-		}
-		if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
-			return err
-		}
-		return kernel.Acknowledge(ctx, tx, j)
+		return fn(&conversationUnit{store: s, tx: tx, job: j, scope: memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}})
 	})
+}
+
+// conversationUnit is the storage of one conversation job. The extraction
+// domain decides; conversationUnit reads and writes.
+type conversationUnit struct {
+	store *Intake
+	tx    pgx.Tx
+	job   worker.Job
+	scope memory.Scope
+}
+
+var _ extraction.ConversationUnit = (*conversationUnit)(nil)
+
+func (u *conversationUnit) Sources(ctx context.Context, conversation string) ([]memory.SourceResult, error) {
+	return ArchiveConversationSources(ctx, u.tx, u.job.OwnerID, conversation)
+}
+
+func (u *conversationUnit) Extracted(ctx context.Context, conversation string) (bool, error) {
+	var complete bool
+	err := u.tx.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM source_contexts c
+ JOIN memory_records r ON(r.owner_id,r.id,r.version)=(c.owner_id,c.source_id,c.source_version)
+ WHERE c.owner_id=$1 AND c.conversation_key=$2 AND r.state='active'
+ AND NOT EXISTS(SELECT 1 FROM source_extractions x WHERE(x.owner_id,x.source_id,x.source_version)=(c.owner_id,c.source_id,c.source_version) AND x.extractor>=$3 AND x.state IN('done','empty')))`, string(u.job.OwnerID), conversation, ConversationExtractorVersion).Scan(&complete)
+	return complete, err
+}
+
+func (u *conversationUnit) Enqueue(ctx context.Context, anchor memory.Ref, run string, segment, next int) error {
+	return EnqueueConversationTx(ctx, u.tx, u.job.OwnerID, anchor, run, segment, next)
+}
+
+func (u *conversationUnit) ReplaceMemories(ctx context.Context, sources []memory.SourceResult) error {
+	return u.store.replaceConversationMemoriesTx(ctx, u.tx, u.scope, sources)
+}
+
+func (u *conversationUnit) Withdraw(ctx context.Context, claim memory.Ref) error {
+	return u.store.DeleteRecordsTx(context.WithValue(ctx, RetainUndoneAnswersKey{}, true), u.tx, u.scope, memory.DeleteRequest{Targets: []memory.Ref{claim}})
+}
+
+func (u *conversationUnit) WriteStates(ctx context.Context, targets []extraction.StateTarget, state string) error {
+	return writeConversationStatesTx(ctx, u.tx, u.job.OwnerID, targets, state)
+}
+
+func (u *conversationUnit) RetireJobs(ctx context.Context, conversation, run string) error {
+	return retireConversationJobsTx(ctx, u.tx, u.job, conversation, run)
+}
+
+func (u *conversationUnit) Acknowledge(ctx context.Context) error {
+	return kernel.Acknowledge(ctx, u.tx, u.job)
+}
+
+func (u *conversationUnit) DiscardPaidResult(ctx context.Context) error {
+	return kernel.DiscardPaidResult(ctx, u.tx, u.job)
+}
+
+func (u *conversationUnit) Earlier(ctx context.Context, run string) ([]extraction.EarlierMemory, error) {
+	return earlierConversationMemoriesTx(ctx, u.tx, u.job.OwnerID, run)
+}
+
+func (u *conversationUnit) Timezone(ctx context.Context) (string, error) {
+	settings, err := kernel.QueryDocument[workspace.Settings](ctx, u.tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(u.job.OwnerID))
+	return settings.Timezone, err
+}
+
+func (u *conversationUnit) Imported(ctx context.Context, source memory.Ref) (bool, error) {
+	var imported bool
+	err := u.tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2)", string(u.job.OwnerID), string(source.ID)).Scan(&imported)
+	return imported, err
+}
+
+func (u *conversationUnit) Capture(ctx context.Context, source memory.SourceResult, item extraction.Item, imported bool) error {
+	return u.store.captureActionTx(ctx, u.tx, u.scope, source, item, imported, "")
+}
+
+func (u *conversationUnit) Remember(ctx context.Context, decision extraction.Decision, source memory.SourceResult, run string, next int, newAtQuote bool) (bool, error) {
+	item := decision.Item
+	ref, err := u.store.RememberTx(ctx, u.tx, u.scope, claimstore.Statement{Text: item.Text, Nature: item.Nature, Subject: decision.Subject, SubjectType: decision.SubjectType, Predicate: item.Predicate, Confirmation: decision.Confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: source.Source.Ref, Structured: true, ExpressedAt: extraction.ExpressedAt(source), ExtractionRun: run, ExtractionRef: next,
+		EventFrom: decision.EventFrom, EventTo: decision.EventTo, EventPrecision: decision.EventPrecision, Mentions: decision.Mentions, AllowNewAtQuote: newAtQuote})
+	if err != nil {
+		return false, err
+	}
+	var assigned bool
+	err = u.tx.QueryRow(ctx, `SELECT coalesce(scope->>'conversation_extraction'=$4 AND scope->>'conversation_ref'=$5,false) FROM claim_revisions WHERE owner_id=$1 AND claim_id=$2 AND version=$3`, string(u.job.OwnerID), string(ref.ID), ref.Version, run, strconv.Itoa(next)).Scan(&assigned)
+	return assigned, err
 }
 
 func retireConversationJobsTx(ctx context.Context, tx pgx.Tx, job worker.Job, conversation, run string) error {
@@ -341,12 +187,12 @@ func retireConversationJobsTx(ctx context.Context, tx pgx.Tx, job worker.Job, co
 	return err
 }
 
-func writeConversationStatesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, sources []memory.SourceResult, state string) error {
+func writeConversationStatesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, targets []extraction.StateTarget, state string) error {
 	ids, versions, eligible := []string{}, []int{}, []bool{}
-	for _, source := range sources {
-		ids = append(ids, string(source.Source.ID))
-		versions = append(versions, source.Source.Version)
-		eligible = append(eligible, source.Context.Role == "user" && source.Context.Branch != "historical")
+	for _, target := range targets {
+		ids = append(ids, string(target.Source.ID))
+		versions = append(versions, target.Source.Version)
+		eligible = append(eligible, target.Counted)
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO source_extractions(owner_id,source_id,source_version,extractor,state,items)
  SELECT $1,input.id,input.version,$6,CASE WHEN $4<>'' THEN $4 WHEN count(DISTINCT r.id)>0 THEN 'done' ELSE 'empty' END,count(DISTINCT r.id)
@@ -370,26 +216,7 @@ func conversationExtractionStateTx(ctx context.Context, tx pgx.Tx, j worker.Job,
 	if err != nil {
 		return err
 	}
-	sources, err := ArchiveConversationSources(ctx, tx, j.OwnerID, conversation)
-	if err != nil {
-		return err
-	}
-	run, ordinal, _, err := extraction.ParseConversationStage(j.Stage)
-	if err != nil || run != extraction.ConversationRun(sources) {
-		return err
-	}
-	current := extraction.CurrentBranch(sources)
-	segments := extraction.SplitConversation(current)
-	if ordinal >= len(segments) {
-		return nil
-	}
-	remaining := []memory.SourceResult{}
-	for _, segment := range segments[ordinal:] {
-		for _, message := range segment.Messages {
-			remaining = append(remaining, current[message.Index-1])
-		}
-	}
-	return writeConversationStatesTx(ctx, tx, j.OwnerID, remaining, state)
+	return extraction.FailedConversation(ctx, &conversationUnit{tx: tx, job: j, scope: memory.Scope{OwnerID: j.OwnerID, PrincipalID: "worker", IsOwner: true}}, j, conversation)
 }
 
 // Read normalized message originals, never an archive blob or another owner's

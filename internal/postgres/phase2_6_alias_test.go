@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T) {
@@ -97,10 +97,10 @@ func TestPhase26A7A8NegativeNamesAndScanReceiptsIgnoreMemoryCounts(t *testing.T)
 			t.Errorf("count change rewrote %s", table)
 		}
 	}
-	var batch *interpstore.EntityCandidateBatch
+	var batch *aliasscan.Batch
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
-		batch, err = interpstore.NextEntityCandidateBatchTx(ctx, tx, f.Scope.OwnerID, kernel.EntityCompareVersion)
+		batch, err = interpstore.NextEntityCandidateBatchTx(ctx, tx, f.Scope.OwnerID, comparison.EntityRuleVersion)
 		return err
 	}); err != nil {
 		t.Fatal(err)

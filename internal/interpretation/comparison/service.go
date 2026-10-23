@@ -121,3 +121,13 @@ func (s Service) Process(ctx context.Context, job worker.Job) error {
 	s.Store.Reschedule(ctx)
 	return nil
 }
+
+// RuleVersion is the version of the statement comparison rules, and
+// EntityRuleVersion of the entity identity rules, which advance on their own.
+const (
+	RuleVersion       = 2
+	EntityRuleVersion = 2
+)
+
+// BatchLimit is the count of statements that one comparison plan holds.
+const BatchLimit = 200

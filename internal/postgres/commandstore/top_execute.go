@@ -15,6 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/command"
 )
 
 // ExecuteWith executes one workspace command. A command that queues a run
@@ -85,7 +86,7 @@ func (s *Commands) ExecuteWith(ctx context.Context, scope memory.Scope, in works
 		if (kernel.OneOf(in.Type, "toggleCheck", "toggleTrigger", "toggleContextMemory") || strings.HasPrefix(in.Type, "bulk")) && revision != in.ExpectedRevision {
 			return memory.ErrConflict
 		}
-		recordAction := workspacestore.UndoableCommand(in.Type)
+		recordAction := command.Undoable(in.Type)
 		if in.Type == "undoAction" {
 			var err error
 			recordAction, err = deputystore.ReviseUndoActionTx(ctx, tx, scope, in.ID)

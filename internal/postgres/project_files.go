@@ -6,14 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime"
-	"net/http"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/blob"
+	"github.com/soaringjerry/PCAS/internal/input/projectfile"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -55,22 +53,9 @@ func (s *Store) UploadProjectFile(ctx context.Context, scope memory.Scope, item,
 	if strings.TrimSpace(name) == "" || len(name) > 2000 || input == nil {
 		return out, memory.ErrInvalid
 	}
-	if parsed, _, err := mime.ParseMediaType(media); err == nil {
-		media = parsed
-	} else {
-		media = "application/octet-stream"
-	}
 	peek := bufio.NewReader(input)
 	input = peek
-	if media == "application/octet-stream" || media == "" {
-		if byExt, _, err := mime.ParseMediaType(mime.TypeByExtension(strings.ToLower(filepath.Ext(name)))); err == nil && byExt != "" {
-			media = byExt
-		} else if head, _ := peek.Peek(512); len(head) > 0 {
-			if sniffed, _, err := mime.ParseMediaType(http.DetectContentType(head)); err == nil && sniffed != "application/octet-stream" {
-				media = sniffed
-			}
-		}
-	}
+	media = projectfile.Media(name, media, func() []byte { head, _ := peek.Peek(512); return head })
 	// Validate the destination before writing a blob, then recheck in the commit.
 	if err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error { _, err := studioFileProjectTx(ctx, tx, scope, item); return err }); err != nil {
 		return out, err
@@ -117,7 +102,7 @@ func (s *Store) UploadProjectFile(ctx context.Context, scope memory.Scope, item,
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		in := memory.IngestRequest{Connector: "project-file", ExternalID: project + ":" + hash, ExternalVersion: "1", Title: name, MediaType: media, Text: "[附件原件；正文尚未解析。校验标识：" + hash + "]"}
+		in := memory.IngestRequest{Connector: "project-file", ExternalID: project + ":" + hash, ExternalVersion: "1", Title: name, MediaType: media, Text: projectfile.Placeholder(hash)}
 		result, err := s.IngestAttachmentTx(ctx, tx, scope, in, key)
 		if err != nil {
 			return err
@@ -152,62 +137,23 @@ func projectFileTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string
 		return out, err
 	}
 	defer rows.Close()
-	extracting, done := false, false
+	jobs := []projectfile.Job{}
 	for rows.Next() {
-		var job, stage, state, code string
-		if err = rows.Scan(&job, &stage, &state, &code); err != nil {
+		var j projectfile.Job
+		if err = rows.Scan(&j.ID, &j.Stage, &j.State, &j.Code); err != nil {
 			return out, err
 		}
-		if out.JobID == nil {
-			latest := job
-			out.JobID = &latest
-		}
-		if (state == "failed" || state == "blocked") && out.Status != "failed" {
-			out.Status = "failed"
-			failed := job
-			out.JobID = &failed
-			out.FailureReason = fileProcessingReason(code)
-		}
-		if state != "done" {
-			extracting = true
-		}
-		if strings.HasPrefix(stage, "source.extract") && state == "done" {
-			done = true
-		}
+		jobs = append(jobs, j)
 	}
 	if err = rows.Err(); err != nil {
 		return out, err
 	}
-	if out.Status != "failed" && done && !extracting {
-		out.Status = "extracted"
+	var job string
+	out.Status, job, out.FailureReason = projectfile.State(jobs)
+	if job != "" {
+		out.JobID = &job
 	}
 	return out, nil
-}
-func fileProcessingReason(code string) string {
-	switch code {
-	case "file_parser_unsupported":
-		return "此文件类型尚无文字抽取器；原件已保存，可打开或下载，安装相应处理器后在此重试"
-	case "file_pdf_page_limit":
-		return "PDF超过现有100页解析上限；原件保留，请拆分为每份不超过100页后上传"
-	case "file_pdf_invalid":
-		return "PDF没有可读页；原件保留，请检查文件完整性后重试"
-	case "file_audio_duration_limit":
-		return "音频超过现有4小时转录上限；原件保留，请拆分后上传"
-	case "file_audio_probe_failed":
-		return "无法识别音频时长；原件保留，请检查音频格式或ffprobe处理器后重试"
-	case "file_text_too_large":
-		return "抽取文字超过现有1MiB解析上限；原件保留，请分成较小文件后上传"
-	case "file_text_invalid":
-		return "文件不是有效UTF-8文字或正文为空；原件保留，请换成UTF-8文字文件后重试"
-	case "provider_not_configured", "provider_unavailable":
-		return "模型通道未配置或暂不可用；原件保留，通道恢复后重试"
-	case "model_output_invalid":
-		return "模型抽取结果格式不合格；原件保留，可在此重试"
-	case "file_parse_failed":
-		return "文件解析失败；原件保留，请检查文件完整性和解析器后重试"
-	default:
-		return "处理未完成（" + code + "）；原件保留，可在此重试"
-	}
 }
 func (s *Store) ListProjectFiles(ctx context.Context, scope memory.Scope, item string) (workspace.ProjectFileList, error) {
 	out := workspace.ProjectFileList{Items: []workspace.ProjectFile{}}

@@ -28,6 +28,8 @@ type secretaryMemoriesKey struct{}
 
 type secretaryProjectReceiptsKey struct{}
 
+type secretaryDocumentsKey struct{}
+
 func (s *Desk) secretaryProjectTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, value string, aliases map[string]workspace.Item) (string, error) {
 	if value == "" || value == "none" {
 		return "", nil

@@ -166,6 +166,8 @@ When the owner is reminded is decided in `internal/workspace/reminder`: `reminde
 
 How a notice is pushed is `internal/notify`: `notify.Window` (24 hours), `Delivery.Due` and `Delivery.Failed` (five attempts after one, five, and thirty minutes; a target that is gone stops at once), and `notify.Compose`. `Store.DispatchNotices` keeps the lock of each notice and the read just before each send.
 
+The end of a run is decided in the deputy domain: `deputy.Finish` writes the output, the failure text, the stale and revoked cases, the groups the run did not read, the notice, and what became of each paid call; `deputy.FinishRevision` does the same for a paid revision with its own checks. The texts of an interrupted run are `deputy` constants, which the journal recovery matches as a parameter instead of a copied sentence.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

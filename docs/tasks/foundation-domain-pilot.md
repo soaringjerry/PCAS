@@ -162,6 +162,8 @@ The job flow of an imported conversation is in the extraction domain: `extractio
 
 The source context of the memories that an input gives is chosen by `contextbuilder.Evidence`; `evidencestore` reads the anchors and the windows.
 
+When the owner is reminded is decided in `internal/workspace/reminder`: `reminder.Check` records the daily review, the triggers of a task that have come (the start reminder once, while the task waits), and the shelved ideas that wake by their time or a found condition; `reminder.ApplySignals` wakes an idea from a sign in a new source; `reminder.Suppressed` keeps an undo from sending an old reminder again. Storage keeps the owner loop, the lock, and the invalidation of obsolete notices.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

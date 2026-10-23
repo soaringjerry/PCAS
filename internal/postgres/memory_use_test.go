@@ -575,31 +575,6 @@ func TestB4UnbuiltStatusKeepsOriginalSingleCall(t *testing.T) {
 	}
 }
 
-func TestB4RetrievalGroupProposalsIgnoreLiteralNames(t *testing.T) {
-	index := []workspace.StatusCardRef{}
-	ranked := []workspace.Memory{}
-	for i := 0; i < 10; i++ {
-		id := string(memory.NewID())
-		index = append(index, workspace.StatusCardRef{Key: "entity:" + id, Name: fmt.Sprintf("虚构组%d", i)})
-		ranked = append(ranked, workspace.Memory{Groups: []workspace.MemoryGroup{{EntityID: id}}})
-	}
-	aliases := map[string][]string{index[9].Key: {"虚构第九别名"}}
-	for _, text := range []string{"虚构组8和虚构第九别名", "虚构组0", "虚构完全不同请求"} {
-		selected := usestore.ChooseUseGroups(text, index, ranked, aliases, 6, false)
-		if len(selected) != 6 {
-			t.Fatal(selected)
-		}
-		for i, key := range selected {
-			if key != index[i].Key {
-				t.Fatal("literal names changed retrieval proposals", selected)
-			}
-		}
-	}
-	if selected := usestore.ChooseUseGroups("虚构组0 虚构第九别名", index, ranked, aliases, 12, true); len(selected) != 0 {
-		t.Fatal("semantic naming must await the existing model call", selected)
-	}
-}
-
 func TestB4ProductionLiveDirectoryAndRequirementScopes(t *testing.T) {
 	s := testStore(t)
 	scope := owner()

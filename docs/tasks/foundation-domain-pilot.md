@@ -172,6 +172,8 @@ An undo is decided by `command.Undo`: once, within thirty days, while no later a
 
 The answer for one source is written by `extraction.ApplySource`: each item is decided, a memory is remembered and its candidate accepted, a task or an idea goes to `extraction.CaptureItem` (made at once only when said plainly and now, at most 20 automatic tasks per source or conversation, titles up to 2,000 bytes; otherwise a candidate with its reasons), and the quick note closes once anything was taken. `intakestore.sourceUnit` and `captureUnit` read and write.
 
+The memory that a turn or a run is given is completed by `contextbuilder.FinishUse`: the groups the agent may read, the project's handover and group, the requirements that apply everywhere within 6,000 characters (confirmed, then repeated, then the latest), the remembered dates, and the recalled memories; a scoped requirement waits for recall. `contextbuilder.ChooseGroups` proposes groups by reciprocal rank. `usestore.useUnit` reads.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

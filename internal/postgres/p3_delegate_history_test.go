@@ -14,9 +14,9 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/deputystore"
-	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -143,8 +143,8 @@ func TestP3LiveDelegateHistory(t *testing.T) {
 		started := time.Now()
 		var result ai.Result
 		var err error
-		if system == deskstore.SecretaryInstructions {
-			result, err = real.GenerateWithSearchSchema(ctx, "chatgpt", system, prompt, deskstore.SecretaryOutputSchema)
+		if system == prompts.Must("secretary").Text() {
+			result, err = real.GenerateWithSearchSchema(ctx, "chatgpt", system, prompt, prompts.MustSchema("secretary-output").Bytes())
 		} else {
 			result, err = real.GenerateWithSearch(ctx, "chatgpt", system, prompt)
 		}

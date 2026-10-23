@@ -14,13 +14,10 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
 const EntityCandidatesStage = aliasscan.Stage
-
-var entityCandidatesInstructions = prompts.Must("entity-candidates").Text()
 
 type EntityCandidateName struct {
 	Positions   map[string]int64 `json:"-"`

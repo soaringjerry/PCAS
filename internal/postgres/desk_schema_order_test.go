@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 )
 
@@ -15,7 +14,7 @@ import (
 // first, or the forms cannot be told apart from their first key. This reads
 // the schema as text on purpose: decoding it into a map would hide the order.
 func TestSecretarySchemasListOpFirstInEveryAction(t *testing.T) {
-	for name, schema := range map[string]json.RawMessage{"answer": deskstore.SecretaryOutputSchema, "selfcheck": prompts.MustSchema("secretary-check").Bytes()} {
+	for name, schema := range map[string]json.RawMessage{"answer": prompts.MustSchema("secretary-output").Bytes(), "selfcheck": prompts.MustSchema("secretary-check").Bytes()} {
 		if !json.Valid(schema) {
 			t.Fatalf("%s schema is not valid JSON", name)
 		}

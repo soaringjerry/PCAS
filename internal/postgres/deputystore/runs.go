@@ -31,17 +31,9 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
-
-var AssistantInstructions = prompts.Must("assistant").Text()
-
-// deputyInstructions are for work handed to an agent. Research and drafting
-// often need what is public, so the agent may search where its channel can;
-// what it sends out as a search must not carry the owner's private material.
-var deputyInstructions = prompts.Must("deputy").Text()
 
 func (s *Deputy) RunCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	if c.Type == "requestRun" {
@@ -255,11 +247,7 @@ func (s *Deputy) RunCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 		// Derived copies carry input dependencies even when their source memories
 		// fall outside this run's text budget.
 		brief.Derived(artifactRefs)
-		recallDates := ""
-		if plan.Recall || recall.TimeRelaxed {
-			recallDates = usestore.RecallDateInstructions
-		}
-		brief.Request(c.Prompt, c.Kind, recallDates)
+		brief.Request(c.Prompt, c.Kind, plan.Recall || recall.TimeRelaxed)
 		run.ContextMemoryIDs = append(run.ContextMemoryIDs, brief.MemoryIDs...)
 		run.ContextVersions = append(run.ContextVersions, brief.Versions...)
 		run.ContextVersions = kernel.UniqueRefs(run.ContextVersions)
@@ -272,7 +260,7 @@ func (s *Deputy) RunCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 			if !s.ModelAvailable(agent.ID) {
 				return memory.ErrUnavailable
 			}
-			run.Cost = s.Models.Estimate(agent.ID, deputyInstructions+run.Brief)
+			run.Cost = s.Models.Estimate(agent.ID, deputy.CostInput(run.Kind, run.Brief))
 			loc, err := time.LoadLocation(settings.Timezone)
 			if err != nil {
 				return err

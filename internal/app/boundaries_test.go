@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 // A domain package holds business rules. It reaches storage through its own
@@ -144,6 +145,57 @@ func TestStoragePackagesHoldNoInstructions(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// storageSentences are the string literals in Chinese that a storage file
+// still holds: words that the owner or the model reads. They belong to the
+// domain that decides them. A file may hold fewer, never more; a new file
+// holds none. Lower a count when its sentence leaves storage.
+var storageSentences = map[string]int{
+	"claimstore/claims.go":               1,
+	"claimstore/entities.go":             1,
+	"commandstore/compare_undo.go":       1,
+	"deskstore/desk_actions.go":          2,
+	"deskstore/desk_turn.go":             5,
+	"deskstore/desk_turn_order.go":       2,
+	"intakestore/attachments.go":         1,
+	"intakestore/connectors.go":          2,
+	"intakestore/editing.go":             2,
+	"intakestore/import_batches.go":      3,
+	"intakestore/retrieval.go":           1,
+	"interpstore/compare_entities.go":    1,
+	"notify.go":                          3,
+	"ownerstore/owner_bootstrap.go":      5,
+	"statestore/date_tidy.go":            1,
+	"statestore/status_read.go":          1,
+	"workspacestore/project_handover.go": 1,
+	"workstore/artifacts.go":             3,
+}
+
+func TestStorageWritesNoNewSentences(t *testing.T) {
+	err := filepath.Walk("../postgres", func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return err
+		}
+		parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			return err
+		}
+		count := 0
+		ast.Inspect(parsed, func(node ast.Node) bool {
+			if literal, ok := node.(*ast.BasicLit); ok && literal.Kind == token.STRING && strings.IndexFunc(literal.Value, func(r rune) bool { return unicode.Is(unicode.Han, r) }) >= 0 {
+				count++
+			}
+			return true
+		})
+		if allowed := storageSentences[strings.TrimPrefix(filepath.ToSlash(path), "../postgres/")]; count > allowed {
+			t.Errorf("%s holds %d sentences for the owner or the model; at most %d may stay in storage", path, count, allowed)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

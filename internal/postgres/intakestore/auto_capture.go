@@ -2,9 +2,10 @@ package intakestore
 
 import (
 	"context"
-	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
@@ -12,97 +13,47 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-// Twenty automatic tasks per original/whole conversation prevents an imported
-// list from flooding the hall. Every excess item remains a counted candidate.
-const automaticTaskLimit = 20
-const automaticCaptureConfidence = 0.98
-
-func captureReasons(source memory.SourceResult, item ExtractedItem, imported bool) ([]string, string) {
-	reasons, descriptions := []string{}, []string{}
-	add := func(code, text string) { reasons = append(reasons, code); descriptions = append(descriptions, text) }
-	if imported || source.Context != nil && source.Context.Branch == "historical" {
-		add("historical", "历史导入，不作为当前事项")
-	}
-	if item.Qualification == "ai_suggestion" || source.Context != nil && source.Context.Role != "user" {
-		add("ai_suggestion", "AI 或工具的建议，不是本人表达")
-	}
-	if item.Acquisition == "reported" || item.Qualification == "quoted" {
-		add("reported", "转述，留作候选")
-	}
-	if item.Qualification == "tentative" || !item.Explicit && item.Acquisition == "direct" {
-		add("qualified", "带保留，留作候选")
-	}
-	if item.Acquisition == "inferred" || item.Confidence < automaticCaptureConfidence || !kernel.OneOf(item.Qualification, "", "asserted", "corrected") || !item.Explicit && item.Acquisition != "direct" {
-		add("uncertain", "拿不准，留作候选")
-	}
-	return reasons, strings.Join(descriptions, "；")
+// captureActionTx makes the task or the idea of an extracted item, or keeps
+// it as a candidate. extraction.CaptureItem decides.
+func (s *Intake) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, source memory.SourceResult, item ExtractedItem, imported bool, project string) error {
+	return extraction.CaptureItem(ctx, captureUnit{tx: tx, scope: scope}, source, item, imported, project, time.Now())
 }
 
-// Candidate acceptance is deliberately outside action tracking: its retained
-// accepted row is the replay fence even after undo deletes the work item.
-func (s *Intake) captureActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, source memory.SourceResult, item ExtractedItem, imported bool, project string) error {
-	if !kernel.OneOf(item.Kind, "task", "idea") {
-		return memory.ErrInvalid
-	}
+// captureUnit is the storage of the capture of one item.
+type captureUnit struct {
+	tx    pgx.Tx
+	scope memory.Scope
+}
+
+func (u captureUnit) Captured(ctx context.Context, source memory.Ref, kind, quote, text string) (bool, error) {
 	var duplicate bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM capture_candidates WHERE owner_id=$1 AND source_id=$2
- AND document->>'kind'=$3 AND (document->'source'->>'excerpt'=$4 OR document->>'text'=$5))`, string(scope.OwnerID), string(source.Source.Ref.ID), item.Kind, item.Quote, item.Text).Scan(&duplicate); err != nil {
+	err := u.tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM capture_candidates WHERE owner_id=$1 AND source_id=$2
+ AND document->>'kind'=$3 AND (document->'source'->>'excerpt'=$4 OR document->>'text'=$5))`, string(u.scope.OwnerID), string(source.ID), kind, quote, text).Scan(&duplicate)
+	return duplicate, err
+}
+
+func (u captureUnit) AutomaticTasks(ctx context.Context, source memory.Ref, conversation string) (int, error) {
+	var count int
+	err := u.tx.QueryRow(ctx, `SELECT count(*) FROM capture_candidates c WHERE c.owner_id=$1 AND c.document->>'kind'='task' AND c.state='accepted'
+ AND (c.source_id=$2 OR $3<>'' AND EXISTS(SELECT 1 FROM source_contexts sc WHERE sc.owner_id=c.owner_id AND sc.source_id=c.source_id AND sc.conversation_key=$3))`, string(u.scope.OwnerID), string(source.ID), conversation).Scan(&count)
+	return count, err
+}
+
+func (u captureUnit) Overflow(ctx context.Context, reason string, count int) error {
+	return kernel.StageEvent(ctx, u.tx, u.scope.OwnerID, "source.extract", "overflow", reason, count)
+}
+
+func (u captureUnit) Create(ctx context.Context, item workspace.Item, action, summary string) error {
+	actionCtx := actionlog.WithActionLog(kernel.WithActor(ctx, "ai"), action, "background_extraction", "", summary)
+	if err := actionlog.BeginActionLogTx(actionCtx, u.tx); err != nil {
 		return err
 	}
-	if duplicate {
-		return nil
+	if err := itemstore.SaveItem(actionCtx, u.tx, u.scope, item); err != nil {
+		return err
 	}
-	reasons, reason := captureReasons(source, item, imported)
-	v := workspace.Candidate{ID: string(memory.NewID()), Kind: item.Kind, Text: item.Text, ProjectID: project, Confidence: item.Confidence, Source: workspace.SourceRef{SourceID: string(source.Source.Ref.ID), Version: source.Source.Ref.Version, Label: source.Source.Title, Excerpt: item.Quote, At: kernel.Stamp()}, State: "pending", CreatedAt: kernel.Stamp(), Reasons: reasons, Reason: reason}
-	if len(reasons) == 0 && item.Kind == "task" {
-		var count int
-		err := tx.QueryRow(ctx, `SELECT count(*) FROM capture_candidates c WHERE c.owner_id=$1 AND c.document->>'kind'='task' AND c.state='accepted'
- AND (c.source_id=$2 OR $3<>'' AND EXISTS(SELECT 1 FROM source_contexts sc WHERE sc.owner_id=c.owner_id AND sc.source_id=c.source_id AND sc.conversation_key=$3))`, string(scope.OwnerID), string(source.Source.Ref.ID), conversationKey(source)).Scan(&count)
-		if err != nil {
-			return err
-		}
-		if count >= automaticTaskLimit {
-			v.Reasons = append(v.Reasons, "overflow")
-			v.Reason = "超过本段对话或资料自动创建上限，保留为候选"
-			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "source.extract", "overflow", "automatic_task_limit", 1); err != nil {
-				return err
-			}
-		}
-	}
-	if len(v.Reasons) == 0 && len(v.Text) > 2000 {
-		v.Reasons = append(v.Reasons, "overflow")
-		v.Reason = "事项标题超过既有2000字节上限，完整内容保留为候选"
-		if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "source.extract", "overflow", "automatic_title_bytes", len(v.Text)-2000); err != nil {
-			return err
-		}
-	}
-	if len(v.Reasons) == 0 {
-		item := workspace.NewItem(v.Kind, v.Text)
-		item.History[0].By = "ai"
-		item.Evolution[0].By = "ai"
-		item.ProjectID = project
-		item.Sources = append(item.Sources, v.Source)
-		actionID := string(memory.NewID())
-		item.Creation = &workspace.ItemCreation{By: "background_extraction", ActionID: actionID, Source: &v.Source}
-		label := map[string]string{"task": "待办", "idea": "想法"}[v.Kind]
-		actionCtx := actionlog.WithActionLog(kernel.WithActor(ctx, "ai"), actionID, "background_extraction", "", "建了"+label+"「"+v.Text+"」")
-		if err := actionlog.BeginActionLogTx(actionCtx, tx); err != nil {
-			return err
-		}
-		if err := itemstore.SaveItem(actionCtx, tx, scope, item); err != nil {
-			return err
-		}
-		if err := actionlog.FlushActionLog(actionCtx, tx, scope); err != nil {
-			return err
-		}
-		v.State = "accepted"
-		v.ResolvedInto = item.ID
-	}
-	return SaveCandidate(ctx, tx, scope, v)
+	return actionlog.FlushActionLog(actionCtx, u.tx, u.scope)
 }
-func conversationKey(source memory.SourceResult) string {
-	if source.Context != nil {
-		return source.Context.Conversation
-	}
-	return ""
+
+func (u captureUnit) SaveCandidate(ctx context.Context, candidate workspace.Candidate) error {
+	return SaveCandidate(ctx, u.tx, u.scope, candidate)
 }

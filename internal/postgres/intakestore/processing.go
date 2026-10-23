@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
@@ -359,7 +360,7 @@ func (a extractionStore) Failed(ctx context.Context, j worker.Job) error {
 }
 
 func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extraction.Result) error {
-	s, scope, source := a.store, workerScope(j.OwnerID), result.Source
+	s := a.store
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT 1 FROM workspace_owners WHERE owner_id=$1 FOR UPDATE", string(j.OwnerID)); err != nil {
 			return err
@@ -367,104 +368,78 @@ func (a extractionStore) Apply(ctx context.Context, j worker.Job, result extract
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		current, err := currentExtractionSource(ctx, tx, j)
-		if err != nil {
-			return err
-		}
-		if !current {
-			return kernel.Acknowledge(ctx, tx, j)
-		}
-		facts := extraction.Facts{Source: source, MentionText: result.MentionText, Location: result.Location}
-		// Recheck under the same owner lock used by undo, after generation: an
-		// undo during the model call must not resurrect the extracted memories.
-		if source.Source.Connector == "desk" {
-			facts.Undone, err = DeskTurnFullyUndoneTx(ctx, tx, j.OwnerID, source.Source.ExternalID)
-			if err != nil {
-				return err
-			}
-			if facts.Undone {
-				facts.Remembered, err = DeskTurnRememberedTx(ctx, tx, j.OwnerID, source.Source.ExternalID)
-				if err != nil {
-					return err
-				}
-			}
-		}
-		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID))
-		if err != nil {
-			return err
-		}
-		// An uploaded archive is a history migration. What it says becomes memory
-		// and reviewable candidates, never a present-day task or a woken idea:
-		// "明天" in a 2025 conversation is not tomorrow.
-		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2 AND source_version=$3)", string(j.OwnerID), string(j.Record.ID), j.Record.Version).Scan(&facts.Imported); err != nil {
-			return err
-		}
-		accepted := 0
-		seenOutputQuotes := map[string]bool{}
-		for _, raw := range result.Output.Items {
-			decision := extraction.Decide(raw, facts)
-			item := decision.Item
-			if decision.Action == extraction.Skip {
-				continue
-			}
-			if decision.Action == extraction.Capture {
-				if err := s.captureActionTx(ctx, tx, scope, source, item, facts.Imported, result.Project); err != nil {
-					return err
-				}
-				accepted++
-				continue
-			}
-			var duplicate bool
-			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM capture_candidates WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 AND document->>'text'=$4 AND document->>'kind'=$5)", string(j.OwnerID), string(j.Record.ID), j.Record.Version, item.Text, item.Kind).Scan(&duplicate); err != nil {
-				return err
-			}
-			if duplicate && item.Kind != "memory" {
-				continue
-			}
-			v := workspace.Candidate{ID: string(memory.NewID()), Kind: item.Kind, Text: item.Text, MemoryKind: item.Nature, Confidence: item.Confidence, Source: workspace.SourceRef{SourceID: string(j.Record.ID), Version: j.Record.Version, Label: source.Source.Title, Excerpt: item.Quote, At: kernel.Stamp()}, State: "pending", CreatedAt: kernel.Stamp()}
-			if decision.Action == extraction.Remember {
-				in := claimstore.Statement{ProjectID: result.Project, Text: item.Text, Nature: item.Nature, Subject: decision.Subject, SubjectType: decision.SubjectType, Predicate: item.Predicate, Confirmation: decision.Confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: j.Record, Structured: true, ExpressedAt: extraction.ExpressedAt(source),
-					EventFrom: decision.EventFrom, EventTo: decision.EventTo, EventPrecision: decision.EventPrecision, Mentions: decision.Mentions}
-				// The model can extract several independent memories from one
-				// quotation. Later siblings must not overwrite the first item.
-				quoteKey := string(in.Source.ID) + "/" + in.Quote
-				in.AllowNewAtQuote = seenOutputQuotes[quoteKey]
-				seenOutputQuotes[quoteKey] = true
-				ref, err := s.RememberTx(ctx, tx, scope, in)
-				if errors.Is(err, memory.ErrBlocked) {
-					continue
-				}
-				if err != nil {
-					return err
-				}
-				v.ResolvedInto = string(ref.ID)
-				v.State = "accepted"
-			}
-			if duplicate {
-				accepted++
-				continue
-			}
-			if err := SaveCandidate(ctx, tx, scope, v); err != nil {
-				return err
-			}
-			accepted++
-		}
-		if settings.WakeIdeas {
-			if err := s.ApplySignalsTx(ctx, tx, scope, source.Source, extraction.UsableSignals(result.Output, source, facts.Imported)); err != nil {
-				return err
-			}
-		}
-		// The original unclassified capture remains until extraction is successful.
-		if accepted > 0 {
-			if _, err := tx.Exec(ctx, "UPDATE capture_candidates SET state='merged',document=jsonb_set(document,'{state}','\"merged\"') WHERE owner_id=$1 AND source_id=$2 AND state='pending' AND document->>'kind'='unknown' AND (document->>'confidence')::numeric=0", string(j.OwnerID), string(j.Record.ID)); err != nil {
-				return err
-			}
-		}
-		if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
-			return err
-		}
-		return completeExtractionTx(ctx, tx, j, "")
+		return extraction.ApplySource(ctx, sourceUnit{captureUnit: captureUnit{tx: tx, scope: workerScope(j.OwnerID)}, store: s, job: j}, j.Record, result, time.Now())
 	})
+}
+
+// sourceUnit is the storage of the answer for one source, under the owner
+// lock and the job's lease. extraction.ApplySource decides.
+type sourceUnit struct {
+	captureUnit
+	store *Intake
+	job   worker.Job
+}
+
+func (u sourceUnit) owner() string { return string(u.job.OwnerID) }
+
+func (u sourceUnit) Current(ctx context.Context) (bool, error) {
+	return currentExtractionSource(ctx, u.tx, u.job)
+}
+
+func (u sourceUnit) Acknowledge(ctx context.Context) error {
+	return kernel.Acknowledge(ctx, u.tx, u.job)
+}
+
+// DeskTurn is read under the owner lock that undo uses, after generation: an
+// undo during the model call must not bring the extracted memories back.
+func (u sourceUnit) DeskTurn(ctx context.Context, external string) (bool, bool, error) {
+	undone, err := DeskTurnFullyUndoneTx(ctx, u.tx, u.job.OwnerID, external)
+	if err != nil || !undone {
+		return undone, false, err
+	}
+	remembered, err := DeskTurnRememberedTx(ctx, u.tx, u.job.OwnerID, external)
+	return true, remembered, err
+}
+
+func (u sourceUnit) WakeIdeas(ctx context.Context) (bool, error) {
+	settings, err := kernel.QueryDocument[workspace.Settings](ctx, u.tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", u.owner())
+	return settings.WakeIdeas, err
+}
+
+func (u sourceUnit) Imported(ctx context.Context) (bool, error) {
+	var imported bool
+	err := u.tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM archive_entries WHERE owner_id=$1 AND source_id=$2 AND source_version=$3)", u.owner(), string(u.job.Record.ID), u.job.Record.Version).Scan(&imported)
+	return imported, err
+}
+
+func (u sourceUnit) CandidateExists(ctx context.Context, kind, text string) (bool, error) {
+	var duplicate bool
+	err := u.tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM capture_candidates WHERE owner_id=$1 AND source_id=$2 AND source_version=$3 AND document->>'text'=$4 AND document->>'kind'=$5)", u.owner(), string(u.job.Record.ID), u.job.Record.Version, text, kind).Scan(&duplicate)
+	return duplicate, err
+}
+
+func (u sourceUnit) Remember(ctx context.Context, decision extraction.Decision, source memory.SourceResult, project string, newAtQuote bool) (memory.ID, error) {
+	item := decision.Item
+	ref, err := u.store.RememberTx(ctx, u.tx, u.scope, claimstore.Statement{ProjectID: project, Text: item.Text, Nature: item.Nature, Subject: decision.Subject, SubjectType: decision.SubjectType, Predicate: item.Predicate, Confirmation: decision.Confirmation, Acquisition: item.Acquisition, Actor: "ai", Quote: item.Quote, Source: u.job.Record, Structured: true, ExpressedAt: extraction.ExpressedAt(source),
+		EventFrom: decision.EventFrom, EventTo: decision.EventTo, EventPrecision: decision.EventPrecision, Mentions: decision.Mentions, AllowNewAtQuote: newAtQuote})
+	return ref.ID, err
+}
+
+func (u sourceUnit) ApplySignals(ctx context.Context, source memory.Source, signals []extraction.Signal) error {
+	return u.store.ApplySignalsTx(ctx, u.tx, u.scope, source, signals)
+}
+
+func (u sourceUnit) MergeCapture(ctx context.Context) error {
+	_, err := u.tx.Exec(ctx, "UPDATE capture_candidates SET state='merged',document=jsonb_set(document,'{state}','\"merged\"') WHERE owner_id=$1 AND source_id=$2 AND state='pending' AND document->>'kind'='unknown' AND (document->>'confidence')::numeric=0", u.owner(), string(u.job.Record.ID))
+	return err
+}
+
+func (u sourceUnit) DiscardPaidResult(ctx context.Context) error {
+	return kernel.DiscardPaidResult(ctx, u.tx, u.job)
+}
+
+func (u sourceUnit) Complete(ctx context.Context) error {
+	return completeExtractionTx(ctx, u.tx, u.job, "")
 }
 
 func completeExtractionTx(ctx context.Context, tx pgx.Tx, j worker.Job, state string) error {

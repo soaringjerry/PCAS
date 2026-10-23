@@ -170,6 +170,8 @@ The end of a run is decided in the deputy domain: `deputy.Finish` writes the out
 
 An undo is decided by `command.Undo`: once, within thirty days, while no later action changed the rows and no queued run started; a project that the secretary made returns its items to no project; a reopened task keeps its passed reminders silent. `commandstore.undoUnit` keeps the fingerprints, the locks, and the restores.
 
+The answer for one source is written by `extraction.ApplySource`: each item is decided, a memory is remembered and its candidate accepted, a task or an idea goes to `extraction.CaptureItem` (made at once only when said plainly and now, at most 20 automatic tasks per source or conversation, titles up to 2,000 bytes; otherwise a candidate with its reasons), and the quick note closes once anything was taken. `intakestore.sourceUnit` and `captureUnit` read and write.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

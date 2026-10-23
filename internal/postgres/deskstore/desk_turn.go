@@ -10,18 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
-	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
-	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -37,29 +33,6 @@ type StoredSecretaryResponse struct {
 	Turn              workspace.SecretaryTurn `json:"turn"`
 }
 
-type SecretaryContext struct {
-	Documents         map[string]workspace.Doc
-	TargetItems       map[string]workspace.Item
-	ConversationID    string
-	Agent             workspace.Agent
-	Settings          workspace.Settings
-	Aliases           map[string]workspace.Item
-	Items             []workspace.Item
-	Memories          map[string]workspace.Memory
-	Sources           map[string]workspace.DeskSourceItem
-	Dependencies      []memory.Ref
-	History           []workspace.SecretaryTurn
-	Projects          []workspace.Item
-	Tasks             []workspace.Item
-	Ideas             []workspace.Item
-	Recent            []workspace.Item
-	Counts            map[string]int
-	AttachmentContext string
-	Plan              memory.QueryPlan
-	Use               usestore.UseContext
-	Tier              string
-}
-
 func StringPointer(v string) *string {
 	if v == "" {
 		return nil
@@ -73,123 +46,9 @@ func PointerValue(v *string) string {
 	return *v
 }
 
-func (s *Desk) SecretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, conversationID string) (SecretaryContext, error) {
-	out := SecretaryContext{TargetItems: map[string]workspace.Item{}, ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
-	agentID := req.AgentID
-	if s.Models == nil {
-		return out, memory.ErrUnavailable
-	}
-	if agentID == "" {
-		agentID = s.Models.ExtractionID()
-	}
-	var err error
-	out.Agent, err = kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), agentID)
-	if errors.Is(err, memory.ErrNotFound) {
-		return out, memory.ErrUnavailable
-	}
-	if err != nil {
-		return out, err
-	}
-	if !out.Agent.Enabled || out.Agent.Channel == "manual" || !s.ModelAvailable(out.Agent.ID) {
-		return out, memory.ErrUnavailable
-	}
-	tasks, settings, deps, err := s.DeskItemsContextTx(ctx, tx, scope, out.Agent, true)
-	if err != nil {
-		return out, err
-	}
-	out.Settings = settings
-	out.Tasks = tasks
-	out.Dependencies = deps
-	out.Projects, err = kernel.QueryDocuments[workspace.Item](ctx, tx, "SELECT document FROM work_items WHERE owner_id=$1 AND kind='project' AND status='active' ORDER BY created_at,id LIMIT 50", string(scope.OwnerID))
-	if err != nil {
-		return out, err
-	}
-	goals, err := workspacestore.ProjectGoalEvidenceTx(ctx, tx, scope.OwnerID)
-	if err != nil {
-		return out, err
-	}
-	for i := range out.Projects {
-		p := &out.Projects[i]
-		excerpt := ""
-		if p.Creation != nil && p.Creation.Source != nil {
-			excerpt = p.Creation.Source.Excerpt
-		}
-		p.Goal = workspacestore.ProjectMeaning(p.Goal, excerpt, goals[p.ID])
-	}
-	out.Ideas, err = kernel.QueryDocuments[workspace.Item](ctx, tx, "SELECT document FROM (SELECT document,created_at,id FROM work_items WHERE owner_id=$1 AND kind='idea' ORDER BY created_at DESC,id DESC LIMIT 20) recent ORDER BY created_at,id", string(scope.OwnerID))
-	if err != nil {
-		return out, err
-	}
-	out.Recent, err = kernel.QueryDocuments[workspace.Item](ctx, tx, `SELECT w.document FROM work_items w JOIN (
- SELECT c->>'id' AS id,max(l.created_at) AS at FROM action_log l JOIN desk_turns t ON (t.owner_id,t.id)=(l.owner_id,l.turn_id)
- CROSS JOIN LATERAL jsonb_array_elements(l.changes) c
- WHERE l.owner_id=$1 AND t.conversation_id=$2 AND l.undone_at IS NULL AND c->>'table'='work_items' GROUP BY c->>'id'
- ) r ON r.id=w.id::text WHERE w.owner_id=$1 ORDER BY r.at DESC,w.created_at,w.id LIMIT 20`, string(scope.OwnerID), conversationID)
-	if err != nil {
-		return out, err
-	}
-	for _, group := range []struct {
-		prefix string
-		items  *[]workspace.Item
-	}{{"P", &out.Projects}, {"T", &out.Tasks}, {"I", &out.Ideas}, {"R", &out.Recent}} {
-		for i := range *group.items {
-			item := (*group.items)[i]
-			original, err := itemstore.GetItem(ctx, tx, scope, item.ID)
-			if err != nil {
-				return out, err
-			}
-			out.TargetItems[item.ID] = original
-			var refs []memory.Ref
-			item, refs, err = accessstore.SanitizeItemTx(ctx, tx, scope, out.Agent.ID, item)
-			if err != nil {
-				return out, err
-			}
-			(*group.items)[i] = item
-			out.Aliases[fmt.Sprintf("%s%d", group.prefix, i+1)] = item
-			out.Items = append(out.Items, item)
-			out.Dependencies = append(out.Dependencies, refs...)
-		}
-	}
-	if req.ThingID != nil {
-		item, err := itemstore.GetItem(ctx, tx, scope, *req.ThingID)
-		if err != nil {
-			return out, err
-		}
-		out.TargetItems[item.ID] = item
-		item, refs, err := accessstore.SanitizeItemTx(ctx, tx, scope, out.Agent.ID, item)
-		if err != nil {
-			return out, err
-		}
-		out.Aliases["THIS"] = item
-		out.Items = append(out.Items, item)
-		out.Dependencies = append(out.Dependencies, refs...)
-	}
-	rows, err := tx.Query(ctx, "SELECT project_id::text,count(*) FROM work_items WHERE owner_id=$1 AND kind='task' AND status IN ('todo','doing','waiting') AND project_id IS NOT NULL GROUP BY project_id", string(scope.OwnerID))
-	if err != nil {
-		return out, err
-	}
-	for rows.Next() {
-		var id string
-		var count int
-		if err = rows.Scan(&id, &count); err != nil {
-			rows.Close()
-			return out, err
-		}
-		out.Counts[id] = count
-	}
-	rows.Close()
-	if err = rows.Err(); err != nil {
-		return out, err
-	}
-	stored, err := s.DeskTurnsTx(ctx, tx, scope, conversationID, 6, out.Agent.ID, req.ThingID, &out.Dependencies)
-	if err != nil {
-		return out, err
-	}
-	if err := recordSecretaryOverflowTx(ctx, tx, scope, out); err != nil {
-		return out, err
-	}
-	out.History = stored.Turns
-	return out, nil
+// SecretaryContextTx reads the context of a turn in the transaction tx.
+func (s *Desk) SecretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, conversationID string) (secretary.Context, error) {
+	return secretary.Gather(ctx, &inputUnit{store: s, tx: tx, scope: scope}, req, conversationID)
 }
 func (s *Desk) CheckDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent string, dependencies []memory.Ref, items []workspace.Item, full bool) error {
 	if err := accessstore.VerifyRunTx(ctx, tx, scope, workspace.Run{AgentID: agent, ContextVersions: dependencies}); err != nil {
@@ -214,153 +73,10 @@ func (s *Desk) CheckDeskContextTx(ctx context.Context, tx pgx.Tx, scope memory.S
 	}
 	return nil
 }
-func (s *Desk) SecretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *SecretaryContext, search secretary.Recall) (string, map[string]workspace.Memory, error) {
-	var prompt strings.Builder
-	loc := c.Settings.Location()
-	c.Plan = memory.PlanQuery(req.Text, s.BusinessNow(), loc)
-	var projectID *string
-	if req.ThingID != nil {
-		item, err := itemstore.GetItem(ctx, tx, scope, *req.ThingID)
-		if err != nil {
-			return "", nil, err
-		}
-		project := item.ProjectID
-		if item.Kind == "project" {
-			project = item.ID
-		}
-		projectID = &project
-	}
-	docCatalog, docErr := s.secretaryDocumentsTx(ctx, tx, scope, req, c)
-	if docErr != nil {
-		return "", nil, docErr
-	}
-	prompt.WriteString(docCatalog)
-	view := secretary.WorkspaceView{City: c.Settings.City, Location: loc, Projects: c.Projects, OpenCounts: c.Counts, Tasks: c.Tasks, Ideas: c.Ideas, Recent: c.Recent}
-	earlier := ""
-	for _, t := range c.History {
-		turn := secretary.HistoryTurn{Text: t.Text, Reply: t.Reply, Outdated: t.Outdated}
-		earlier += t.Text + " "
-		for _, receipt := range t.Receipts {
-			line := secretary.HistoryReceipt{Text: receipt.Text, Undone: receipt.Undone}
-			// A receipt of an item that the agent may not read now is hidden.
-			if t.Text != "" && receipt.ThingID != nil {
-				if item, err := itemstore.GetItem(ctx, tx, scope, *receipt.ThingID); err == nil {
-					permitted, _, err := accessstore.SanitizeItemTx(ctx, tx, scope, c.Agent.ID, item)
-					if err != nil {
-						return "", nil, err
-					}
-					line.Hidden = permitted.Title != item.Title
-				} else {
-					// An item that no longer exists gives no line.
-					continue
-				}
-			}
-			turn.Receipts = append(turn.Receipts, line)
-		}
-		view.History = append(view.History, turn)
-	}
-	workspaceText, clipped := secretary.RenderWorkspace(view)
-	for _, characters := range clipped {
-		if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", "project_evidence_characters", characters); err != nil {
-			return "", nil, err
-		}
-	}
-	prompt.WriteString(workspaceText)
-	c.Tier = usestore.MemoryTier(ctx, req.Text, "light")
-	var err error
-	c.Use, err = s.StartUseContextTx(ctx, tx, scope)
-	c.Tier = usestore.MemoryTierForStatus(c.Tier, c.Use.Ready)
-	c.Use.Location = loc
-	c.Use.Tier = c.Tier
-	if err != nil {
-		return "", nil, err
-	}
-	tokens := 4000
-	candidates := 15
-	if c.Use.Ready {
-		candidates = 40
-		tokens = 12000
-	}
-	recall, err := search(ctx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID, Team: true}, memory.RecallRequest{Team: &memory.TeamRecall{Text: req.Text, Plan: c.Plan, ThingID: req.ThingID, ProjectID: projectID, Candidates: 20, RankFusion: c.Use.Ready}, Query: contextbuilder.Tail(earlier+req.Text, 4000), Mode: "remember", Context: memory.WorkingContext{Objects: []memory.ID{}}, Budget: memory.Budget{Candidates: candidates, Tokens: tokens, Edges: 15, Hops: 1}})
-	if err != nil {
-		return "", nil, err
-	}
-	for reason, n := range map[string]int{"recall_budget": recall.Coverage.Omitted, "source_recall_budget": recall.Coverage.OmittedSources} {
-		if n > 0 {
-			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", reason, n); err != nil {
-				return "", nil, err
-			}
-		}
-	}
-	ids := make([]string, 0, len(recall.Memories))
-	for _, ref := range recall.Memories {
-		ids = append(ids, string(ref.ID))
-	}
-	memories, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: c.Agent.ID}, true, memoryread.MemoryReadOptions{IDs: ids, UseCurrent: true})
-	if err != nil {
-		return "", nil, err
-	}
-	for _, m := range memories {
-		if contextbuilder.MemoryAllowed(m, c.Agent) {
-			c.Memories[m.ID] = m
-		}
-	}
-	ranked := []workspace.Memory{}
-	for _, ref := range recall.Memories {
-		if m, ok := c.Memories[string(ref.ID)]; ok {
-			ranked = append(ranked, m)
-		}
-	}
-	if err = s.FinishUseContextTx(ctx, tx, scope, c.Agent, req.ThingID, req.Text, ranked, &c.Use); err != nil {
-		return "", nil, err
-	}
-	given := secretary.Memories{Use: c.Use, Location: loc, Recalled: ranked, TimeRelaxed: recall.TimeRelaxed}
-	if req.ThingID != nil {
-		given.Readable = func(m workspace.Memory) bool {
-			ref := memory.Ref{ID: memory.ID(m.ID), Version: m.Version, Kind: memory.ClaimKind}
-			return accessstore.VerifyRunTx(ctx, tx, scope, workspace.Run{ThingID: *req.ThingID, AgentID: c.Agent.ID, ContextVersions: []memory.Ref{ref}}) == nil
-		}
-	}
-	shown := secretary.RenderMemories(given)
-	prompt.WriteString(shown.Text)
-	sent, contextClaims := shown.Sent, shown.Claims
-	c.Dependencies = append(c.Dependencies, shown.Dependencies...)
-	historyRequests, err := kernel.QueryDocuments[string](ctx, tx, "SELECT to_jsonb(request_id::text) FROM desk_turns WHERE owner_id=$1 AND conversation_id=$2 AND question!='' AND request_id IS NOT NULL", string(scope.OwnerID), c.ConversationID)
-	if err != nil {
-		return "", nil, err
-	}
-	contextbuilder.OrderExcerpts(recall.Excerpts, c.Plan)
-	excerpts, err := intakestore.TeamSourceExcerptsTx(ctx, tx, scope, c.Agent.ID, req.ThingID, recall.Excerpts, historyRequests, 6, 2400)
-	if err != nil {
-		return "", nil, err
-	}
-	c.Sources = map[string]workspace.DeskSourceItem{}
-	excerptText, excerptRefs := secretary.RenderExcerpts(excerpts, loc, c.Sources)
-	prompt.WriteString(excerptText)
-	c.Dependencies = append(c.Dependencies, excerptRefs...)
-	evidenceCtx := ctx
-	if c.Use.Ready {
-		evidenceCtx = context.WithValue(ctx, evidencestore.UseEvidenceBatchKey{}, true)
-	}
-	groups, gaps, err := evidencestore.EvidenceContextsTx(evidenceCtx, tx, scope, c.Agent.ID, req.ThingID, contextClaims)
-	if err != nil {
-		return "", nil, err
-	}
-	evidenceText, evidenceRefs := secretary.RenderEvidence(groups, gaps, loc, c.Sources)
-	prompt.WriteString(evidenceText)
-	c.Dependencies = append(c.Dependencies, evidenceRefs...)
-	// Each of the last turns already carries its own history. Without this the
-	// stored list doubles every turn of a conversation.
-	if err := s.secretaryHandoverEvidenceTx(ctx, tx, scope, c, &prompt, sent); err != nil {
-		return "", nil, err
-	}
-	c.Dependencies = kernel.UniqueRefs(c.Dependencies)
-	request := secretary.Request{Now: s.BusinessNow(), Location: loc, Text: req.Text, Attachments: c.AttachmentContext}
-	if t, ok := c.Aliases["THIS"]; ok {
-		request.This = &t
-	}
-	prompt.WriteString(secretary.RenderRequest(request))
-	return secretary.HideIdentifiers(prompt.String()), sent, nil
+
+// SecretaryPrompt builds the model input of a turn in the transaction tx.
+func (s *Desk) SecretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretary.Context, search secretary.Recall) (string, map[string]workspace.Memory, error) {
+	return secretary.Compose(ctx, &inputUnit{store: s, tx: tx, scope: scope}, req, c, search, s.BusinessNow())
 }
 
 // DeskTurn holds request and conversation advisory locks across generation.
@@ -538,7 +254,7 @@ func PointerValueOrNull(v *string) any {
 type secretarySession struct {
 	*secretaryAsk
 	*secretaryTurn
-	c            *SecretaryContext
+	c            *secretary.Context
 	conversation string
 	attachments  []DeskAttachment
 	text         string
@@ -641,7 +357,7 @@ type secretaryAsk struct {
 	tx         pgx.Tx
 	scope      memory.Scope
 	req        workspace.DeskTurnRequest
-	c          *SecretaryContext
+	c          *secretary.Context
 	turnID     string
 	requestCtx context.Context
 	timing     *budgetstore.ExecutionTimer
@@ -683,7 +399,7 @@ type secretaryTurn struct {
 	tx       pgx.Tx
 	scope    memory.Scope
 	req      workspace.DeskTurnRequest
-	c        *SecretaryContext
+	c        *secretary.Context
 	turnID   string
 	original workspace.SourceRef
 	sent     map[string]workspace.Memory
@@ -860,52 +576,6 @@ func RefreshDeskReceiptUndoTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 				receipt.Undone = byID[*receipt.ActionID]
 			}
 		}
-	}
-	return nil
-}
-
-func recordSecretaryOverflowTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c SecretaryContext) error {
-	rows, err := tx.Query(ctx, `SELECT kind,count(*) FROM work_items WHERE owner_id=$1 AND ((kind='task' AND status IN ('todo','doing','waiting')) OR (kind='project' AND status='active') OR kind='idea') GROUP BY kind`, string(scope.OwnerID))
-	if err != nil {
-		return err
-	}
-	counts := map[string]int{}
-	for rows.Next() {
-		var kind string
-		var n int
-		if err := rows.Scan(&kind, &n); err != nil {
-			rows.Close()
-			return err
-		}
-		counts[kind] = n
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return err
-	}
-	for kind, limit := range map[string]int{"task": 40, "project": 50, "idea": 20} {
-		if n := counts[kind] - limit; n > 0 {
-			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", kind+"_context_limit", n); err != nil {
-				return err
-			}
-		}
-	}
-	var recent int
-	if err := tx.QueryRow(ctx, `SELECT count(DISTINCT w.id) FROM action_log l JOIN desk_turns t ON(t.owner_id,t.id)=(l.owner_id,l.turn_id) CROSS JOIN LATERAL jsonb_array_elements(l.changes) c JOIN work_items w ON w.owner_id=l.owner_id AND w.id::text=c->>'id' WHERE l.owner_id=$1 AND t.conversation_id=$2 AND l.undone_at IS NULL AND c->>'table'='work_items'`, string(scope.OwnerID), c.ConversationID).Scan(&recent); err != nil {
-		return err
-	}
-	if recent > 20 {
-		if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", "recent_item_context_limit", recent-20); err != nil {
-			return err
-		}
-	}
-	var turns int
-	if err := tx.QueryRow(ctx, "SELECT count(*) FROM desk_turns WHERE owner_id=$1 AND conversation_id=$2", string(scope.OwnerID), c.ConversationID).Scan(&turns); err != nil {
-		return err
-	}
-	if turns > 6 {
-		return kernel.StageEvent(ctx, tx, scope.OwnerID, "secretary", "overflow", "history_context_limit", turns-6)
 	}
 	return nil
 }

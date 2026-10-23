@@ -180,6 +180,8 @@ A connector sync runs in `internal/connectors` (`connectors.Sync`): the HTTP pol
 
 Background work is put into the owner's words by `internal/workspace/activity`: job titles and problems, the library's job list, the notes of the agents, and the home page's "while you were away" lines. Storage reads the rows; the notice and review IDs are still made in SQL so that they keep their bytes.
 
+The schedule view is built by `internal/currentstate/schedule` (`schedule.Build`, `schedule.InProgress`): the repeats of a recurring arrangement, what is unclear, what is overdue, and the undated tasks of the home page. The rules of a model's dates for a memory are `organize.NormalizeDeadlines`, with `organize.LegacyRule` and `organize.Clock` next to `organize.ScheduleRule`.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

@@ -2,14 +2,12 @@ package statestore
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
-	"github.com/soaringjerry/PCAS/internal/postgres/schedulestore"
 )
 
 // Program validation does not attempt to understand the original date language.
@@ -19,58 +17,9 @@ func WriteOrganizedDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	if err != nil {
 		return err
 	}
-	normalized := []organize.Deadline{}
-	for _, d := range output {
-		if !kernel.OneOf(d.Kind, "deadline", "appointment", "recurring", "unclear") || strings.TrimSpace(d.Title) == "" {
-			return memory.ErrInvalid
-		}
-		if d.Kind == "recurring" {
-			d.At = nil
-			if d.ScheduleRule != nil && !d.ScheduleRule.Valid() {
-				return memory.ErrInvalid
-			}
-			if d.ScheduleRule == nil {
-				said, e := time.Parse(time.RFC3339Nano, m.ExpressedAt)
-				if e != nil {
-					said = time.Now()
-				}
-				rule, ok := schedulestore.LegacyScheduleRule(d.Recurrence, said, loc)
-				if ok {
-					d.ScheduleRule = &rule
-				}
-			}
-			if strings.TrimSpace(d.Recurrence) == "" {
-				d.Kind = "unclear"
-				d.TimeNote = "未说明周期；" + d.TimeNote
-			}
-		} else if d.Kind == "unclear" {
-			d.At = nil
-		} else {
-			valid := false
-			if d.At != nil {
-				at, e := time.Parse(time.RFC3339Nano, *d.At)
-				if e != nil {
-					at, e = time.ParseInLocation("2006-01-02", *d.At, loc)
-				}
-				said, se := time.Parse(time.RFC3339Nano, m.ExpressedAt)
-				if e == nil && (se != nil || !at.Before(said)) {
-					v := at.UTC().Format(time.RFC3339Nano)
-					d.At = &v
-					valid = true
-				}
-			}
-			if !valid {
-				d.Kind = "unclear"
-				d.At = nil
-				d.TimeNote = "日期无法校验；" + d.TimeNote
-			}
-		}
-		if d.DateOnly == nil && d.At != nil {
-			at, e := time.Parse(time.RFC3339Nano, *d.At)
-			only := e == nil && at.In(loc).Hour() == 0 && at.In(loc).Minute() == 0 && d.TimeNote != ""
-			d.DateOnly = &only
-		}
-		normalized = append(normalized, d)
+	normalized, err := organize.NormalizeDeadlines(output, m.ExpressedAt, loc)
+	if err != nil {
+		return err
 	}
 	if _, err := tx.Exec(ctx, "DELETE FROM deadlines WHERE owner_id=$1 AND claim_id=$2", string(owner), string(m.Ref.ID)); err != nil {
 		return err

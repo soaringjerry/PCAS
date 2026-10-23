@@ -142,3 +142,39 @@ func Reminded(thing, trigger string, due time.Time, title, reason string, at tim
 func Reviewed(due time.Time, pending int, at time.Time) workspace.Activity {
 	return workspace.Activity{ID: "review:" + due.UTC().Format(time.RFC3339), At: at.UTC().Format(time.RFC3339Nano), Text: fmt.Sprintf("每日整理：有 %d 条拿不准的等你确认", pending)}
 }
+
+// SourceGroup is one entry of the library's list of where material came
+// from: an import, what was said to the secretary, written notes, quick
+// notes, Telegram, or a single document. Background work on some of many
+// originals says nothing about the entry; only a single document reports
+// it. A stopped job reports its gap.
+func SourceGroup(id, title, archive string, items int, at time.Time, blocked, pending bool) workspace.Source {
+	source := workspace.Source{ID: id, ItemCount: items, Status: "connected", LastSyncAt: at.UTC().Format(time.RFC3339Nano)}
+	switch {
+	case strings.HasPrefix(id, "import:"):
+		source.Kind, source.Name = "import", archive
+		if source.Name == "" {
+			source.Name = "导入的聊天记录"
+		}
+	case id == "said":
+		source.Kind, source.Name = "said", "跟秘书说的话"
+	case id == "memory-input":
+		source.Kind, source.Name = "note", "添加记忆时写的话"
+	case id == "capture":
+		source.Kind, source.Name = "capture", "快速记录"
+	case id == "telegram":
+		source.Kind, source.Name = "telegram", "从 Telegram 发来的"
+	default:
+		source.Kind, source.Name, source.Single = "file", title, true
+		if strings.TrimSpace(source.Name) == "" {
+			source.Name = "没有标题的资料"
+		}
+	}
+	if pending && source.Single {
+		source.Status, source.Note = "syncing", "原文可读，还在处理"
+	}
+	if blocked {
+		source.Status, source.Note = "failed", "原文可读，部分处理未完成；展开后台任务查看缺口"
+	}
+	return source
+}

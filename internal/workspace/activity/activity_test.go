@@ -43,3 +43,15 @@ func TestTheLinesOfAwayTimeNameWhatHappened(t *testing.T) {
 		t.Fatal("agent notes")
 	}
 }
+
+func TestTheLibraryNamesWhereMaterialCameFrom(t *testing.T) {
+	if s := SourceGroup("import:a", "", "", 40, at, false, true); s.Name != "导入的聊天记录" || s.Status != "connected" {
+		t.Fatalf("%+v", s)
+	}
+	if s := SourceGroup("f", " ", "", 1, at, false, true); s.Name != "没有标题的资料" || s.Status != "syncing" || !s.Single {
+		t.Fatalf("%+v", s)
+	}
+	if s := SourceGroup("said", "", "", 9, at, true, false); s.Kind != "said" || s.Status != "failed" {
+		t.Fatalf("%+v", s)
+	}
+}

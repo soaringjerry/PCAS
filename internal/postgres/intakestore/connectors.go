@@ -8,8 +8,6 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"net/url"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/connectors"
@@ -52,19 +50,8 @@ func (s *Intake) ConfigureConnection(ctx context.Context, scope memory.Scope, in
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}
-	if strings.TrimSpace(in.Name) == "" || len(in.Name) > 200 || !kernel.OneOf(in.Kind, "webhook", "poll", "folder") || in.IntervalSeconds < 15 || in.IntervalSeconds > 86400 {
-		return out, memory.ErrInvalid
-	}
-	if in.Kind == "poll" {
-		u, e := url.Parse(in.URL)
-		if e != nil || !kernel.OneOf(u.Scheme, "https", "http") || u.Host == "" || u.User != nil || u.Fragment != "" || len(in.URL) > 4096 {
-			return out, memory.ErrInvalid
-		}
-	} else if in.URL != "" || in.TokenEnv != "" {
-		return out, memory.ErrInvalid
-	}
-	if in.TokenEnv != "" && (!strings.HasPrefix(in.TokenEnv, "PCAS_CONNECTOR_") || strings.ContainsAny(in.TokenEnv, " \n\r=\x00")) {
-		return out, memory.ErrInvalid
+	if err := connectors.CheckConfiguration(in); err != nil {
+		return out, err
 	}
 	var hash []byte
 	if in.ID == "" {

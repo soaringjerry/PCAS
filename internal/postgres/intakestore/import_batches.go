@@ -207,54 +207,10 @@ func scanImportBatch(row pgx.Row) (ImportBatch, error) {
 	var stage string
 	var budgetWait bool
 	err := row.Scan(&b.ID, &b.ArchiveID, &b.ArchiveVersion, &b.Name, &b.State, &b.Total, &b.Stored, &b.Organized, &b.OrganizeLater, &b.LeftOut, &b.Earliest, &b.Latest, &b.ErrorCode, &b.CreatedAt, &b.UpdatedAt, &b.Prepared, &b.Indexed, &b.Vectorized, &stage, &b.OrganizingFailed, &budgetWait)
-	if b.ErrorCode != "" {
-		b.Error = importErrorMessage(b.ErrorCode)
-	}
-	switch {
-	case b.State == "paused":
-		b.Activity = "paused"
-	case b.State == "failed":
-		b.Activity = "failed"
-	case b.State == "importing":
-		b.Activity = "storing"
-	case strings.HasPrefix(stage, ConversationExtractionPrefix):
-		b.Activity = "organizing"
-	case stage == "source.chunk":
-		b.Activity = "preparing"
-	case stage == "source.embed":
-		b.Activity = "vectorizing"
-	case stage == "source.tokenize" || stage == "memory.summary":
-		b.Activity = "indexing"
-	case b.Prepared < b.Stored:
-		b.Activity = "preparing"
-	case b.OrganizeLater:
-		b.Activity = "held"
-	case b.OrganizingFailed > 0:
-		b.Activity = "organizing_failed"
-	case budgetWait && b.Organized < b.Total:
-		b.Activity = "budget_wait"
-	case b.Organized < b.Total:
-		b.Activity = "queued"
-	case b.Indexed < b.Total:
-		b.Activity = "indexing"
-	case b.Vectorized < b.Total:
-		b.Activity = "vectorizing"
-	default:
-		b.Activity = "complete"
-	}
+	connectors.Describe(&b, stage, budgetWait)
 	return b, err
 }
 
-func importErrorMessage(code string) string {
-	switch code {
-	case "import_storage_failed":
-		return "保存中断了，已存好的记录仍在，请点继续重试。"
-	case "import_source_missing":
-		return "原始文件已不可用，请重新上传导出文件。"
-	default:
-		return (&connectors.ArchiveError{Code: code}).Message()
-	}
-}
 func (s *Intake) ListImports(ctx context.Context, scope memory.Scope) ([]ImportBatch, error) {
 	out := []ImportBatch{}
 	if err := kernel.RequireOwner(scope); err != nil {
@@ -275,7 +231,7 @@ func (s *Intake) ListImports(ctx context.Context, scope memory.Scope) ([]ImportB
 	return out, rows.Err()
 }
 
-var ErrImportNotActive = &connectors.ArchiveError{Code: "import_not_active"}
+var ErrImportNotActive = connectors.ErrImportNotActive
 
 // Starting organization changes only the hold. Paused imports stay paused, and
 // repeated requests keep already queued or completed extraction work intact.
@@ -329,12 +285,9 @@ func (s *Intake) changeImportState(ctx context.Context, scope memory.Scope, id m
 		if err != nil {
 			return err
 		}
-		if pause && b.State != "importing" || !pause && b.State != "paused" && b.State != "failed" {
-			return ErrImportNotActive
-		}
-		state := "importing"
-		if pause {
-			state = "paused"
+		state, err := connectors.ChangeImport(b.State, pause)
+		if err != nil {
+			return err
 		}
 		if _, err = tx.Exec(ctx, "UPDATE import_batches SET state=$3,error_code='',updated_at=now() WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(id), state); err != nil {
 			return err
@@ -497,30 +450,10 @@ var _ interface {
 	OrganizeImport(context.Context, memory.Scope, memory.ID) (connectors.ImportBatch, error)
 } = (*Intake)(nil)
 
-// importFailureCode names the failure of an archive import. failed is false
-// when the import did not fail: it lost its lease, or its own context ended.
-// A stopped worker ends the context, and the database driver can then return
-// an error that does not wrap the context's error. Such an import is tried
-// again; it is not a storage failure.
-func ImportFailureCode(contextErr, err error) (code string, failed bool) {
-	if err == nil || contextErr != nil || errors.Is(err, worker.ErrLeaseLost) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return "", false
-	}
-	code = "import_storage_failed"
-	var failure *connectors.ArchiveError
-	if errors.As(err, &failure) {
-		code = failure.Code
-	}
-	if errors.Is(err, memory.ErrNotFound) {
-		code = "import_source_missing"
-	}
-	return code, true
-}
-
 // The initial attachment open can fail before parsing begins, so it shares the
 // same durable status update as failures between chunks.
 func (s *Intake) recordImportFailure(ctx context.Context, j worker.Job, err error) error {
-	code, failed := ImportFailureCode(ctx.Err(), err)
+	code, failed := connectors.FailureCode(ctx.Err(), err)
 	if !failed {
 		return err
 	}

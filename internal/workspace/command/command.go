@@ -367,3 +367,36 @@ func oneOf(value string, values ...string) bool {
 	}
 	return false
 }
+
+// undoableCommands are the commands whose action the owner can undo.
+var undoableCommands = map[string]bool{"restoreMemory": true, "completeDeadline": true, "addTask": true, "addIdea": true, "addProject": true, "updateTask": true, "updateProject": true, "setTaskStatus": true, "renameThing": true, "setNotes": true, "moveThing": true, "deferTask": true, "addCheck": true, "toggleCheck": true, "removeCheck": true, "ideaPromote": true, "ideaSnooze": true, "ideaShelve": true, "ideaDrop": true, "ideaContinue": true, "addCondition": true, "removeCondition": true, "adoptRun": true, "discardRun": true, "createDoc": true, "updateDoc": true, "deleteDoc": true, "bulkStatus": true, "bulkDefer": true, "bulkMove": true}
+
+// Undoable is true when the action of the command can be undone.
+func Undoable(commandType string) bool { return undoableCommands[commandType] }
+
+// Target is the item that a command names, for the summary of its action.
+func Target(c workspace.Command) string {
+	id := c.ID
+	if c.TaskID != "" {
+		id = c.TaskID
+	}
+	if c.IdeaID != "" {
+		id = c.IdeaID
+	}
+	return id
+}
+
+// Summary is the line of the owner's log for a command. title is the title
+// that the command gives, or of its item, or of its remembered date.
+func Summary(c workspace.Command, title string) string {
+	if c.Type == "completeDeadline" {
+		return map[string]string{"dropped": "不再显示：", "task": "转成待办：", "done": "完成期限：", "": "完成期限："}[c.Reason] + title
+	}
+	switch {
+	case c.Type == "addTask" || c.Type == "addIdea" || c.Type == "addProject":
+		return "新建：" + title
+	case c.Type == "setTaskStatus" && c.Status == "done":
+		return "完成：" + title
+	}
+	return "修改：" + title
+}

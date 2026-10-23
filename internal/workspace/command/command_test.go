@@ -222,3 +222,20 @@ func TestASampleAndAJobChangeOnlyFromAStateThatAllowsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestTheLogNamesWhatACommandDid(t *testing.T) {
+	for want, c := range map[string]workspace.Command{
+		"新建：订车":   {Type: "addTask"},
+		"完成：订车":   {Type: "setTaskStatus", Status: "done"},
+		"修改：订车":   {Type: "renameThing"},
+		"转成待办：订车": {Type: "completeDeadline", Reason: "task"},
+		"完成期限：订车": {Type: "completeDeadline"},
+	} {
+		if got := Summary(c, "订车"); got != want {
+			t.Errorf("%s: %s", want, got)
+		}
+	}
+	if !Undoable("deleteDoc") || Undoable("deleteThing") || Undoable("updateSettings") {
+		t.Fatal("undoable commands")
+	}
+}

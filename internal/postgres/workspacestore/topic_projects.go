@@ -20,13 +20,6 @@ import (
 )
 
 const TopicProjectStage = topicproject.Stage
-const topicProjectMinimum = 10
-const topicProjectEvidenceLimit = 10
-
-// A group nobody has spoken of for this long is not something being worked
-// on now. A trip in June or an exam in spring has memories, a goal and a date,
-// and made a project all the same; this is what keeps them out.
-const topicProjectAlive = 45 * 24 * time.Hour
 
 // The input assembly below is the context builder of the topic project
 // service. It stays here until memory retrieval has its own interface.
@@ -132,14 +125,14 @@ func topicProjectInputSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	// What the user calls a project needs no deadline to be one; a mere topic
 	// still needs a goal and a date. Either way somebody must have spoken of it
 	// lately; a group with no time on any memory cannot be told to be old.
-	if out.Count < topicProjectMinimum || out.Kind == "topic" && (!goal || !date) || !latest.IsZero() && time.Since(latest) > topicProjectAlive {
+	if !topicproject.Eligible(out.Count, out.Kind, goal, date, latest, time.Now()) {
 		return out, nil, pgx.ErrNoRows
 	}
 	// Always include both threshold witnesses before filling recent context.
 	selected := map[string]bool{}
 	add := func(m map[string]any) {
 		id := m["id"].(string)
-		if !selected[id] && len(out.Memories) < topicProjectEvidenceLimit {
+		if !selected[id] && len(out.Memories) < topicproject.EvidenceLimit {
 			selected[id] = true
 			text, clipped := topicproject.ClipMemory(m["text"].(string))
 			m["text"] = text
@@ -184,8 +177,8 @@ func topicProjectInputSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	return out, refs, nil
 }
 func EnqueueTopicProjectsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time) (int, error) {
-	topics, err := kernel.QueryDocuments[string](ctx, tx, `WITH eligible AS MATERIALIZED(SELECT m.key FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version) WHERE m.owner_id=$1 AND m.kind IN('topic','project') GROUP BY m.key HAVING count(*)>=10 AND (bool_or(m.kind='project') OR bool_or(c.category='goal') AND bool_or(EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)))))
- SELECT to_jsonb(r.id::text) FROM eligible g JOIN memory_records r ON r.owner_id=$1 AND 'entity:'||r.id::text=g.key JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version) WHERE r.state='active' AND ev.entity_type IN('topic','project') AND coalesce(ev.disambiguation->>'work_item_id','')='' ORDER BY r.id`, string(owner))
+	topics, err := kernel.QueryDocuments[string](ctx, tx, `WITH eligible AS MATERIALIZED(SELECT m.key FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version) WHERE m.owner_id=$1 AND m.kind IN('topic','project') GROUP BY m.key HAVING count(*)>=$2 AND (bool_or(m.kind='project') OR bool_or(c.category='goal') AND bool_or(EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)))))
+ SELECT to_jsonb(r.id::text) FROM eligible g JOIN memory_records r ON r.owner_id=$1 AND 'entity:'||r.id::text=g.key JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version) WHERE r.state='active' AND ev.entity_type IN('topic','project') AND coalesce(ev.disambiguation->>'work_item_id','')='' ORDER BY r.id`, string(owner), topicproject.Minimum)
 	if err != nil {
 		return 0, err
 	}
@@ -233,8 +226,8 @@ func EnqueueTopicProjectsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now
 			return count, err
 		}
 		if tag.RowsAffected() > 0 {
-			if input.Count > topicProjectEvidenceLimit {
-				if err = kernel.StageEvent(ctx, tx, owner, TopicProjectStage, "overflow", "topic_project_evidence_left_in_group", input.Count-topicProjectEvidenceLimit); err != nil {
+			if input.Count > topicproject.EvidenceLimit {
+				if err = kernel.StageEvent(ctx, tx, owner, TopicProjectStage, "overflow", "topic_project_evidence_left_in_group", input.Count-topicproject.EvidenceLimit); err != nil {
 					return count, err
 				}
 			}

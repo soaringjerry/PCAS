@@ -309,3 +309,23 @@ func ClipMemory(text string) (string, int) {
 	}
 	return string(r[:MemoryCharacters]) + "（原文还有内容，拿不准请用 uncertain）", len(r) - MemoryCharacters
 }
+
+// A group is judged as a project when it has this many current memories, at
+// most EvidenceLimit of them go into the input, and somebody spoke of it
+// within Alive. A trip in June or an exam in spring has memories, a goal and
+// a date, and made a project all the same; Alive keeps them out.
+const (
+	Minimum       = 10
+	EvidenceLimit = 10
+	Alive         = 45 * 24 * time.Hour
+)
+
+// Eligible is true for a group that can be judged as a project: what the
+// owner calls a project needs no date; a mere topic needs a goal and a date.
+// latest is the time of its latest memory, or zero when none has a time.
+func Eligible(count int, kind string, goal, date bool, latest, now time.Time) bool {
+	if count < Minimum || kind == "topic" && (!goal || !date) {
+		return false
+	}
+	return latest.IsZero() || now.Sub(latest) <= Alive
+}

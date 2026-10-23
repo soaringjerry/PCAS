@@ -72,7 +72,7 @@ func EnqueueStatusHandoversTx(ctx context.Context, tx pgx.Tx, anchors map[memory
 		}
 		due := now
 		if built != nil {
-			due = kernel.MaxTime(now, built.Add(time.Hour))
+			due = kernel.MaxTime(now, built.Add(handover.MinimumInterval))
 		}
 		id := memory.NewID()
 		if _, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at)

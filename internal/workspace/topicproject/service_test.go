@@ -210,3 +210,14 @@ func TestTheInputOfATopicSaysWhereItCutText(t *testing.T) {
 		t.Fatal(n, text)
 	}
 }
+
+func TestAGroupIsJudgedWhenItIsBigLivelyAndAProjectOrAGoalWithADate(t *testing.T) {
+	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	recent, old := now.Add(-24*time.Hour), now.Add(-Alive-time.Hour)
+	if !Eligible(10, "project", false, false, recent, now) || !Eligible(12, "topic", true, true, time.Time{}, now) {
+		t.Fatal("an eligible group was left out")
+	}
+	if Eligible(9, "project", true, true, recent, now) || Eligible(12, "topic", true, false, recent, now) || Eligible(12, "project", false, false, old, now) {
+		t.Fatal("an ineligible group was judged")
+	}
+}

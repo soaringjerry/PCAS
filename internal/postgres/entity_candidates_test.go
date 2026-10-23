@@ -99,7 +99,7 @@ func TestEntityCandidatesTranslationAbbreviationKeepAndUndo(t *testing.T) {
 			if err := (aliasscan.Service{Store: s.AliasScanStore(), Generator: jobCalls(s)}).Process(ctx, j); err != nil {
 				t.Fatal(err)
 			}
-			var input interpstore.EntityCandidateBatch
+			var input aliasscan.Batch
 			prompt := f.last(t).Prompt
 			if err := json.Unmarshal([]byte(prompt), &input); err != nil || len(input.Entities) != 2 || input.Scope != tc.kind {
 				t.Fatal("list", input, err)
@@ -268,12 +268,12 @@ func TestEntityCandidatesCrossTypeAndGroupBookmarks(t *testing.T) {
 }
 
 func TestEntityCandidatesBatchCoverageAndTypeBoundaries(t *testing.T) {
-	names := make([]interpstore.EntityCandidateName, 301)
+	names := make([]aliasscan.Name, 301)
 	for i := range names {
-		names[i] = interpstore.EntityCandidateName{Type: "place", Name: fmt.Sprintf("虚构名字%03d", i), MemoryCount: 1, Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.EntityKind}}
+		names[i] = aliasscan.Name{Type: "place", Name: fmt.Sprintf("虚构名字%03d", i), MemoryCount: 1, Ref: memory.Ref{ID: memory.NewID(), Version: 1, Kind: memory.EntityKind}}
 	}
 	names[0].Name, names[300].Name = "蓝沙湾", "Azure Quay"
-	batches := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
+	batches := aliasscan.Batches(names, kernel.EntityCompareVersion)
 	covered := map[string]bool{}
 	for _, batch := range batches {
 		if len(batch.Entities) > 200 {
@@ -457,17 +457,17 @@ func TestEntityCandidatesThreeNamesKeepChineseAndUndoInReverse(t *testing.T) {
 func TestEntityCandidatesInitialCatalogueCallEstimate(t *testing.T) {
 	// Supplied inventory sizes only; all names/IDs and counts are fictitious.
 	// Match the catalogue's ORDER BY entity_type,name,id before partitioning.
-	names := []interpstore.EntityCandidateName{}
+	names := []aliasscan.Name{}
 	for _, group := range []struct {
 		kind string
 		n    int
 	}{{"organization", 323}, {"person", 92}, {"place", 251}, {"project", 47}, {"topic", 225}} {
 		for i := range group.n {
-			names = append(names, interpstore.EntityCandidateName{Type: group.kind, Name: fmt.Sprintf("虚构名单%04d", i), MemoryCount: 1, Ref: memory.Ref{ID: memory.NewID(), Kind: memory.EntityKind, Version: 1}})
+			names = append(names, aliasscan.Name{Type: group.kind, Name: fmt.Sprintf("虚构名单%04d", i), MemoryCount: 1, Ref: memory.Ref{ID: memory.NewID(), Kind: memory.EntityKind, Version: 1}})
 		}
 	}
 	counts := map[string]int{}
-	batches := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
+	batches := aliasscan.Batches(names, kernel.EntityCompareVersion)
 	for _, batch := range batches {
 		counts[batch.Scope]++
 	}

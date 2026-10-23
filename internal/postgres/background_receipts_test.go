@@ -143,16 +143,16 @@ func TestPersistentBackgroundFailureKeepsIncreasingAttempts(t *testing.T) {
 }
 
 func TestNameScanKeepsUnaffectedBlocksAcrossCapacityBoundary(t *testing.T) {
-	names := make([]interpstore.EntityCandidateName, 200)
+	names := make([]aliasscan.Name, 200)
 	for i := range names {
-		names[i] = interpstore.EntityCandidateName{Type: "person", Name: fmt.Sprintf("Fictitious person %03d", i), Ref: memory.Ref{Kind: memory.EntityKind, ID: memory.NewID(), Version: 1}, MemoryCount: 1, Positions: map[string]int64{"person": int64(i)}}
+		names[i] = aliasscan.Name{Type: "person", Name: fmt.Sprintf("Fictitious person %03d", i), Ref: memory.Ref{Kind: memory.EntityKind, ID: memory.NewID(), Version: 1}, MemoryCount: 1, Positions: map[string]int64{"person": int64(i)}}
 	}
-	before := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
+	before := aliasscan.Batches(names, kernel.EntityCompareVersion)
 	if len(before) != 3 {
 		t.Fatal("self and cross blocks missing", len(before))
 	}
-	names = append(names, interpstore.EntityCandidateName{Type: "person", Name: "Fictitious person 200", Ref: memory.Ref{Kind: memory.EntityKind, ID: memory.NewID(), Version: 1}, MemoryCount: 1, Positions: map[string]int64{"person": 200}})
-	after := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
+	names = append(names, aliasscan.Name{Type: "person", Name: "Fictitious person 200", Ref: memory.Ref{Kind: memory.EntityKind, ID: memory.NewID(), Version: 1}, MemoryCount: 1, Positions: map[string]int64{"person": 200}})
+	after := aliasscan.Batches(names, kernel.EntityCompareVersion)
 	markers := map[string]bool{}
 	for _, b := range after {
 		markers[b.Marker] = true
@@ -166,7 +166,7 @@ func TestNameScanKeepsUnaffectedBlocksAcrossCapacityBoundary(t *testing.T) {
 		names[i].MemoryCount += 10
 		names[i].Ref.Version++
 	}
-	counted := interpstore.EntityCandidateBatches(names, kernel.EntityCompareVersion)
+	counted := aliasscan.Batches(names, kernel.EntityCompareVersion)
 	for _, b := range counted {
 		if !markers[b.Marker] {
 			t.Fatal("memory counts or audit versions invalidated name receipt")
@@ -184,7 +184,7 @@ func TestLegacyNameScanReceiptTransfersWithoutAnotherModelCall(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		old := interpstore.EntityCandidateBatchesFor(names, kernel.EntityCompareVersion, true)
+		old := aliasscan.BatchesFor(names, kernel.EntityCompareVersion, true)
 		if len(old) != 1 {
 			t.Fatal("legacy fixture", len(old))
 		}

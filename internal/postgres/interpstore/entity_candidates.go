@@ -2,10 +2,8 @@ package interpstore
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -19,24 +17,9 @@ import (
 
 const EntityCandidatesStage = aliasscan.Stage
 
-type EntityCandidateName struct {
-	Positions   map[string]int64 `json:"-"`
-	N           int              `json:"n"`
-	Type        string           `json:"type"`
-	Name        string           `json:"name"`
-	MemoryCount int              `json:"memoryCount"`
-	Ref         memory.Ref       `json:"-"`
-	Protected   bool             `json:"-"` // withdrawn merge: don't remerge under the same rule
-}
-type EntityCandidateBatch struct {
-	Scope    string                `json:"scope"`
-	Entities []EntityCandidateName `json:"entities"`
-	Marker   string                `json:"-"`
-}
-
 // Count current claims once, independently of the ten-memory confirmation
 // sample. Both subject and mention membership count, without double counting.
-func EntityCandidateNamesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) ([]EntityCandidateName, error) {
+func EntityCandidateNamesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) ([]aliasscan.Name, error) {
 	rows, err := tx.Query(ctx, `WITH current_claims AS MATERIALIZED (
  SELECT r.id,r.version,c.subject_id FROM claims cl
  JOIN memory_records r ON(r.owner_id,r.id)=(cl.owner_id,cl.id)
@@ -61,9 +44,9 @@ func EntityCandidateNamesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ver
 		return nil, err
 	}
 	defer rows.Close()
-	out := []EntityCandidateName{}
+	out := []aliasscan.Name{}
 	for rows.Next() {
-		e := EntityCandidateName{Ref: memory.Ref{Kind: memory.EntityKind}}
+		e := aliasscan.Name{Ref: memory.Ref{Kind: memory.EntityKind}}
 		if err := rows.Scan(&e.Ref.ID, &e.Ref.Version, &e.Type, &e.Name, &e.MemoryCount, &e.Positions, &e.Protected); err != nil {
 			return nil, err
 		}
@@ -75,99 +58,6 @@ func EntityCandidateNamesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ver
 }
 
 func EntityPairTypesAllowed(a, b string) bool { return aliasscan.PairTypesAllowed(a, b) }
-
-// Up to 200 names are sent together. Larger lists use every pair of 100-name
-// blocks, so EVERY pair can meet, even across languages or distant positions.
-// No ordering heuristic can permanently separate translations.
-func EntityCandidateBatches(names []EntityCandidateName, version int) []EntityCandidateBatch {
-	return EntityCandidateBatchesFor(names, version, false)
-}
-
-// Legacy batches are reconstructed only to transfer still-matching paid receipts.
-func EntityCandidateBatchesFor(names []EntityCandidateName, version int, legacy bool) []EntityCandidateBatch {
-	out := []EntityCandidateBatch{}
-	for _, scope := range []string{"person", "place", "organization", "topic", "project", "place_topic", "organization_topic"} {
-		list := []EntityCandidateName{}
-		for _, e := range names {
-			if e.Type == scope || scope == "place_topic" && kernel.OneOf(e.Type, "place", "topic") || scope == "organization_topic" && kernel.OneOf(e.Type, "organization", "topic") {
-				list = append(list, e)
-			}
-		}
-		add := func(batch []EntityCandidateName) {
-			// Cross-type passes require both types; unused entities alone cannot
-			// be confirmed, but still accompany the full current-name list.
-			eligible := false
-			for i, a := range batch {
-				for _, b := range batch[i+1:] {
-					if !a.Protected && !b.Protected && (a.Type == b.Type && scope == a.Type || a.Type != b.Type && EntityPairTypesAllowed(a.Type, b.Type)) {
-						eligible = true
-					}
-				}
-			}
-			if !eligible {
-				return
-			}
-			entities := append([]EntityCandidateName{}, batch...)
-			refs := make([]memory.Ref, len(entities))
-			for i := range entities {
-				entities[i].N = i + 1
-				refs[i] = entities[i].Ref
-			}
-			b := EntityCandidateBatch{Scope: scope, Entities: entities}
-			identities := []any{}
-			for _, e := range entities {
-				identities = append(identities, []any{e.Ref.ID, e.Type, e.Name})
-			}
-			hash := sha256.Sum256(kernel.JSON([]any{scope, identities}))
-			if legacy {
-				hash = sha256.Sum256(kernel.JSON([]any{b, refs}))
-			}
-			b.Marker = fmt.Sprintf("%s:%d:seen:%x", EntityCandidatesStage, version, hash)
-			out = append(out, b)
-		}
-		if legacy && len(list) <= 200 {
-			add(list)
-			continue
-		}
-		stable := false
-		for _, e := range list {
-			if _, ok := e.Positions[scope]; ok {
-				stable = true
-			}
-		}
-		blocks := map[int64][]EntityCandidateName{}
-		keys := []int64{}
-		for i, e := range list {
-			position := int64(i)
-			if stable {
-				position = e.Positions[scope]
-			}
-			key := position / 100
-			if blocks[key] == nil {
-				keys = append(keys, key)
-			}
-			blocks[key] = append(blocks[key], e)
-		}
-		sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
-		for _, key := range keys {
-			sort.SliceStable(blocks[key], func(i, j int) bool { return blocks[key][i].Positions[scope] < blocks[key][j].Positions[scope] })
-		}
-		for i, a := range keys {
-			for _, b := range keys[i:] {
-				if legacy && a == b {
-					continue
-				}
-				batch := append([]EntityCandidateName{}, blocks[a]...)
-				if a != b {
-					batch = append(batch, blocks[b]...)
-				}
-				add(batch)
-			}
-		}
-
-	}
-	return out
-}
 
 func EntityCandidatePairMarker(a, b memory.Ref, version int) string {
 	if a.ID > b.ID {
@@ -193,7 +83,7 @@ func entityCandidateMarkersTx(ctx context.Context, tx pgx.Tx, owner memory.ID, v
 	return out, rows.Err()
 }
 
-func NextEntityCandidateBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) (*EntityCandidateBatch, error) {
+func NextEntityCandidateBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version int) (*aliasscan.Batch, error) {
 	// Positions never move when names or memory counts change.
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':scan-members:'||$1,0))", string(owner)); err != nil {
 		return nil, err
@@ -215,13 +105,13 @@ func NextEntityCandidateBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID,
 	if err != nil {
 		return nil, err
 	}
-	matchedLegacy := []EntityCandidateBatch{}
-	for _, b := range EntityCandidateBatchesFor(names, version, true) {
+	matchedLegacy := []aliasscan.Batch{}
+	for _, b := range aliasscan.BatchesFor(names, version, true) {
 		if seen[b.Marker] {
 			matchedLegacy = append(matchedLegacy, b)
 		}
 	}
-	for _, b := range EntityCandidateBatches(names, version) {
+	for _, b := range aliasscan.Batches(names, version) {
 		if !seen[b.Marker] {
 			for _, old := range matchedLegacy {
 				if old.Scope != b.Scope {
@@ -256,7 +146,7 @@ func NextEntityCandidateBatchTx(ctx context.Context, tx pgx.Tx, owner memory.ID,
 	return nil, nil
 }
 
-func enqueueEntityCandidatesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time, version int, prepared ...*EntityCandidateBatch) (bool, error) {
+func enqueueEntityCandidatesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time, version int, prepared ...*aliasscan.Batch) (bool, error) {
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':scan-queue:'||$1,0))", string(owner)); err != nil {
 		return false, err
 	}
@@ -264,7 +154,7 @@ func enqueueEntityCandidatesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM memory_jobs WHERE owner_id=$1 AND stage LIKE $2 AND state IN('queued','leased'))`, string(owner), EntityCandidatesStage+":%").Scan(&pending); err != nil || pending {
 		return false, err
 	}
-	var batch *EntityCandidateBatch
+	var batch *aliasscan.Batch
 	var err error
 	if len(prepared) > 0 {
 		batch = prepared[0]
@@ -322,7 +212,7 @@ func (s *Interp) ScheduleEntityCandidates(ctx context.Context, now time.Time) (i
 	}
 	count := 0
 	for _, owner := range owners {
-		var batch *EntityCandidateBatch
+		var batch *aliasscan.Batch
 		if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			var e error
 			batch, e = NextEntityCandidateBatchTx(ctx, tx, owner, kernel.EntityCompareVersion)
@@ -383,7 +273,7 @@ func (a aliasScanSession) Ready() error {
 }
 
 func (a aliasScanSession) NextBatch(ctx context.Context, j worker.Job) (json.RawMessage, []memory.Ref, bool, error) {
-	var batch *EntityCandidateBatch
+	var batch *aliasscan.Batch
 	err := pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
 		var e error
 		batch, e = NextEntityCandidateBatchTx(ctx, tx, j.OwnerID, kernel.EntityCompareVersion)
@@ -397,7 +287,7 @@ func (a aliasScanSession) NextBatch(ctx context.Context, j worker.Job) (json.Raw
 		refs = append(refs, e.Ref)
 	}
 	return kernel.JSON(struct {
-		*EntityCandidateBatch
+		*aliasscan.Batch
 		Marker string `json:"marker"`
 	}{batch, batch.Marker}), refs, true, nil
 }
@@ -417,13 +307,13 @@ func (a aliasScanSession) DiscardResult(ctx context.Context, j worker.Job) error
 
 func (a aliasScanSession) Apply(ctx context.Context, j worker.Job, record json.RawMessage, refs []memory.Ref, fn func(aliasscan.Unit) error) error {
 	var input struct {
-		EntityCandidateBatch
+		aliasscan.Batch
 		Marker string `json:"marker"`
 	}
 	if err := json.Unmarshal(record, &input); err != nil || len(refs) != len(input.Entities) {
 		return memory.ErrInvalid
 	}
-	batch := input.EntityCandidateBatch
+	batch := input.Batch
 	batch.Marker = input.Marker
 	for i := range batch.Entities {
 		batch.Entities[i].Ref = refs[i]
@@ -443,7 +333,7 @@ type aliasScanUnit struct {
 	ctx   context.Context
 	tx    pgx.Tx
 	job   worker.Job
-	batch EntityCandidateBatch
+	batch aliasscan.Batch
 }
 
 func (u aliasScanUnit) ProposePair(a, b int) error {

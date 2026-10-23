@@ -30,21 +30,14 @@ const DateTidyStage = datereview.Stage
 // Jobs past the hour's budget wait for the next hour; none is dropped.
 const DateTidyHourly = datereview.HourlyCalls
 
-// Open to-dos and ideas shown so the model does not make a second copy. The
-// secretary is shown the same 40 and 20 (2.6 C6); what is left out is counted.
-const dateTidyTaskTitles = 40
-const dateTidyIdeaTitles = 20
-const dateTidyTextCharacters = 1200
-
-// Other open rows of the table with the same title, so one thing read twice
-// is shown once. The newest five; a title repeated more often than that is a
-// fixed arrangement, which has its own rule.
-const dateTidySameTitles = 5
-const dateTidySameCharacters = 300
-
-// A dated row is left alone until its day has been over for this long, so
-// something due last night is still the user's to tick on the home page.
-const dateTidyPastAfter = 24 * time.Hour
+const (
+	dateTidyTaskTitles     = datereview.TaskTitles
+	dateTidyIdeaTitles     = datereview.IdeaTitles
+	dateTidyTextCharacters = datereview.TextCharacters
+	dateTidySameTitles     = datereview.SameTitles
+	dateTidySameCharacters = datereview.SameCharacters
+	dateTidyPastAfter      = datereview.PastAfter
+)
 
 // The input assembly below is the context builder of the date review service.
 type dateTidyEntry = datereview.Entry

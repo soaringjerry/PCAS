@@ -135,17 +135,25 @@ func (u reminderUnit) SaveItem(ctx context.Context, item workspace.Item) error {
 // Reusing the existing occurrence key preserves restart and deletion behavior.
 func SuppressRestoredRemindersTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, current, restored workspace.Item, now time.Time) error {
 	for _, trigger := range reminder.Suppressed(current, restored, now) {
-		at, _ := time.Parse(time.RFC3339, trigger.NextAt)
-		// Preserve an existing real notice and every delivery/dismissal field.
-		// Only a newly inserted suppression placeholder is hidden from views.
-		_, err := tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason,delivered)
-			VALUES($1,$2,$3,$4,$5,'{"_suppressed":true,"_suppressionOnly":true}'::jsonb)
-			ON CONFLICT(owner_id,thing_id,trigger_id,due_at) DO UPDATE
-			SET delivered=workspace_notices.delivered || '{"_suppressed":true}'::jsonb
-			WHERE workspace_notices.dismissed_at IS NULL`, string(scope.OwnerID), restored.ID, trigger.ID, at, trigger.Description)
-		if err != nil {
+		if err := SuppressNoticeTx(ctx, tx, scope, restored, trigger); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// SuppressNoticeTx keeps the occurrence of a passed trigger from being sent.
+// It preserves an existing real notice and every delivery or dismissal
+// field; only a newly inserted placeholder is hidden from views.
+func SuppressNoticeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item workspace.Item, trigger workspace.Trigger) error {
+	at, err := time.Parse(time.RFC3339, trigger.NextAt)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason,delivered)
+		VALUES($1,$2,$3,$4,$5,'{"_suppressed":true,"_suppressionOnly":true}'::jsonb)
+		ON CONFLICT(owner_id,thing_id,trigger_id,due_at) DO UPDATE
+		SET delivered=workspace_notices.delivered || '{"_suppressed":true}'::jsonb
+		WHERE workspace_notices.dismissed_at IS NULL`, string(scope.OwnerID), item.ID, trigger.ID, at, trigger.Description)
+	return err
 }

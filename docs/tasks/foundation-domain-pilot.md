@@ -168,6 +168,8 @@ How a notice is pushed is `internal/notify`: `notify.Window` (24 hours), `Delive
 
 The end of a run is decided in the deputy domain: `deputy.Finish` writes the output, the failure text, the stale and revoked cases, the groups the run did not read, the notice, and what became of each paid call; `deputy.FinishRevision` does the same for a paid revision with its own checks. The texts of an interrupted run are `deputy` constants, which the journal recovery matches as a parameter instead of a copied sentence.
 
+An undo is decided by `command.Undo`: once, within thirty days, while no later action changed the rows and no queued run started; a project that the secretary made returns its items to no project; a reopened task keeps its passed reminders silent. `commandstore.undoUnit` keeps the fingerprints, the locks, and the restores.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

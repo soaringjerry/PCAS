@@ -174,6 +174,8 @@ The answer for one source is written by `extraction.ApplySource`: each item is d
 
 The memory that a turn or a run is given is completed by `contextbuilder.FinishUse`: the groups the agent may read, the project's handover and group, the requirements that apply everywhere within 6,000 characters (confirmed, then repeated, then the latest), the remembered dates, and the recalled memories; a scoped requirement waits for recall. `contextbuilder.ChooseGroups` proposes groups by reciprocal rank. `usestore.useUnit` reads.
 
+The owner's cards of a turn (`secretary.Cards`, `secretary.Links`), what a turn reads of an attachment and its receipt (`secretary.AttachmentInput`, `secretary.AttachmentReceipt`), and the closing of a remembered date (in `secretary.Execute`) are in the secretary domain. `workspace.DeadlineClose` names how a date is closed.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

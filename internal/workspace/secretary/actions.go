@@ -3,6 +3,7 @@ package secretary
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -38,8 +39,18 @@ type Workspace interface {
 	// ResolveProject returns the project that the model named: an alias, no
 	// project, or a new project that is made as its own action.
 	ResolveProject(ctx context.Context, value string, aliases map[string]workspace.Item) (string, error)
-	// CloseDate closes a remembered date. That write belongs to memory.
-	CloseDate(ctx context.Context, action Action) (workspace.DeskReceipt, error)
+	// CheckOnly is true in a check-only turn.
+	CheckOnly(ctx context.Context) bool
+	// Shown returns a memory that the turn showed, by its alias.
+	Shown(ctx context.Context, alias string) (workspace.Memory, bool)
+	// RememberedDate is the title of the first date of a memory and the
+	// memory version it came from; found is false when it has none.
+	RememberedDate(ctx context.Context, memoryID string) (title string, version int, found bool, err error)
+	// MemoryActive fails when the memory is gone.
+	MemoryActive(ctx context.Context, memoryID string) error
+	// CloseRememberedDate closes the date of the memory version. That write
+	// belongs to memory; memory.ErrConflict means the memory changed.
+	CloseRememberedDate(ctx context.Context, memoryID string, version int, as string) error
 	// Document returns a document that the turn showed, by its alias.
 	Document(alias string) (workspace.Doc, bool)
 	// DelegateTurns returns the turns that a deputy run gets as its history.
@@ -133,7 +144,7 @@ func Execute(ctx context.Context, w Workspace, a Action, env Env) (workspace.Des
 	}
 	switch a.Op {
 	case "close_date":
-		return w.CloseDate(ctx, a)
+		return closeDate(ctx, w, a)
 	case "create_task", "create_idea", "create_project":
 		title := strings.TrimSpace(a.Title)
 		if a.Op == "create_project" {
@@ -469,3 +480,36 @@ func Execute(ctx context.Context, w Workspace, a Action, env Env) (workspace.Des
 // or turned into a to-do. It marks the memory version the same way the home
 // page's circle does, so the date leaves the home page and the list the
 // secretary is shown; the memory stays and the action can be undone.
+
+// closeDate closes a remembered date as done, dropped, or turned into a
+// task. A check-only turn makes no such mark: its cleanup restores items,
+// not memories.
+func closeDate(ctx context.Context, w Workspace, a Action) (workspace.DeskReceipt, error) {
+	if w.CheckOnly(ctx) {
+		return Skipped(a.Op, "检查模式下不改记忆上的日期"), nil
+	}
+	as, ok := workspace.DeadlineClose(a.As)
+	if !ok {
+		return Skipped(a.Op, "没说清是做完了还是不要了"), nil
+	}
+	m, ok := w.Shown(ctx, a.Ref)
+	if !ok {
+		return Skipped(a.Op, "找不到说的是哪一条"), nil
+	}
+	title, version, found, err := w.RememberedDate(ctx, m.ID)
+	if err != nil {
+		return workspace.DeskReceipt{Op: a.Op, Status: "done"}, err
+	}
+	if !found {
+		return Skipped(a.Op, "这条记忆上没有期限或安排"), nil
+	}
+	if w.MemoryActive(ctx, m.ID) != nil {
+		return Skipped(a.Op, "这条记忆已经不在了"), nil
+	}
+	if err := w.CloseRememberedDate(ctx, m.ID, version, as); errors.Is(err, memory.ErrConflict) {
+		return Skipped(a.Op, "这条记忆刚改过，再说一遍"), nil
+	} else if err != nil {
+		return workspace.DeskReceipt{Op: a.Op, Status: "done"}, err
+	}
+	return workspace.DeskReceipt{Op: a.Op, Status: "done", Text: map[string]string{"done": "记下做完了：", "dropped": "不再提：", "task": "转成了待办，不再单独提："}[as] + title}, nil
+}

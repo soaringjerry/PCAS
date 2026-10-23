@@ -27,14 +27,6 @@ type deadlineCompletion struct {
 
 var deadlineCompletionKeys = []string{"deadline_completed", "deadline_completed_version", "deadline_completed_at", "deadline_closed_as"}
 
-// validDeadlineClose normalises how a date is closed; empty means it was met.
-func ValidDeadlineClose(as string) (string, bool) {
-	if as == "" {
-		return "done", true
-	}
-	return as, kernel.OneOf(as, "done", "dropped", "task")
-}
-
 func deadlineCompletionFromScope(version int, data []byte) (deadlineCompletion, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -66,7 +58,7 @@ func (v deadlineCompletion) hash() string {
 }
 
 func CompleteDeadlineTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, claim string, version int, as string) error {
-	as, ok := ValidDeadlineClose(as)
+	as, ok := workspace.DeadlineClose(as)
 	if !ok {
 		return memory.ErrInvalid
 	}

@@ -160,8 +160,30 @@ func (w *secretaryWorkspace) ResolveProject(ctx context.Context, value string, a
 	return w.store.secretaryProjectTx(w.collecting(ctx), w.tx, w.scope, value, aliases)
 }
 
-func (w *secretaryWorkspace) CloseDate(ctx context.Context, a SecretaryAction) (workspace.DeskReceipt, error) {
-	return w.store.closeDateActionTx(w.collecting(ctx), w.tx, w.scope, a)
+func (w *secretaryWorkspace) CheckOnly(ctx context.Context) bool { return actionlog.SmokeID(ctx) != "" }
+
+func (w *secretaryWorkspace) Shown(ctx context.Context, alias string) (workspace.Memory, bool) {
+	memories, _ := ctx.Value(secretaryMemoriesKey{}).(map[string]workspace.Memory)
+	m, ok := memories[alias]
+	return m, ok
+}
+
+func (w *secretaryWorkspace) RememberedDate(ctx context.Context, memoryID string) (string, int, bool, error) {
+	var title string
+	var version int
+	err := w.tx.QueryRow(ctx, "SELECT title,claim_version FROM deadlines WHERE owner_id=$1 AND claim_id=$2 ORDER BY id LIMIT 1", string(w.scope.OwnerID), memoryID).Scan(&title, &version)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", 0, false, nil
+	}
+	return title, version, err == nil, err
+}
+
+func (w *secretaryWorkspace) MemoryActive(ctx context.Context, memoryID string) error {
+	return intakestore.ActiveClaim(ctx, w.tx, w.scope, memoryID)
+}
+
+func (w *secretaryWorkspace) CloseRememberedDate(ctx context.Context, memoryID string, version int, as string) error {
+	return workstore.CompleteDeadlineTx(w.collecting(ctx), w.tx, w.scope, memoryID, version, as)
 }
 
 func (w *secretaryWorkspace) Document(alias string) (workspace.Doc, bool) {
@@ -170,40 +192,3 @@ func (w *secretaryWorkspace) Document(alias string) (workspace.Doc, bool) {
 }
 
 func (w *secretaryWorkspace) DelegateTurns() []string { return w.delegateTurns }
-
-func (s *Desk) closeDateActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, a SecretaryAction) (workspace.DeskReceipt, error) {
-	receipt := workspace.DeskReceipt{Op: a.Op, Status: "done"}
-	if actionlog.SmokeID(ctx) != "" {
-		// A check-only turn is cleaned up by restoring item documents; a mark on
-		// a memory is outside what that cleanup can put back, so it is not made.
-		return secretary.Skipped(a.Op, "检查模式下不改记忆上的日期"), nil
-	}
-	as, ok := workstore.ValidDeadlineClose(a.As)
-	if !ok {
-		return secretary.Skipped(a.Op, "没说清是做完了还是不要了"), nil
-	}
-	memories, _ := ctx.Value(secretaryMemoriesKey{}).(map[string]workspace.Memory)
-	m, ok := memories[a.Ref]
-	if !ok {
-		return secretary.Skipped(a.Op, "找不到说的是哪一条"), nil
-	}
-	var title string
-	var version int
-	err := tx.QueryRow(ctx, "SELECT title,claim_version FROM deadlines WHERE owner_id=$1 AND claim_id=$2 ORDER BY id LIMIT 1", string(scope.OwnerID), m.ID).Scan(&title, &version)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return secretary.Skipped(a.Op, "这条记忆上没有期限或安排"), nil
-	}
-	if err != nil {
-		return receipt, err
-	}
-	if err = intakestore.ActiveClaim(ctx, tx, scope, m.ID); err != nil {
-		return secretary.Skipped(a.Op, "这条记忆已经不在了"), nil
-	}
-	if err = workstore.CompleteDeadlineTx(ctx, tx, scope, m.ID, version, as); errors.Is(err, memory.ErrConflict) {
-		return secretary.Skipped(a.Op, "这条记忆刚改过，再说一遍"), nil
-	} else if err != nil {
-		return receipt, err
-	}
-	receipt.Text = map[string]string{"done": "记下做完了：", "dropped": "不再提：", "task": "转成了待办，不再单独提："}[as] + title
-	return receipt, nil
-}

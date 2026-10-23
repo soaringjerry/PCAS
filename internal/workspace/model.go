@@ -504,3 +504,15 @@ func NewItem(kind, title string) Item {
 	}
 	return Item{ID: string(memory.NewID()), Kind: kind, Version: 1, Title: title, Name: title, Status: status, DependsOn: []string{}, Checklist: []Check{}, Triggers: []Trigger{}, Sources: []SourceRef{}, History: []Revision{{At: at, By: "user", Summary: "创建"}}, Evolution: []Revision{{At: at, By: "user", Summary: "提出"}}, Conditions: []Condition{}, RemindersOn: true, NextSteps: []string{}, CreatedAt: at, UpdatedAt: at}
 }
+
+// DeadlineClose is how a remembered date is closed: done, dropped, or turned
+// into a task. An empty value means it was met.
+func DeadlineClose(as string) (string, bool) {
+	switch as {
+	case "":
+		return "done", true
+	case "done", "dropped", "task":
+		return as, true
+	}
+	return as, false
+}

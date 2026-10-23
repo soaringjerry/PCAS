@@ -29,12 +29,6 @@ func MemoryTier(ctx context.Context, text, fallback string) string {
 	}
 	return fallback
 }
-func MemoryTierForStatus(tier string, ready bool) string {
-	if tier == "heavy" && !ready {
-		return "medium"
-	}
-	return tier
-}
 
 type (
 	UseCoverage = contextbuilder.Coverage

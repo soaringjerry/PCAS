@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
@@ -48,13 +47,6 @@ func (s *Store) RunStatus(ctx context.Context, logger *slog.Logger) {
 		case <-timer.C:
 		}
 	}
-}
-
-func statusCardPriority(key string) int {
-	if strings.HasPrefix(key, "self:") {
-		return kernel.SelfCardPriority
-	}
-	return kernel.CardPriority
 }
 
 // Kept as a compatibility handler for pre-upgrade queue slots. Cards are frozen.

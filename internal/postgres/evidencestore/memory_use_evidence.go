@@ -48,12 +48,3 @@ func useEvidenceAnchorsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, cl
 	rows.Close()
 	return out, err
 }
-
-func useEvidenceRow(anchors map[memory.Ref]useEvidenceAnchor, ref memory.Ref, source *string, version, start, end *int) error {
-	a, ok := anchors[ref]
-	if !ok {
-		return pgx.ErrNoRows
-	}
-	*source, *version, *start, *end = a.source, a.version, a.start, a.end
-	return nil
-}

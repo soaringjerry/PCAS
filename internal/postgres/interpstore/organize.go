@@ -2,11 +2,9 @@ package interpstore
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/big"
 	"strings"
 	"time"
 
@@ -15,7 +13,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -406,50 +403,6 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 		return organize.Applied{}, err
 	}
 	return organize.Applied{Deferred: exhausted}, nil
-}
-
-// Organizing retries are automatic, including transaction recovery. Reserve a
-// fresh invocation through the shared budget policy, then bind it to the fenced
-// job. Each call's reservation ID also deduplicates its usage log.
-func (s *Interp) reserveOrganizeCost(ctx context.Context, j worker.Job, cost float64) (string, error) {
-	reserveCtx, cancel := context.WithTimeout(ctx, kernel.BackgroundWriteTimeout)
-	id, err := s.ReserveModelCostID(reserveCtx, j.OwnerID, cost, &j)
-	cancel()
-	if errors.Is(err, memory.ErrUnavailable) {
-		var timezone string
-		if err := s.Pool.QueryRow(ctx, "SELECT settings->>'timezone' FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID)).Scan(&timezone); err != nil {
-			return "", err
-		}
-		loc, err := time.LoadLocation(timezone)
-		if err != nil {
-			return "", err
-		}
-		jitter, err := rand.Int(rand.Reader, big.NewInt(int64(budgetstore.BudgetJitter)+1))
-		if err != nil {
-			return "", err
-		}
-		return "", &worker.JobError{Code: "budget_deferred", Until: budgetstore.NextBudgetDay(time.Now(), loc).Add(time.Duration(jitter.Int64())), NoAttempt: true}
-	}
-	if err != nil {
-		return "", kernel.BackgroundWriteError(ctx, err)
-	}
-	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := kernel.LockJob(ctx, tx, j); err != nil {
-			return err
-		}
-		_, err := tx.Exec(ctx, "UPDATE background_usage SET job_id=$3 WHERE owner_id=$1 AND id=$2", string(j.OwnerID), id, string(j.ID))
-		return err
-	})
-	if err != nil {
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		_, cleanupErr := s.Pool.Exec(cleanupCtx, "DELETE FROM background_usage WHERE owner_id=$1 AND id=$2", string(j.OwnerID), id)
-		if cleanupErr != nil {
-			return "", cleanupErr
-		}
-		return "", err
-	}
-	return id, nil
 }
 
 func FindOrganizeGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string) (memory.ID, error) {

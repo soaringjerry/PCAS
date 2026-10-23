@@ -180,7 +180,6 @@ func ParseHandover(text string, memories []kernel.CardMemory) (string, bool) {
 	}
 	return handover.Parse(text, trusts)
 }
-func emptyHandover() string { return handover.Empty() }
 
 // HandoverStore gives the global handover service its reads and writes.
 func (s *State) HandoverStore() handover.Store { return handoverStore{s} }

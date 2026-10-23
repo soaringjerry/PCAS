@@ -158,6 +158,10 @@ The context and the model input of a secretary turn are built in the secretary d
 
 A workspace command is applied by `command.Apply` in `internal/workspace/command`: the checks of each command, the delegation that makes a task and queues its draft, the quick note, the documents, the settings, the agents, the exclusion of a memory from an item, the samples, the retry of a failed job, and the deletion of an item. `commandstore.commandUnit` gives it its reads and writes. The memory commands, the run commands, and undo keep their storage entries, which the unit calls.
 
+The job flow of an imported conversation is in the extraction domain: `extraction.PrepareConversation` starts or restarts a run and returns the segment, `extraction.ApplyConversation` replaces or withdraws automatic memories, decides each item, records the processed messages, and queues the next segment, and `extraction.FailedConversation` marks the rest of a stopped run. `intakestore.conversationUnit` reads and writes under the owner lock and the job's lease.
+
+The source context of the memories that an input gives is chosen by `contextbuilder.Evidence`; `evidencestore` reads the anchors and the windows.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

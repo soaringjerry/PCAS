@@ -518,7 +518,7 @@ func mergeEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, merged, kept
 		return err
 	}
 	changes := kernel.JSON([]map[string]any{{"table": "entity_merge", "id": string(merged.ID), "before": snapshot, "afterHash": fingerprint, "rule": version}})
-	if _, err := tx.Exec(ctx, `INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'worker','合并同一实体的叫法',$3)`, string(owner), string(memory.NewID()), changes); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'worker',$4,$3)`, string(owner), string(memory.NewID()), changes, comparison.MergeSummary); err != nil {
 		return err
 	}
 	return nil

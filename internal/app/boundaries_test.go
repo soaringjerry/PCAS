@@ -150,23 +150,13 @@ func TestStoragePackagesHoldNoInstructions(t *testing.T) {
 
 // storageSentences are the string literals in Chinese that a storage file
 // still holds: words that the owner or the model reads. They belong to the
-// domain that decides them. A file may hold fewer, never more; a new file
-// holds none. Lower a count when its sentence leaves storage.
+// domain that decides them. Two stay inside SQL that builds them row by row:
+// the label of a source's best fragment in the recall query, and the text
+// of a receipt in the scrub of a deleted turn. A file may hold fewer, never
+// more; a new file holds none.
 var storageSentences = map[string]int{
-	"claimstore/claims.go":               1,
-	"claimstore/entities.go":             1,
-	"commandstore/compare_undo.go":       1,
-	"intakestore/attachments.go":         1,
-	"intakestore/connectors.go":          2,
-	"intakestore/editing.go":             2,
-	"intakestore/import_batches.go":      3,
-	"intakestore/retrieval.go":           1,
-	"interpstore/compare_entities.go":    1,
-	"notify.go":                          3,
-	"statestore/date_tidy.go":            1,
-	"statestore/status_read.go":          1,
-	"workspacestore/project_handover.go": 1,
-	"workstore/artifacts.go":             3,
+	"intakestore/editing.go":   1,
+	"intakestore/retrieval.go": 1,
 }
 
 func TestStorageWritesNoNewSentences(t *testing.T) {

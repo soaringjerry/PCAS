@@ -523,3 +523,6 @@ const ReauthorizeTitle = "事项内容需要重新授权或核验"
 
 // UnclassifiedScope is the scope of a requirement that is not classified yet.
 const UnclassifiedScope = "适用范围待归类"
+
+// ExpiredNote is added to the time note of a date that passed without being closed.
+const ExpiredNote = "已过期，不知是否完成"

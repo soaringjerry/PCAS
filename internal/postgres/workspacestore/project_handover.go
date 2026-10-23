@@ -297,7 +297,7 @@ func currentProjectEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 }
 
 func (s *Workspace) AdoptProjectMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run, item workspace.Item, text, actionID string, auto bool) error {
-	source, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "capture", ExternalID: "project-adoption:" + run.ID + ":" + actionID, ExternalVersion: "1", Title: "采纳项目进展", Text: text, MediaType: "text/plain"})
+	source, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "capture", ExternalID: "project-adoption:" + run.ID + ":" + actionID, ExternalVersion: "1", Title: projecthandover.AdoptionTitle, Text: text, MediaType: "text/plain"})
 	if err != nil {
 		return err
 	}

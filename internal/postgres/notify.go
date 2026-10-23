@@ -150,7 +150,7 @@ func (n *Notifier) SaveTelegram(ctx context.Context, scope memory.Scope, in work
 	if _, err := strconv.ParseInt(chatID, 10, 64); err != nil {
 		return false, notify.ErrTelegramSendFailed
 	}
-	if err := n.Telegram.SendTo(ctx, token, chatID, notify.Message{Title: "PCAS 提醒已连接", Body: time.Now().Format("2006-01-02 15:04 MST"), URL: n.PublicURL + "/settings"}); err != nil {
+	if err := n.Telegram.SendTo(ctx, token, chatID, notify.Message{Title: notify.ConnectedTitle, Body: time.Now().Format("2006-01-02 15:04 MST"), URL: n.PublicURL + "/settings"}); err != nil {
 		if errors.Is(err, notify.ErrTelegramTokenInvalid) {
 			return false, err
 		}
@@ -173,7 +173,7 @@ func (n *Notifier) TestNotify(ctx context.Context, scope memory.Scope) ([]string
 	if err != nil {
 		return nil, err
 	}
-	m := notify.Message{OwnerID: string(scope.OwnerID), NoticeID: string(memory.NewID()), Title: "PCAS 测试提醒", Body: time.Now().In(loc).Format("2006-01-02 15:04 MST") + " · 通知通道测试", URL: n.PublicURL + "/settings"}
+	m := notify.Message{OwnerID: string(scope.OwnerID), NoticeID: string(memory.NewID()), Title: notify.TestTitle, Body: notify.TestBody(time.Now().In(loc)), URL: n.PublicURL + "/settings"}
 	sent := []string{}
 	for _, channel := range n.Channels {
 		if channel.Send(ctx, m) == nil {

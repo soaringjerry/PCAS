@@ -218,3 +218,12 @@ func FinishRevision(ctx context.Context, u RevisionUnit, run workspace.Run, outp
 	}
 	return ending, rejection != ""
 }
+
+// The words of generated text whose inputs were removed.
+const (
+	// RemovedText replaces generated text whose inputs were deleted.
+	RemovedText = "已删除的生成内容"
+	// MixedWriting is why an older text that mixes the owner's writing with
+	// generated text was set aside.
+	MixedWriting = "旧版文字混有生成内容，已隔离；请检查并单独保存自己的文字。"
+)

@@ -9,6 +9,7 @@ package datereview
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -203,4 +204,9 @@ func apply(u Unit, job worker.Job, class string, input Input, clipped int, outpu
 		return err
 	}
 	return finish()
+}
+
+// TidiedSummary is the home page's line for the dates that a review put away.
+func TidiedSummary(n int) string {
+	return fmt.Sprintf("收拾了日程：%d 条过了期或不作数的，不再显示", n)
 }

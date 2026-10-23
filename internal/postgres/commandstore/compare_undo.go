@@ -78,7 +78,7 @@ func restoreMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id stri
 		return err
 	}
 	changes := kernel.JSON([]map[string]any{{"table": "claim_retirement", "id": id, "before": before, "afterHash": retirementFingerprint(after), "rule": kernel.CompareVersion}})
-	if _, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'command','恢复退出的记忆',$3)", string(scope.OwnerID), log.ID, changes); err != nil {
+	if _, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'command',$4,$3)", string(scope.OwnerID), log.ID, changes, comparison.RestoreSummary); err != nil {
 		return err
 	}
 	return nil

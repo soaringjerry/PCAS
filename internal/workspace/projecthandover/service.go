@@ -269,3 +269,7 @@ func apply(u Unit, project string, input Input, output string) (invalidOutput bo
 	}
 	return false, u.Acknowledge()
 }
+
+// AdoptionTitle is the title of the record that remembers adopted progress
+// of a project.
+const AdoptionTitle = "采纳项目进展"

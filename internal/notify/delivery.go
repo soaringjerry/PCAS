@@ -71,3 +71,13 @@ func Compose(n Notice, publicURL string) Message {
 	}
 	return m
 }
+
+// The titles of the messages that check a channel.
+const (
+	ConnectedTitle = "PCAS 提醒已连接"
+	TestTitle      = "PCAS 测试提醒"
+	testBody       = "通知通道测试"
+)
+
+// TestBody is the body of a test message sent at now.
+func TestBody(now time.Time) string { return now.Format("2006-01-02 15:04 MST") + " · " + testBody }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/connectors"
+	"github.com/soaringjerry/PCAS/internal/input/attachment"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
@@ -95,7 +96,7 @@ func (s *Intake) importArchiveReader(ctx context.Context, scope memory.Scope, na
 	if err == nil {
 		out.Refs = append(out.Refs, ref)
 		out.Duplicates = 1
-		out.Gaps = append(archive.Preview.Gaps, "原始归档已保留，记录正在后台解析；处理进度可在来源中查看")
+		out.Gaps = append(archive.Preview.Gaps, connectors.GapParsing)
 		return out, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -105,7 +106,7 @@ func (s *Intake) importArchiveReader(ctx context.Context, scope memory.Scope, na
 	if err != nil {
 		return out, err
 	}
-	in := memory.IngestRequest{Connector: namespace, ExternalID: archive.Hash, ExternalVersion: "1", Title: name, MediaType: "application/x-pcas-archive", Text: "[附件原件；正文尚未解析。校验标识：" + archive.Hash + "]"}
+	in := memory.IngestRequest{Connector: namespace, ExternalID: archive.Hash, ExternalVersion: "1", Title: name, MediaType: "application/x-pcas-archive", Text: attachment.Placeholder(archive.Hash)}
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := s.EnsureOwner(ctx, tx, scope); err != nil {
 			return err
@@ -172,7 +173,7 @@ func (s *Intake) importArchiveReader(ctx context.Context, scope memory.Scope, na
 		defer cancel()
 		_, _ = s.Pool.Exec(cleanupCtx, "INSERT INTO blob_cleanup_jobs(owner_id,blob_key) VALUES($1,$2) ON CONFLICT DO NOTHING", string(scope.OwnerID), key)
 	}
-	out.Gaps = append(archive.Preview.Gaps, "原始归档已保留，记录正在后台解析；处理进度可在来源中查看")
+	out.Gaps = append(archive.Preview.Gaps, connectors.GapParsing)
 	return out, err
 }
 

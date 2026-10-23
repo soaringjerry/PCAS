@@ -1,6 +1,5 @@
 // Package projectfile owns the rules of a file that the owner keeps in a
-// project: its media type, the placeholder text of an original that is not
-// read yet, its processing state, and the reason the owner reads when its
+// project: its media type, its processing state, and the reason the owner reads when its
 // processing stopped. Storage keeps the file, its record, and its jobs.
 package projectfile
 
@@ -30,11 +29,6 @@ func Media(name, declared string, head func() []byte) string {
 		}
 	}
 	return media
-}
-
-// Placeholder is the text of an original that is not read yet.
-func Placeholder(hash string) string {
-	return "[附件原件；正文尚未解析。校验标识：" + hash + "]"
 }
 
 // Job is one processing job of a file or of a text derived from it.

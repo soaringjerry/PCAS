@@ -3,7 +3,6 @@ package statestore
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -307,6 +306,6 @@ func TidiedDatesTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (*workspa
 	if err = rows.Err(); err != nil || len(out.Items) == 0 {
 		return nil, err
 	}
-	out.Text = fmt.Sprintf("收拾了日程：%d 条过了期或不作数的，不再显示", len(out.Items))
+	out.Text = datereview.TidiedSummary(len(out.Items))
 	return &out, nil
 }

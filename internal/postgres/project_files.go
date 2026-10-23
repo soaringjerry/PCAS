@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/blob"
+	"github.com/soaringjerry/PCAS/internal/input/attachment"
 	"github.com/soaringjerry/PCAS/internal/input/projectfile"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
@@ -102,7 +103,7 @@ func (s *Store) UploadProjectFile(ctx context.Context, scope memory.Scope, item,
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		in := memory.IngestRequest{Connector: "project-file", ExternalID: project + ":" + hash, ExternalVersion: "1", Title: name, MediaType: media, Text: projectfile.Placeholder(hash)}
+		in := memory.IngestRequest{Connector: "project-file", ExternalID: project + ":" + hash, ExternalVersion: "1", Title: name, MediaType: media, Text: attachment.Placeholder(hash)}
 		result, err := s.IngestAttachmentTx(ctx, tx, scope, in, key)
 		if err != nil {
 			return err

@@ -124,3 +124,10 @@ func CheckConfiguration(in ConfigureRequest) error {
 	}
 	return nil
 }
+
+// What an import says about its records, in the owner's words.
+const (
+	GapParsing     = "原始归档已保留，记录正在后台解析；处理进度可在来源中查看"
+	GapBlocked     = "已删除的来源被阻止重新导入"
+	GapArchiveGone = "原始归档因包含已删除内容而清理；其余独立记录可展开"
+)

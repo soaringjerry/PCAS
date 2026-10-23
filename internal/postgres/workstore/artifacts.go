@@ -8,6 +8,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 )
 
 func ArtifactTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, runID, thingID, kind, id, body string) error {
@@ -67,7 +68,7 @@ func PurgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 			}
 			text := itemstore.BlockText(kept)
 			if field == "title" && text == "" {
-				text = "已删除的生成内容"
+				text = deputy.RemovedText
 				kept = []itemstore.ArtifactBlock{{Text: text, Runs: []string{}}}
 			}
 			itemstore.SetField(&item, field, text)
@@ -81,14 +82,14 @@ func PurgeArtifactsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ids []
 			if text != "" && text != a.Body && text != "\n"+a.Body {
 				// Ownership cannot be reconstructed after historical freeform edits.
 				// Quarantine for explicit owner review; never feed it to a model.
-				if _, err := tx.Exec(ctx, "INSERT INTO retained_artifact_writing(owner_id,thing_id,field,body,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", string(scope.OwnerID), item.ID, field, text, "旧版文字混有生成内容，已隔离；请检查并单独保存自己的文字。"); err != nil {
+				if _, err := tx.Exec(ctx, "INSERT INTO retained_artifact_writing(owner_id,thing_id,field,body,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", string(scope.OwnerID), item.ID, field, text, deputy.MixedWriting); err != nil {
 					return nil, err
 				}
 				item.HasRetainedWriting = true
 			}
 			text = ""
 			if field == "title" {
-				text = "已删除的生成内容"
+				text = deputy.RemovedText
 			}
 			itemstore.SetField(&item, field, text)
 		} else if a.Kind == "check" {

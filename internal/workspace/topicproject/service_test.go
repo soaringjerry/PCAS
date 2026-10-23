@@ -201,3 +201,12 @@ func TestChangedEvidenceDropsTheAnswer(t *testing.T) {
 		t.Fatal(err, f.calls, f.saved, f.end)
 	}
 }
+
+func TestTheInputOfATopicSaysWhereItCutText(t *testing.T) {
+	if text, n := ClipMemory(strings.Repeat("长", MemoryCharacters+3)); n != 3 || !strings.HasSuffix(text, "（原文还有内容，拿不准请用 uncertain）") {
+		t.Fatal(n, text[len(text)-30:])
+	}
+	if text, n := ClipGoal("短目标"); n != 0 || text != "短目标" {
+		t.Fatal(n, text)
+	}
+}

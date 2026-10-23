@@ -83,7 +83,7 @@ func (s *State) ListDeadlines(ctx context.Context, scope memory.Scope, q workspa
 
 func (s *State) AssistantRequirementsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (workspace.AssistantRequirementList, error) {
 	out := workspace.AssistantRequirementList{Items: []workspace.AssistantRequirement{}}
-	rows, err := tx.Query(ctx, `SELECT m.claim_id::text,c.value #>> '{}',coalesce(a.unrestricted,false),coalesce(a.scope,'适用范围待归类')
+	rows, err := tx.Query(ctx, `SELECT m.claim_id::text,c.value #>> '{}',coalesce(a.unrestricted,false),a.scope
  FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version)
  LEFT JOIN assistant_requirements a ON(a.owner_id,a.claim_id,a.claim_version)=(m.owner_id,m.claim_id,m.claim_version)
  WHERE m.owner_id=$1 AND m.key='self:rule' ORDER BY m.claim_id`, string(scope.OwnerID))
@@ -93,8 +93,13 @@ func (s *State) AssistantRequirementsTx(ctx context.Context, tx pgx.Tx, scope me
 	defer rows.Close()
 	for rows.Next() {
 		var r workspace.AssistantRequirement
-		if err := rows.Scan(&r.MemoryID, &r.Text, &r.Unrestricted, &r.Scope); err != nil {
+		var scope *string
+		if err := rows.Scan(&r.MemoryID, &r.Text, &r.Unrestricted, &scope); err != nil {
 			return out, err
+		}
+		r.Scope = workspace.UnclassifiedScope
+		if scope != nil {
+			r.Scope = *scope
 		}
 		out.Items = append(out.Items, r)
 	}

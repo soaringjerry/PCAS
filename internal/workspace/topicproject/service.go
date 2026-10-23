@@ -286,3 +286,26 @@ func apply(u Unit, topic string, input Input, refs []memory.Ref, output Output, 
 	}
 	return finish()
 }
+
+// MemoryCharacters is the text of one memory in the model input of a topic.
+const MemoryCharacters = 1200
+
+// ClipGoal cuts a project goal to its room in the model input and says that
+// it goes on. clipped is the count of characters cut.
+func ClipGoal(goal string) (text string, clipped int) {
+	r := []rune(goal)
+	if len(r) <= GoalCharacters {
+		return goal, 0
+	}
+	return string(r[:GoalCharacters]) + "（目标还有内容）", len(r) - GoalCharacters
+}
+
+// ClipMemory cuts the text of a memory to its room in the model input and
+// tells the model to answer uncertain when the rest might matter.
+func ClipMemory(text string) (string, int) {
+	r := []rune(text)
+	if len(r) <= MemoryCharacters {
+		return text, 0
+	}
+	return string(r[:MemoryCharacters]) + "（原文还有内容，拿不准请用 uncertain）", len(r) - MemoryCharacters
+}

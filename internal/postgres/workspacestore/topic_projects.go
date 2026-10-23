@@ -22,8 +22,6 @@ import (
 const TopicProjectStage = topicproject.Stage
 const topicProjectMinimum = 10
 const topicProjectEvidenceLimit = 10
-const topicProjectMemoryCharacters = 1200
-const topicProjectGoalCharacters = topicproject.GoalCharacters
 
 // A group nobody has spoken of for this long is not something being worked
 // on now. A trip in June or an exam in spring has memories, a goal and a date,
@@ -69,11 +67,9 @@ func topicProjectSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (*top
 	shared := &topicProjectShared{projects: projects}
 	for i := range projects {
 		projects[i].Goal = ProjectMeaning(projects[i].Goal, "", goals[projects[i].ID])
-		goal := []rune(projects[i].Goal)
-		if len(goal) > topicProjectGoalCharacters {
-			shared.clipped += len(goal) - topicProjectGoalCharacters
-			projects[i].Goal = string(goal[:topicProjectGoalCharacters]) + "（目标还有内容）"
-		}
+		var clipped int
+		projects[i].Goal, clipped = topicproject.ClipGoal(projects[i].Goal)
+		shared.clipped += clipped
 	}
 	return shared, nil
 }
@@ -145,11 +141,9 @@ func topicProjectInputSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 		id := m["id"].(string)
 		if !selected[id] && len(out.Memories) < topicProjectEvidenceLimit {
 			selected[id] = true
-			text := []rune(m["text"].(string))
-			if len(text) > topicProjectMemoryCharacters {
-				out.ClippedCharacters += len(text) - topicProjectMemoryCharacters
-				m["text"] = string(text[:topicProjectMemoryCharacters]) + "（原文还有内容，拿不准请用 uncertain）"
-			}
+			text, clipped := topicproject.ClipMemory(m["text"].(string))
+			m["text"] = text
+			out.ClippedCharacters += clipped
 			out.Memories = append(out.Memories, m)
 			refs = append(refs, memory.Ref{ID: memory.ID(id), Version: m["version"].(int), Kind: memory.ClaimKind})
 		}

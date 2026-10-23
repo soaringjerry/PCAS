@@ -516,3 +516,10 @@ func DeadlineClose(as string) (string, bool) {
 	}
 	return as, false
 }
+
+// ReauthorizeTitle is the title of an item whose content the reader may no
+// longer see; it reaches the model and the owner in its place.
+const ReauthorizeTitle = "事项内容需要重新授权或核验"
+
+// UnclassifiedScope is the scope of a requirement that is not classified yet.
+const UnclassifiedScope = "适用范围待归类"

@@ -182,6 +182,8 @@ Background work is put into the owner's words by `internal/workspace/activity`: 
 
 The schedule view is built by `internal/currentstate/schedule` (`schedule.Build`, `schedule.InProgress`): the repeats of a recurring arrangement, what is unclear, what is overdue, and the undated tasks of the home page. The rules of a model's dates for a memory are `organize.NormalizeDeadlines`, with `organize.LegacyRule` and `organize.Clock` next to `organize.ScheduleRule`.
 
+The sentences of a recall's coverage and the label of an original are `retrieval` constants and `retrieval.ContextLabel`; the clipping of a topic's model input is `topicproject.ClipGoal` and `topicproject.ClipMemory`; the title of an item that must be authorized again is `workspace.ReauthorizeTitle`. One model-input label stays in storage with a reason: the label of the best fragment of a source (`[片段 …；字符 …]`) is made in the recall SQL that chooses the fragment, and moves when that query moves.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

@@ -33,6 +33,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
+	"github.com/soaringjerry/PCAS/internal/workspace/activity"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -736,7 +737,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 			rows.Close()
 			return out, err
 		}
-		j.Title = workspacestore.JobTitle(stage)
+		j.Title = activity.JobTitle(stage)
 		j.Trigger = "资料处理"
 		j.Status = map[string]string{"done": "done", "queued": "queued", "leased": "running", "blocked": "failed", "failed": "failed"}[state]
 		var detail []string
@@ -744,7 +745,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 			detail = append(detail, "「"+source+"」")
 		}
 		if code != "" {
-			detail = append(detail, workspacestore.JobProblem(code))
+			detail = append(detail, activity.JobProblem(code))
 		}
 		j.Detail = strings.Join(detail, " · ")
 		j.CreatedAt = at.Format(time.RFC3339Nano)

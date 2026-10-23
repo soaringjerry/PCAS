@@ -178,6 +178,8 @@ The owner's cards of a turn (`secretary.Cards`, `secretary.Links`), what a turn 
 
 A connector sync runs in `internal/connectors` (`connectors.Sync`): the HTTP poll and the inbox folder with their limits (8 MiB a read, 100 records a poll, 1,000 files and 10,000 records a folder) and the cursor rules. Storage keeps the lease and `finishSync`. The rules of a project file are in `internal/input/projectfile`. `internal/connectors` and `internal/notify` are in the domain boundary test.
 
+Background work is put into the owner's words by `internal/workspace/activity`: job titles and problems, the library's job list, the notes of the agents, and the home page's "while you were away" lines. Storage reads the rows; the notice and review IDs are still made in SQL so that they keep their bytes.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

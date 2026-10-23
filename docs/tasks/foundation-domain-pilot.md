@@ -156,6 +156,8 @@ Two run commands are decided in the deputy domain and executed by a unit of stor
 
 The context and the model input of a secretary turn are built in the secretary domain: `secretary.Gather` reads the agent, the items by alias, the history, and counts what the context leaves out; `secretary.Compose` writes the document catalog, the workspace, the memories, the sources, the evidence, the evidence behind the project handover, and the request. `deskstore.inputUnit` gives both their reads.
 
+A workspace command is applied by `command.Apply` in `internal/workspace/command`: the checks of each command, the delegation that makes a task and queues its draft, the quick note, the documents, the settings, the agents, the exclusion of a memory from an item, the samples, the retry of a failed job, and the deletion of an item. `commandstore.commandUnit` gives it its reads and writes. The memory commands, the run commands, and undo keep their storage entries, which the unit calls.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.
@@ -190,7 +192,7 @@ What the kernel needs from a domain comes through the composition:
 | `interpstore` | Organizing, the alias scan, and the comparison of statements and entities. |
 | `usestore` | The memory that a turn or a run is given, and its checks. |
 | `deputystore` | The reads and writes of a run request and of an adoption, the lease and the recovery of a run, the journal reads of its calls, the last write of a run, and the revision of a document. `deputy.Request`, `deputy.Adopt`, and `deputy.Conduct` decide; this package gives them units and one leased run as a `deputy.Session`. |
-| `commandstore` | The dispatch of a workspace command, the undo of an action, and the entry that executes a command. |
+| `commandstore` | The reads and writes of a workspace command, the undo of an action, and the entry that executes a command. `command.Apply` decides. |
 | `deskstore` | The secretary: admission and order of a turn, the turn in its transaction, the reads of its context and its model input, attachments of a request, and the cleanup of a check-only turn. |
 | `internal/postgres` | The composition of the store, the migrations, the queue, the schedulers, the notification channels, and five small adapters (about 2,000 lines). |
 

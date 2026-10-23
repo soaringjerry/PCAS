@@ -184,27 +184,13 @@ func ReviseUndoActionTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id s
 // keeps every unrequested paragraph cannot shrink that far. Wording is left to
 // the model/user.
 func manualReviseReasonTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run, text string) (string, error) {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return "改写正文为空", nil
-	}
 	base, err := workspacestore.DocumentVersionTx(ctx, tx, scope, run.DocumentID, run.BaseVersion)
 	if err != nil {
-		return "基准文档已删除或版本不存在", nil
+		return deputy.RevisionRejection(text, nil, ""), nil
 	}
 	doc, err := kernel.QueryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.DocumentID)
 	if err != nil {
 		return "", err
 	}
-	baseBody := strings.TrimSpace(base.Body)
-	if text == baseBody {
-		return "改写正文与基准完全相同", nil
-	}
-	if text == strings.TrimSpace(doc.Body) {
-		return "改写正文与当前版本完全相同", nil
-	}
-	if len([]rune(baseBody)) >= 40 && len([]rune(text))*4 < len([]rune(baseBody)) {
-		return "改写正文明显短于基准，疑似截断；未存为新版本", nil
-	}
-	return "", nil
+	return deputy.RevisionRejection(text, &base.Body, doc.Body), nil
 }

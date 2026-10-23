@@ -227,15 +227,11 @@ func (s *Store) RunNotify(ctx context.Context, logger *slog.Logger, channels []n
 	}
 }
 
-type deliveryState struct {
-	Attempts map[string]int       `json:"attempts"`
-	RetryAt  map[string]time.Time `json:"retryAt"`
-}
-
-// DispatchNotices uses a transaction advisory lock per notice to keep concurrent
+// DispatchNotices sends each notice of the last notify.Window on each
+// channel that it has not reached. It uses a transaction advisory lock per notice to keep concurrent
 // dispatchers from sending it twice. READ COMMITTED rechecks state per channel.
 func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []notify.Channel) error {
-	rows, err := s.Pool.Query(ctx, `SELECT id::text FROM workspace_notices WHERE created_at>=$1 AND created_at<=$2 AND dismissed_at IS NULL AND NOT (delivered @> '{"_suppressed":true}'::jsonb) ORDER BY created_at,id`, now.Add(-24*time.Hour), now)
+	rows, err := s.Pool.Query(ctx, `SELECT id::text FROM workspace_notices WHERE created_at>=$1 AND created_at<=$2 AND dismissed_at IS NULL AND NOT (delivered @> '{"_suppressed":true}'::jsonb) ORDER BY created_at,id`, now.Add(-notify.Window), now)
 	if err != nil {
 		return err
 	}
@@ -285,31 +281,26 @@ func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []n
 					return err
 				}
 				var fields map[string]json.RawMessage
-				var delivery deliveryState
+				var delivery notify.Delivery
 				if err := json.Unmarshal(raw, &fields); err != nil {
 					return err
 				}
 				if err := json.Unmarshal(raw, &delivery); err != nil {
 					return err
 				}
-				name := channel.Name()
-				if _, ok := fields[name]; ok {
-					continue
+				delivery.Sent = map[string]bool{}
+				for key := range fields {
+					delivery.Sent[key] = true
 				}
-				attempts := delivery.Attempts[name]
-				if attempts >= 5 || now.Before(delivery.RetryAt[name]) {
+				name := channel.Name()
+				if !delivery.Due(name, now) {
 					continue
 				}
 				loc, err := time.LoadLocation(timezone)
 				if err != nil {
 					return err
 				}
-				publicURL := strings.TrimRight(getPublicURL(), "/")
-				m := notify.Message{OwnerID: owner, NoticeID: id, ThingID: thing, Title: title, Body: due.In(loc).Format("2006-01-02 15:04 MST") + " · " + reason, URL: publicURL + "/t/" + thing}
-				if strings.HasPrefix(trigger, kernel.RunNoticePrefix) {
-					m.Result, m.Body = true, reason
-				}
-				err = channel.Send(ctx, m)
+				err = channel.Send(ctx, notify.Compose(notify.Notice{Owner: owner, ID: id, Thing: thing, Title: title, Reason: reason, Due: due, Location: loc, Result: strings.HasPrefix(trigger, kernel.RunNoticePrefix)}, getPublicURL()))
 				if errors.Is(err, notify.ErrUnconfigured) {
 					continue
 				}
@@ -320,29 +311,11 @@ func (s *Store) DispatchNotices(ctx context.Context, now time.Time, channels []n
 				if err == nil {
 					patch[name] = now.UTC().Format(time.RFC3339)
 				} else {
-					if delivery.Attempts == nil {
-						delivery.Attempts = map[string]int{}
-					}
-					if delivery.RetryAt == nil {
-						delivery.RetryAt = map[string]time.Time{}
-					}
-					attempts++
-					if errors.Is(err, notify.ErrGone) {
-						attempts = 5
-					}
-					delay := time.Minute
-					if attempts == 2 {
-						delay = 5 * time.Minute
-					}
-					if attempts >= 3 {
-						delay = 30 * time.Minute
-					}
-					delivery.Attempts[name] = attempts
-					delivery.RetryAt[name] = now.Add(delay)
+					attempts := delivery.Failed(name, err, now)
 					patch["attempts"] = delivery.Attempts
 					patch["retryAt"] = delivery.RetryAt
 					status := "retry"
-					if attempts >= 5 {
+					if attempts >= notify.MaxAttempts {
 						status = "stopped"
 					}
 					slog.WarnContext(ctx, "notification delivery failed", "channel", name, "error_type", notificationErrorType(err), "attempt", attempts, "status", status)

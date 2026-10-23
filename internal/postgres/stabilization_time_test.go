@@ -805,7 +805,7 @@ func TestR5_PendingFailedOccurrenceStopsWithoutLosingRetryData(t *testing.T) {
 		t.Fatal(err)
 	}
 	var fields map[string]json.RawMessage
-	var delivery deliveryState
+	var delivery notify.Delivery
 	if err := json.Unmarshal(raw, &fields); err != nil {
 		t.Fatal(err)
 	}

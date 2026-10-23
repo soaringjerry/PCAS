@@ -164,6 +164,8 @@ The source context of the memories that an input gives is chosen by `contextbuil
 
 When the owner is reminded is decided in `internal/workspace/reminder`: `reminder.Check` records the daily review, the triggers of a task that have come (the start reminder once, while the task waits), and the shelved ideas that wake by their time or a found condition; `reminder.ApplySignals` wakes an idea from a sign in a new source; `reminder.Suppressed` keeps an undo from sending an old reminder again. Storage keeps the owner loop, the lock, and the invalidation of obsolete notices.
 
+How a notice is pushed is `internal/notify`: `notify.Window` (24 hours), `Delivery.Due` and `Delivery.Failed` (five attempts after one, five, and thirty minutes; a target that is gone stops at once), and `notify.Compose`. `Store.DispatchNotices` keeps the lock of each notice and the read just before each send.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

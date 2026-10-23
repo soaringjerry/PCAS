@@ -95,3 +95,32 @@ func ApplyAgent(current workspace.Agent, patch json.RawMessage) (next workspace.
 	}
 	return next, next.Enabled && !next.MemoryInitialized, nil
 }
+
+// Defaults are the settings of a new owner: ideas wake, finished work is
+// reported, the daily review is at nine, and the daily budget is ten.
+func Defaults(timezone string) workspace.Settings {
+	return workspace.Settings{WakeIdeas: true, FollowUps: true, DailyReviewAt: "09:00", DailyBudget: 10, Timezone: timezone}
+}
+
+// defaultKinds are the kinds of memory that a new agent reads.
+var defaultKinds = []string{"fact", "preference", "decision", "intention", "plan"}
+
+// Agents are the agents of a new owner: the manual handoff, and one agent
+// for each configured text model with a note on its channel.
+func Agents(models []memory.ModelInfo) []workspace.Agent {
+	agents := []workspace.Agent{{ID: "manual", Name: "手动交接", Channel: "manual", Enabled: true, MemoryKinds: append([]string{}, defaultKinds...), Note: "复制上下文到任意 AI，再粘贴结果"}}
+	for _, p := range models {
+		if p.Embedding || p.Transcription {
+			continue
+		}
+		note := "通用 API · " + p.Model
+		switch p.Protocol {
+		case "codex":
+			note = "ChatGPT 订阅 · 在设置中登录"
+		case "siwc":
+			note = "消耗你的 ChatGPT 套餐 · 官方直接授权"
+		}
+		agents = append(agents, workspace.Agent{ID: p.ID, Name: p.Name, Channel: "api", Note: note, Enabled: true, MemoryKinds: append([]string{}, defaultKinds...)})
+	}
+	return agents
+}

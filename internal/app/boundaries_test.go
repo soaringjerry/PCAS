@@ -166,7 +166,6 @@ var storageSentences = map[string]int{
 	"intakestore/retrieval.go":           1,
 	"interpstore/compare_entities.go":    1,
 	"notify.go":                          3,
-	"ownerstore/owner_bootstrap.go":      5,
 	"statestore/date_tidy.go":            1,
 	"statestore/status_read.go":          1,
 	"workspacestore/project_handover.go": 1,

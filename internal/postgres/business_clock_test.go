@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
+	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -98,7 +99,7 @@ func TestDeputyUsesBusinessDateAndActualAdmissionTime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	prepared := ctx.Value(deputystore.RunContextKey{}).(deputystore.PreparedRunContext)
+	prepared := ctx.Value(deputystore.RunContextKey{}).(deputy.Prepared)
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	if err != nil {
 		t.Fatal(err)

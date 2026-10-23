@@ -9,287 +9,33 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
+	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
-	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
-	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
-	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
-	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
-	"github.com/soaringjerry/PCAS/internal/retrieval"
+	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/soaringjerry/PCAS/internal/ai"
-	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
-	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
 func (s *Deputy) RunCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
 	if c.Type == "requestRun" {
-		if err := deputy.CheckRequest(c.Kind, c.Prompt); err != nil {
-			return err
+		var prepared *deputy.Prepared
+		if p, ok := ctx.Value(RunContextKey{}).(deputy.Prepared); ok {
+			prepared = &p
 		}
-		item, err := itemstore.GetItem(ctx, tx, scope, c.ThingID)
-		if err != nil {
-			return err
-		}
-		agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.AgentID)
-		if err != nil {
-			return err
-		}
-		if !agent.Enabled {
-			return memory.ErrForbidden
-		}
-		targetHash := workspace.ContentHash(item)
-		item, artifactRefs, err := accessstore.SanitizeItemTx(ctx, tx, scope, agent.ID, item)
-		if err != nil {
-			return err
-		}
-		history, err := readRunHistoryTx(ctx, tx, scope, c, item)
-		if err != nil {
-			return err
-		}
-		id, err := workspacestore.UuidOrNew(c.ID)
-		if err != nil {
-			return err
-		}
-		memories, err := s.ReadMemoriesTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID}, true, memoryread.MemoryReadOptions{UseCurrent: true})
-		if err != nil {
-			return err
-		}
-
-		run := workspace.Run{DocumentVersions: []workspace.RunDocumentVersion{}, DocumentID: c.DocumentID, BaseVersion: c.BaseVersion, TargetHash: targetHash, SmokeID: actionlog.SmokeID(ctx), ID: id, ThingID: item.ID, AgentID: agent.ID, Kind: c.Kind, Prompt: c.Prompt, Status: "running", ContextMemoryIDs: []string{}, ContextVersions: []memory.Ref{}, CreatedAt: kernel.Stamp()}
-		var brief deputy.Brief
-		projectID := item.ProjectID
-		var project *workspace.Item
-		if item.Kind == "project" {
-			projectID = item.ID
-		} else if projectID != "" {
-			found, err := itemstore.GetItem(ctx, tx, scope, projectID)
-			if err != nil {
-				return err
-			}
-			project = &found
-		}
-		brief.Item(item, project)
-		docs, docRefs, err := currentRunDocsTx(ctx, tx, scope, item, agent.ID)
-		if err != nil {
-			return err
-		}
-
-		var reviseTarget int
-		if c.Kind == "revise" {
-			if !memory.ID(c.DocumentID).Valid() || c.BaseVersion < 1 {
-				return memory.ErrInvalid
-			}
-			target, e := kernel.QueryDocument[workspace.Doc](ctx, tx, "SELECT document FROM work_documents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.DocumentID)
-			if e != nil {
-				return e
-			}
-			if target.ThingID != item.ID {
-				return memory.ErrInvalid
-			}
-			reviseTarget = target.Version
-			base, e := workspacestore.DocumentVersionTx(ctx, tx, scope, c.DocumentID, c.BaseVersion)
-			if e != nil {
-				return e
-			}
-			brief.ReviseBase(c.DocumentID, c.BaseVersion, base.Title, base.Body)
-		}
-		reviseID := ""
-		if c.Kind == "revise" {
-			reviseID = c.DocumentID
-		}
-		omittedDocs := brief.CurrentDocuments(docs, reviseID)
-		run.DocumentVersions = append(run.DocumentVersions, brief.Documents...)
-		if omittedDocs > 0 {
-			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "document_char_budget", omittedDocs); err != nil {
-				return err
-			}
-		}
-		artifactRefs = append(artifactRefs, docRefs...)
-		settings, err := kernel.QueryDocument[workspace.Settings](ctx, tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(scope.OwnerID))
-		if err != nil {
-			return err
-		}
-		loc := settings.Location()
-		plan := memory.PlanQuery(c.Prompt, s.BusinessNow(), loc)
-		if prepared, ok := ctx.Value(RunContextKey{}).(PreparedRunContext); ok {
-			plan = prepared.Plan
-		}
-		u, err := s.StartUseContextTx(ctx, tx, scope)
-		if err != nil {
-			return err
-		}
-		u.Location = loc
-		if !u.Ready {
-			fmt.Fprintln(&brief, "相关记忆（引用 ID 与版本；长期约束继续适用）：")
-		}
-		// Rank through the same scoped retrieval used by Recall instead of
-		// filling the prompt with globally recent memories. No nested model
-		// request is made while the owner's transaction is locked.
-		query := RunHistoryQuery(item.Title, history, c.Prompt)
-		if omitted := len(query) - len(usestore.Tail(query, DelegateContextBytes)); omitted > 0 {
-			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_bytes", omitted); err != nil {
-				return err
-			}
-		}
-		query = usestore.Tail(query, DelegateContextBytes)
-		tokens := memory.SearchTokens(query)
-		if len(tokens) > 120 {
-			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_terms", len(tokens)-120); err != nil {
-				return err
-			}
-			tokens = tokens[len(tokens)-120:]
-		}
-		terms := []string{}
-		for _, token := range tokens {
-			if len([]rune(token)) > 1 {
-				terms = append(terms, "'"+strings.ReplaceAll(token, "'", "''")+"'")
-			}
-		}
-		recall := memory.RecallResult{Coverage: retrieval.NewCoverage()}
-		request := memory.RecallRequest{Team: &memory.TeamRecall{Text: query, Plan: plan, ThingID: &item.ID, ProjectID: &projectID, RankFusion: u.Ready}, Query: query, Mode: memory.Remember, Context: memory.WorkingContext{Objects: []memory.ID{}}}
-		if projectID != "" {
-			request.Context.Objects = append(request.Context.Objects, memory.ID(projectID))
-		}
-		budget := memory.Budget{Candidates: 100, Tokens: 10000, Edges: 30, Hops: 1}
-		if err := s.RecallTx(ctx, tx, memory.Scope{OwnerID: scope.OwnerID, PrincipalID: agent.ID, Team: true}, request, budget, query, strings.Join(terms, " | "), nil, "", 0, "", tokens, &recall); err != nil {
-			return err
-		}
-		for reason, n := range map[string]int{"recall_budget": recall.Coverage.Omitted, "source_recall_budget": recall.Coverage.OmittedSources} {
-			if n > 0 {
-				if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", reason, n); err != nil {
-					return err
-				}
-			}
-		}
-		if recall.TimeRelaxed {
-			fmt.Fprintln(&brief, contextbuilder.RecallTimeRelaxed)
-		}
-		excerpts := recall.Excerpts
-		var preparedRefs []memory.Ref
-		historyRequests := []string{}
-		if prepared, ok := ctx.Value(RunContextKey{}).(PreparedRunContext); ok {
-			excerpts = append(append([]memory.RecallExcerpt{}, prepared.Excerpts...), excerpts...)
-			preparedRefs = prepared.Refs
-		}
-		for _, turn := range history {
-			historyRequests = append(historyRequests, turn.RequestID)
-			if !turn.Outdated {
-				artifactRefs = append(artifactRefs, turn.Refs...)
-			}
-		}
-		historyText := runHistoryText(history)
-		if omitted := len(historyText) - len(usestore.Tail(historyText, DelegateContextBytes)); omitted > 0 {
-			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "delegate_history_bytes", omitted); err != nil {
-				return err
-			}
-		}
-		brief.WriteString(usestore.Tail(historyText, DelegateContextBytes))
-		ordered := deputy.OrderMemories(memories, recall.Structured, preparedRefs, recall.Memories)
-		run.MemoryTier = usestore.MemoryTierForStatus(usestore.MemoryTier(ctx, c.Prompt, "heavy"), u.Ready)
-		u.Tier = run.MemoryTier
-		ranked := ordered
-		if u.Ready {
-			ranked = deputy.RankMemories(memories, agent, recall.Structured, preparedRefs, recall.Memories)
-		}
-		if err = s.FinishUseContextTx(ctx, tx, scope, agent, &item.ID, c.Prompt, ranked, &u); err != nil {
-			return err
-		}
-		if u.ProjectHandover != nil {
-			run.ProjectHandoverWrittenAt = u.ProjectHandover.WrittenAt
-		}
-		run.MemoryGroups = u.Groups
-		overflow := func(reason string, count int) error {
-			if count == 0 {
-				return nil
-			}
-			return kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", reason, count)
-		}
-		memoryStart := brief.Len()
-		if err := overflow("memory_char_budget", brief.Memories(u, agent, loc)); err != nil {
-			return err
-		}
-		if u.Ready {
-			run.MemoryContextRange = &[2]int{memoryStart, brief.Len()}
-		}
-		contextbuilder.OrderExcerpts(excerpts, plan)
-		sources, err := intakestore.TeamSourceExcerptsTx(ctx, tx, scope, agent.ID, &item.ID, excerpts, historyRequests, 8, 4000)
-		if err != nil {
-			return err
-		}
-		if err := overflow("source_excerpt_char_budget", brief.Excerpts(sources, loc)); err != nil {
-			return err
-		}
-		evidenceCtx := ctx
-		if u.Ready {
-			evidenceCtx = context.WithValue(ctx, evidencestore.UseEvidenceBatchKey{}, true)
-		}
-		groups, gaps, err := evidencestore.EvidenceContextsTx(evidenceCtx, tx, scope, agent.ID, &item.ID, brief.Claims)
-		if err != nil {
-			return err
-		}
-		if err := overflow("evidence_context_char_budget", brief.Evidence(groups, gaps, loc)); err != nil {
-			return err
-		}
-		// Derived copies carry input dependencies even when their source memories
-		// fall outside this run's text budget.
-		brief.Derived(artifactRefs)
-		brief.Request(c.Prompt, c.Kind, plan.Recall || recall.TimeRelaxed)
-		run.ContextMemoryIDs = append(run.ContextMemoryIDs, brief.MemoryIDs...)
-		run.ContextVersions = append(run.ContextVersions, brief.Versions...)
-		run.ContextVersions = kernel.UniqueRefs(run.ContextVersions)
-		run.Brief = brief.String()
-		dbStatus := "queued"
-		if agent.Channel == "manual" {
-			run.Status = "waiting"
-			dbStatus = "waiting"
-		} else {
-			if !s.ModelAvailable(agent.ID) {
-				return memory.ErrUnavailable
-			}
-			run.Cost = s.Models.Estimate(agent.ID, deputy.CostInput(run.Kind, run.Brief))
-			loc, err := time.LoadLocation(settings.Timezone)
-			if err != nil {
-				return err
-			}
-			now := time.Now().In(loc)
-			start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-			var spent float64
-			if err := tx.QueryRow(ctx, "SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1 AND created_at >= $2),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1 AND created_at >= $2),0)", string(scope.OwnerID), start).Scan(&spent); err != nil {
-				return err
-			}
-			if spent+run.Cost > settings.DailyBudget {
-				return workspace.ErrBudget
-			}
-		}
-		if _, err := tx.Exec(ctx, "INSERT INTO agent_runs(owner_id,id,thing_id,agent_id,status,reserved_cost,created_at,document) VALUES($1,$2,$3,$4,$5,$6,$7,$8)", string(scope.OwnerID), run.ID, run.ThingID, run.AgentID, dbStatus, run.Cost, run.CreatedAt, kernel.JSON(run)); err != nil {
-			return err
-		}
-
-		if c.Kind == "revise" {
-			if _, err := tx.Exec(ctx, `INSERT INTO revise_run_targets(owner_id,run_id,document_id,target_version) VALUES($1,$2,$3,$4)`, string(scope.OwnerID), run.ID, c.DocumentID, reviseTarget); err != nil {
-				return err
-			}
-		}
-		for _, ref := range run.ContextVersions {
-			if _, err := tx.Exec(ctx, "INSERT INTO run_dependencies(owner_id,run_id,memory_id,memory_version) VALUES($1,$2,$3,$4)", string(scope.OwnerID), run.ID, string(ref.ID), ref.Version); err != nil {
-				return err
-			}
-		}
-		return nil
+		return deputy.Request(ctx, &requestUnit{store: s, tx: tx, scope: scope}, c, prepared, s.BusinessNow(), time.Now())
 	}
 	if !memory.ID(c.ID).Valid() {
 		return memory.ErrInvalid
@@ -343,104 +89,7 @@ func (s *Deputy) adoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 	if run.SmokeID != "" {
 		ctx = actionlog.WithSmoke(ctx, run.SmokeID)
 	}
-	if err := deputy.CheckAdoption(*run, as, text); err != nil {
-		return err
-	}
-	// A completed draft can be adopted again after undo, whose audit/version
-	// changes do not alter its content. Generation fences the destination;
-	// adoption still fences revoked or deleted input and disabled agents.
-	agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
-	if err != nil {
-		return err
-	}
-	if !agent.Enabled {
-		return memory.ErrForbidden
-	}
-	if err := accessstore.VerifyRunAccessTx(ctx, usestore.UseClockTx{Tx: tx, At: time.Now()}, scope, *run); err != nil {
-		return err
-	}
-	item, err := itemstore.GetItem(ctx, tx, scope, run.ThingID)
-	if err != nil {
-		return err
-	}
-	// Undo restores the run document but leaves provenance audit rows. Clear
-	// the previous adoption before reusing this run, including progress keys.
-	if _, err := tx.Exec(ctx, "DELETE FROM adopted_artifacts WHERE owner_id=$1 AND run_id=$2", string(scope.OwnerID), run.ID); err != nil {
-		return err
-	}
-	switch as {
-	case "doc":
-		if run.Kind == "revise" {
-			if err := s.adoptReviseDocumentTx(ctx, tx, scope, *run, text); err != nil {
-				return err
-			}
-		} else if err := workspacestore.SaveDoc(ctx, tx, scope, workspace.Doc{ID: string(memory.NewID()), ThingID: item.ID, Title: item.Title + " · " + run.Kind, Body: text, By: "ai", RunID: run.ID, CreatedAt: kernel.Stamp(), UpdatedAt: kernel.Stamp()}); err != nil {
-			return err
-		}
-	case "progress":
-		if item.Kind == "project" {
-			if err := s.AdoptProjectMemoryTx(ctx, tx, scope, run, item, text, actionID, auto); err != nil {
-				return err
-			}
-		} else if item.Kind == "task" {
-			item.Notes += "\n" + text
-			if err := workstore.ArtifactTx(ctx, tx, scope, run.ID, item.ID, "notes", run.ID, text); err != nil {
-				return err
-			}
-		} else {
-			item.Body += "\n" + text
-			if err := workstore.ArtifactTx(ctx, tx, scope, run.ID, item.ID, "body", run.ID, text); err != nil {
-				return err
-			}
-		}
-	case "subtasks":
-		lines, err := deputy.Subtasks(text)
-		if err != nil {
-			return err
-		}
-		for _, line := range lines {
-			if item.Kind == "task" {
-				check := workspace.Check{ID: string(memory.NewID()), Text: line}
-				item.Checklist = append(item.Checklist, check)
-				if err := workstore.ArtifactTx(ctx, tx, scope, run.ID, item.ID, "check", check.ID, line); err != nil {
-					return err
-				}
-			} else {
-				task := workspace.NewItem("task", line)
-				task.History[0].By = kernel.ActorFromContext(ctx)
-				task.Evolution[0].By = kernel.ActorFromContext(ctx)
-				if item.Kind == "project" {
-					task.ProjectID = item.ID
-				} else {
-					task.IdeaID = item.ID
-					task.ProjectID = item.ProjectID
-				}
-				if err := itemstore.SaveItem(ctx, tx, scope, task); err != nil {
-					return err
-				}
-				if err := workstore.ArtifactTx(ctx, tx, scope, run.ID, task.ID, "task", task.ID, line); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	item.Version++
-	item.UpdatedAt = kernel.Stamp()
-	if err := s.SaveAction(ctx, tx, scope, item, "采纳副手结果"); err != nil {
-		return err
-	}
-	run.Adopted = &workspace.Adoption{As: as, At: kernel.Stamp(), Edited: !auto && text != run.Output, Auto: auto, ActionID: actionID}
-	if err := intakestore.SampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "adopted-result", Prompt: run.Brief, Response: text, Origin: workspace.Origin{Label: item.Title, RunID: run.ID}, Version: 1, State: "candidate", Epistemic: "inferred", CreatedAt: kernel.Stamp()}); err != nil {
-		return err
-	}
-	if !auto {
-		for _, ref := range run.ContextVersions {
-			if err := intakestore.RecordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: run.ID + ":" + string(ref.ID), Kind: "adoption", At: time.Now()}); err != nil && !errors.Is(err, memory.ErrConflict) && !errors.Is(err, memory.ErrNotFound) {
-				return err
-			}
-		}
-	}
-	return nil
+	return deputy.Adopt(ctx, &adoptUnit{store: s, tx: tx, scope: scope}, run, as, text, actionID, auto, time.Now())
 }
 
 // RunAgentJobs owns costly jobs: an ambiguous provider timeout/crash is marked
@@ -807,7 +456,7 @@ func (r *runSession) Finish(ctx context.Context, end deputy.End) error {
 }
 
 func (s *Deputy) AutoAdoptRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run) error {
-	if run.Status != "done" || run.StaleContext || run.Adopted != nil || deputy.TrimChecklist(run.Output) == "" {
+	if !deputy.AutoAdoptable(*run) {
 		return nil
 	}
 	// Completion and billing are already saved in the outer transaction. Only
@@ -845,16 +494,7 @@ func (s *Deputy) autoAdoptResultTx(ctx context.Context, tx pgx.Tx, scope memory.
 		return err
 	}
 	as := deputy.AdoptionFor(*run, run.Output)
-	summary := "副手结果：存成文档"
-	if as == "progress" {
-		summary = "副手结果：写进进度"
-		if item.Kind == "project" {
-			summary = "副手结果：记住项目进展"
-		}
-	}
-	if as == "subtasks" {
-		summary = fmt.Sprintf("副手结果：加了 %d 个子任务", len(deputy.Checklist(run.Output)))
-	}
+	summary := deputy.AdoptionSummary(*run, item, as)
 	id := string(memory.NewID())
 	ctx = kernel.WithActor(ctx, "assistant")
 	ctx = actionlog.WithActionLog(ctx, id, "worker", "", summary)

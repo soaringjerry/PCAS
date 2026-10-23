@@ -2,46 +2,31 @@ package deputystore
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
-	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 )
 
-const delegateHistoryTurns = 6
-const DelegateContextBytes = 4000 // Same query budget as manual handoff; UTF-8-safe recent tail.
-
+// RunContextKey holds the deputy.Prepared retrieval of a run request.
 type RunContextKey struct{}
-type PreparedRunContext struct {
-	Plan     memory.QueryPlan
-	Refs     []memory.Ref
-	Excerpts []memory.RecallExcerpt
-}
-
-type StoredDeskContext struct {
-	Question, Answer string
-	RequestID        string
-	Refs             []memory.Ref
-	Outdated         bool
-}
 
 // Resolve references and perform semantic retrieval before Execute takes the
 // owner lock. All selected versions and current documents are rechecked inside
 // the transaction; this snapshot never grants access by itself.
 func (s *Deputy) PrepareRunContext(ctx context.Context, scope memory.Scope, c workspace.Command, recall retrieval.QueryEmbed) (context.Context, error) {
-	if len(c.DeskTurnIDs) > delegateHistoryTurns {
+	if len(c.DeskTurnIDs) > deputy.HistoryTurns {
 		return ctx, memory.ErrInvalid
 	}
-	history := []StoredDeskContext{}
-	query := c.Prompt
+	history := []deputy.Turn{}
+	var query string
 	projectID := c.ProjectID
 	var plan memory.QueryPlan
 	ready := false
@@ -79,6 +64,8 @@ func (s *Deputy) PrepareRunContext(ctx context.Context, scope memory.Scope, c wo
 		if err != nil {
 			return err
 		}
+		var requested *workspace.Item
+		var docs []workspace.Doc
 		if c.Type == "requestRun" {
 			item, _, err = accessstore.SanitizeItemTx(ctx, tx, scope, c.AgentID, item)
 			if err != nil {
@@ -88,22 +75,17 @@ func (s *Deputy) PrepareRunContext(ctx context.Context, scope memory.Scope, c wo
 			if item.Kind == "project" {
 				projectID = item.ID
 			}
-			query += " " + item.Title + " " + item.Notes + " " + item.Body + " " + item.Goal
-			docs, _, err := currentRunDocsTx(ctx, tx, scope, item, c.AgentID)
+			requested = &item
+			docs, _, err = currentRunDocsTx(ctx, tx, scope, item, c.AgentID)
 			if err != nil {
 				return err
 			}
-			for _, doc := range docs {
-				query += " " + doc.Title + " " + usestore.Tail(doc.Body, DelegateContextBytes)
-			}
 		}
-		query = RunHistoryQuery(query, history, c.Prompt)
-		if omitted := len(query) - len(usestore.Tail(query, DelegateContextBytes)); omitted > 0 {
-			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", "retrieval_query_bytes", omitted); err != nil {
-				return err
-			}
+		query = deputy.PreparedQuery(c.Prompt, requested, docs, history)
+		if err := overflowEvent(ctx, tx, scope, "retrieval_query_bytes", len(query)-len(contextbuilder.Tail(query, deputy.HistoryBytes))); err != nil {
+			return err
 		}
-		query = usestore.Tail(query, DelegateContextBytes)
+		query = contextbuilder.Tail(query, deputy.HistoryBytes)
 		return nil
 	}); err != nil {
 		return ctx, err
@@ -116,7 +98,7 @@ func (s *Deputy) PrepareRunContext(ctx context.Context, scope memory.Scope, c wo
 	if err != nil {
 		return ctx, err
 	}
-	return context.WithValue(ctx, RunContextKey{}, PreparedRunContext{Plan: plan, Refs: result.Memories, Excerpts: result.Excerpts}), nil
+	return context.WithValue(ctx, RunContextKey{}, deputy.Prepared{Plan: plan, Refs: result.Memories, Excerpts: result.Excerpts}), nil
 }
 
 // Documents are read again inside runCommandTx. A prepared retrieval snapshot
@@ -155,12 +137,9 @@ func currentRunDocsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, item w
 // Automatic history is constrained to the server-selected conversation. Manual
 // IDs retain their existing owner/agent boundary. Re-read under the owner lock
 // so an earlier prepared snapshot cannot resurrect an erased answer.
-func readRunHistoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command, item workspace.Item) ([]StoredDeskContext, error) {
-	if len(c.DeskTurnIDs) > delegateHistoryTurns {
-		return nil, memory.ErrInvalid
-	}
+func readRunHistoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command, item workspace.Item) ([]deputy.Turn, error) {
 	automatic, auto := ctx.Value(kernel.DelegateHistoryKey{}).(intakestore.DelegateHistoryContext)
-	history := []StoredDeskContext{}
+	history := []deputy.Turn{}
 	for _, id := range c.DeskTurnIDs {
 		if !memory.ID(id).Valid() {
 			return nil, memory.ErrInvalid
@@ -176,7 +155,7 @@ func readRunHistoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c work
 			boundary = "conversation_id=$3"
 			target = automatic.ConversationID
 		}
-		var turn StoredDeskContext
+		var turn deputy.Turn
 		if err := tx.QueryRow(ctx, "SELECT question,answer,dependencies,coalesce(request_id::text,'') FROM desk_turns WHERE owner_id=$1 AND id=$2 AND "+boundary, string(scope.OwnerID), id, target).Scan(&turn.Question, &turn.Answer, &turn.Refs, &turn.RequestID); err != nil {
 			return nil, memory.ErrNotFound
 		}
@@ -192,15 +171,11 @@ func readRunHistoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c work
 	return history, nil
 }
 
-func runHistoryText(history []StoredDeskContext) string {
-	var text strings.Builder
-	for _, turn := range history {
-		fmt.Fprintf(&text, "\n导办台之前的讨论：\n问：%s\n答：%s\n", turn.Question, turn.Answer)
+// overflowEvent records the count of what did not fit in a run, by reason.
+// A count of zero records nothing.
+func overflowEvent(ctx context.Context, tx pgx.Tx, scope memory.Scope, reason string, count int) error {
+	if count <= 0 {
+		return nil
 	}
-	return text.String()
-}
-
-func RunHistoryQuery(base string, history []StoredDeskContext, prompt string) string {
-	// The latest request stays last when older material exceeds the query budget.
-	return strings.TrimSpace(base + runHistoryText(history) + "\n当前要求：" + prompt)
+	return kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "overflow", reason, count)
 }

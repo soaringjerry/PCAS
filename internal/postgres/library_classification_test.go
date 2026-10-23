@@ -49,7 +49,7 @@ func TestLibraryDeadlinesUseModelDatesAndRetainUncertainty(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, organizeTestJob(t, s, scope)); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, organizeTestJob(t, s, scope)); err != nil {
 		t.Fatal(err)
 	}
 	dates, err := s.ListDeadlines(ctx, scope, workspace.DeadlineQuery{})

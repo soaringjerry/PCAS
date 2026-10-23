@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/prompts"
@@ -46,7 +47,7 @@ func p3ComparePrompt() (string, []interpstore.CompareEdge) {
 			expected = append(expected, interpstore.CompareEdge{Old: 2*i + 1, New: 2*i + 2, Kind: "superseded"})
 		}
 	}
-	return string(kernel.JSON(interpstore.ComparisonBatch{Rule: kernel.CompareVersion, Group: interpstore.CompareGroup{Key: "topic:fictional", Kind: "topic", Name: "虚构项目记录"}, Memories: memories})), expected
+	return string(kernel.JSON(interpstore.ComparisonBatch{Rule: comparison.RuleVersion, Group: interpstore.CompareGroup{Key: "topic:fictional", Kind: "topic", Name: "虚构项目记录"}, Memories: memories})), expected
 }
 
 // Opt-in only; uses the executor's login and invented memories. Before changing

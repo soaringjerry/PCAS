@@ -127,7 +127,7 @@ func (s *Interp) ScheduleOrganize(ctx context.Context, now time.Time) (int, erro
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database() || ':' || current_schema() || ':organize-schedule',0))"); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+OrganizeEligible, kernel.OrganizeVersion)
+		rows, err := tx.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+OrganizeEligible, organize.RuleVersion)
 		if err != nil {
 			return err
 		}
@@ -153,7 +153,7 @@ func (s *Interp) ScheduleOrganize(ctx context.Context, now time.Time) (int, erro
 			if err := kernel.OwnerLock(ctx, tx, owner); err != nil {
 				return err
 			}
-			queued, err := EnqueueOrganizeTx(ctx, tx, owner, now, kernel.OrganizeVersion)
+			queued, err := EnqueueOrganizeTx(ctx, tx, owner, now, organize.RuleVersion)
 			if err != nil {
 				return err
 			}
@@ -258,7 +258,7 @@ func (a organizeSession) NextBatch(ctx context.Context, j worker.Job, version in
 		}
 		rows, err := tx.Query(ctx, `SELECT r.id::text,r.version,c.value #>> '{}',rv.expressed_at`+OrganizeEligible+`
  AND cl.owner_id=$2 ORDER BY EXISTS(SELECT 1 FROM evidence e JOIN archive_entries ae ON(ae.owner_id,ae.source_id,ae.source_version)=(e.owner_id,e.source_id,e.source_version)
- WHERE (e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version)),r.created_at DESC,r.id LIMIT $3`, version, string(j.OwnerID), kernel.OrganizeBatchLimit)
+ WHERE (e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version)),r.created_at DESC,r.id LIMIT $3`, version, string(j.OwnerID), organize.BatchLimit)
 		if err != nil {
 			return err
 		}
@@ -404,7 +404,7 @@ func (u organizeUnit) Finish(ctx context.Context) error {
 	if err := kernel.DiscardPaidResult(ctx, u.tx, u.job); err != nil {
 		return err
 	}
-	_, err := EnqueueOrganizeTx(ctx, u.tx, u.job.OwnerID, time.Now(), kernel.OrganizeVersion)
+	_, err := EnqueueOrganizeTx(ctx, u.tx, u.job.OwnerID, time.Now(), organize.RuleVersion)
 	return err
 }
 

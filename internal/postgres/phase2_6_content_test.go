@@ -13,7 +13,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -226,7 +225,7 @@ func TestPhase26G6B3B7B8LibraryAndC1C2Content(t *testing.T) {
 func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	f := phase26LoadFixture(t)
 	phase26NewModel(t, f)
-	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, kernel.OrganizeVersion)
+	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, organize.RuleVersion)
 	s, ctx := f.Store, f.Context
 	var first, second []interpstore.ComparisonBatch
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
@@ -234,7 +233,7 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 			return err
 		}
 		var err error
-		first, err = interpstore.ComparisonPlanTx(ctx, tx, f.Scope.OwnerID, kernel.CompareVersion)
+		first, err = interpstore.ComparisonPlanTx(ctx, tx, f.Scope.OwnerID, comparison.RuleVersion)
 		return err
 	})
 	if err != nil {
@@ -290,7 +289,7 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 	phase26Exec(t, f, `UPDATE claim_revisions SET value=to_jsonb('Fictitious edited note'::text) WHERE owner_id=$1 AND claim_id=$2`, f.Scope.OwnerID, changed)
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
-		second, err = interpstore.ComparisonPlanTx(ctx, tx, f.Scope.OwnerID, kernel.CompareVersion)
+		second, err = interpstore.ComparisonPlanTx(ctx, tx, f.Scope.OwnerID, comparison.RuleVersion)
 		return err
 	})
 	if err != nil {
@@ -321,7 +320,7 @@ func TestPhase26G4A6A10ComparisonCoverageAndUnchangedScheduling(t *testing.T) {
 		}
 		phase26Isolate(t, f, comparison.Stage)
 		j := phase26ClaimStage(t, f, comparison.Stage)
-		if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j); err != nil {
+		if err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: comparison.RuleVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 	}

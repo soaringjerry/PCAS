@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -22,14 +22,14 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 	m := phase26NewModel(t, f)
 	// Prior successful batch receipts are explicit preconditions, not measured
 	// model calls. This test measures a single edit after an established library.
-	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, kernel.OrganizeVersion)
+	phase26Exec(t, f, `UPDATE claims SET organized=$2 WHERE owner_id=$1`, f.Scope.OwnerID, organize.RuleVersion)
 	var prior []interpstore.ComparisonBatch
 	if err := pgx.BeginFunc(ctx, f.Store.Pool, func(tx pgx.Tx) error {
 		if err := interpstore.SyncComparisonMembersTx(ctx, tx, f.Scope.OwnerID); err != nil {
 			return err
 		}
 		var err error
-		prior, err = interpstore.ComparisonPlanTx(ctx, tx, f.Scope.OwnerID, kernel.CompareVersion)
+		prior, err = interpstore.ComparisonPlanTx(ctx, tx, f.Scope.OwnerID, comparison.RuleVersion)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -39,7 +39,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 		rows = append(rows, map[string]any{"g": b.Group.Key, "a": b.A, "b": b.B, "f": b.Fingerprint})
 	}
 	raw, _ := json.Marshal(rows)
-	phase26Exec(t, f, `INSERT INTO memory_comparison_batches(owner_id,group_key,block_a,block_b,fingerprint,rule,completed_at) SELECT $1,x.g,x.a,x.b,x.f,$3,now()-interval '2 hours' FROM jsonb_to_recordset($2::jsonb) x(g text,a bigint,b bigint,f text)`, f.Scope.OwnerID, raw, kernel.CompareVersion)
+	phase26Exec(t, f, `INSERT INTO memory_comparison_batches(owner_id,group_key,block_a,block_b,fingerprint,rule,completed_at) SELECT $1,x.g,x.a,x.b,x.f,$3,now()-interval '2 hours' FROM jsonb_to_recordset($2::jsonb) x(g text,a bigint,b bigint,f text)`, f.Scope.OwnerID, raw, comparison.RuleVersion)
 	if _, err := f.Store.ScheduleCompare(ctx, time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 		}
 		phase26Isolate(t, f, comparison.Stage)
 		j := phase26ClaimStage(t, f, comparison.Stage)
-		if err := (comparison.Service{Store: f.Store.CompareStore(), Generator: jobCalls(f.Store), Version: kernel.CompareVersion}).Process(ctx, j); err != nil {
+		if err := (comparison.Service{Store: f.Store.CompareStore(), Generator: jobCalls(f.Store), Version: comparison.RuleVersion}).Process(ctx, j); err != nil {
 			t.Fatal(err)
 		}
 		if (i+1)%10 == 0 {
@@ -104,7 +104,7 @@ func TestPhase26G4T4OneMemoryEditRunsOnlyIts40AffectedComparisonCalls(t *testing
 			t.Errorf("unrelated prior receipt rewritten %s %d/%d %v", b.Group.Key, b.A, b.B, err)
 		}
 	}
-	pending, err := f.Store.NextComparisonBatch(ctx, f.Scope.OwnerID, kernel.CompareVersion)
+	pending, err := f.Store.NextComparisonBatch(ctx, f.Scope.OwnerID, comparison.RuleVersion)
 	if err != nil || pending != nil {
 		t.Errorf("single edit leaves comparison pending %+v %v", pending, err)
 	}

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 )
 
@@ -36,7 +36,7 @@ func TestTierPreparationAndRestoreValidateLibraryState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !p.Complete || !p.Handover || !p.HandoverInputs || p.OrganizeRule != kernel.OrganizeVersion {
+	if !p.Complete || !p.Handover || !p.HandoverInputs || p.OrganizeRule != organize.RuleVersion {
 		t.Fatal(p)
 	}
 	if _, _, err = restoredTierDatabase(ctx, dsn, suite, p); err != nil {
@@ -63,7 +63,7 @@ func TestTierPreparationAndRestoreValidateLibraryState(t *testing.T) {
 		if _, _, err = restoredTierDatabase(ctx, dsn, suite, p); err == nil {
 			t.Fatal("accepted stale state", query)
 		}
-		if _, err = pool.Exec(ctx, "UPDATE claims SET organized=$2 WHERE owner_id=$1", owner, kernel.OrganizeVersion); err != nil {
+		if _, err = pool.Exec(ctx, "UPDATE claims SET organized=$2 WHERE owner_id=$1", owner, organize.RuleVersion); err != nil {
 			t.Fatal(err)
 		}
 		if _, err = pool.Exec(ctx, "UPDATE handovers SET input_hash=library_handover_hash($1),rule=$2 WHERE owner_id=$1", owner, statestore.HandoverVersion); err != nil {
@@ -76,9 +76,9 @@ func TestTierPreparationAndRestoreValidateLibraryState(t *testing.T) {
 		t.Fatal("accepted mismatched extraction counts")
 	}
 	// P0-55 upgrades only rule classifications; other v2 results remain current.
-	original := kernel.OrganizeVersion
-	kernel.OrganizeVersion = 3
-	t.Cleanup(func() { kernel.OrganizeVersion = original })
+	original := organize.RuleVersion
+	organize.RuleVersion = 3
+	t.Cleanup(func() { organize.RuleVersion = original })
 	if _, err = pool.Exec(ctx, "UPDATE claims SET organized=2 WHERE owner_id=$1", owner); err != nil {
 		t.Fatal(err)
 	}

@@ -12,7 +12,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -168,7 +167,7 @@ func prepareTierSuite(ctx context.Context, store app.Store, pool *pgxpool.Pool, 
 // requirements atomically before advancing organized. An up-to-date organized
 // version is therefore also the extraction-completion marker.
 func readTierPreparation(ctx context.Context, pool *pgxpool.Pool, scope memory.Scope) (doing.Preparation, error) {
-	p := doing.Preparation{OrganizeRule: kernel.OrganizeVersion, HandoverRule: statestore.HandoverVersion}
+	p := doing.Preparation{OrganizeRule: organize.RuleVersion, HandoverRule: statestore.HandoverVersion}
 	var unorganized, staleExtractions int
 	err := pool.QueryRow(ctx, `SELECT
  (SELECT count(*) FROM claims WHERE owner_id=$1),

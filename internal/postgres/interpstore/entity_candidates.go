@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -215,7 +216,7 @@ func (s *Interp) ScheduleEntityCandidates(ctx context.Context, now time.Time) (i
 		var batch *aliasscan.Batch
 		if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			var e error
-			batch, e = NextEntityCandidateBatchTx(ctx, tx, owner, kernel.EntityCompareVersion)
+			batch, e = NextEntityCandidateBatchTx(ctx, tx, owner, comparison.EntityRuleVersion)
 			return e
 		}); err != nil {
 			return count, err
@@ -227,7 +228,7 @@ func (s *Interp) ScheduleEntityCandidates(ctx context.Context, now time.Time) (i
 			if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':compare-schedule',0))"); err != nil {
 				return err
 			}
-			queued, err := enqueueEntityCandidatesTx(ctx, tx, owner, now, kernel.EntityCompareVersion, batch)
+			queued, err := enqueueEntityCandidatesTx(ctx, tx, owner, now, comparison.EntityRuleVersion, batch)
 			if queued {
 				count++
 			}
@@ -276,7 +277,7 @@ func (a aliasScanSession) NextBatch(ctx context.Context, j worker.Job) (json.Raw
 	var batch *aliasscan.Batch
 	err := pgx.BeginFunc(ctx, a.conn, func(tx pgx.Tx) error {
 		var e error
-		batch, e = NextEntityCandidateBatchTx(ctx, tx, j.OwnerID, kernel.EntityCompareVersion)
+		batch, e = NextEntityCandidateBatchTx(ctx, tx, j.OwnerID, comparison.EntityRuleVersion)
 		return e
 	})
 	if err != nil || batch == nil {
@@ -351,7 +352,7 @@ func (u aliasScanUnit) ProposePair(a, b int) error {
 	if err := u.tx.QueryRow(u.ctx, `SELECT count(*)=2 FROM entity_versions ev JOIN memory_records r ON(r.owner_id,r.id,r.version)=(ev.owner_id,ev.entity_id,ev.version) WHERE ev.owner_id=$1 AND ((ev.entity_id=$2 AND ev.name=$3 AND ev.entity_type=$4) OR (ev.entity_id=$5 AND ev.name=$6 AND ev.entity_type=$7))`, owner, string(x.Ref.ID), x.Name, x.Type, string(y.Ref.ID), y.Name, y.Type).Scan(&matches); err != nil || !matches {
 		return err
 	}
-	_, err := u.tx.Exec(u.ctx, `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, owner, string(x.Ref.ID), string(y.Ref.ID), *hash, kernel.EntityCompareVersion, u.batch.Marker)
+	_, err := u.tx.Exec(u.ctx, `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, owner, string(x.Ref.ID), string(y.Ref.ID), *hash, comparison.EntityRuleVersion, u.batch.Marker)
 	return err
 }
 

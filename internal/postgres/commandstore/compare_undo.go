@@ -59,7 +59,7 @@ func restoreMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id stri
 	if !current {
 		return memory.ErrConflict
 	}
-	if _, err := tx.Exec(ctx, "UPDATE claims SET retired='',retired_by=NULL,retired_at=NULL,compared=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id, kernel.CompareVersion); err != nil {
+	if _, err := tx.Exec(ctx, "UPDATE claims SET retired='',retired_by=NULL,retired_at=NULL,compared=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), id, comparison.RuleVersion); err != nil {
 		return err
 	}
 	after, err := retirementSnapshotTx(ctx, tx, scope.OwnerID, id)
@@ -74,10 +74,10 @@ func restoreMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id stri
 	// protection independently, so expiration never silently retires a restored
 	// memory again. This done marker carries IDs only and is not worker work.
 	if _, err := tx.Exec(ctx, `INSERT INTO background_markers(owner_id,record_id,record_version,stage)
- VALUES($1,$2,$3,$4)`, string(scope.OwnerID), id, before.Version, fmt.Sprintf("%s:%d:restored:%s", comparison.Stage, kernel.CompareVersion, log.ID)); err != nil {
+ VALUES($1,$2,$3,$4)`, string(scope.OwnerID), id, before.Version, fmt.Sprintf("%s:%d:restored:%s", comparison.Stage, comparison.RuleVersion, log.ID)); err != nil {
 		return err
 	}
-	changes := kernel.JSON([]map[string]any{{"table": "claim_retirement", "id": id, "before": before, "afterHash": retirementFingerprint(after), "rule": kernel.CompareVersion}})
+	changes := kernel.JSON([]map[string]any{{"table": "claim_retirement", "id": id, "before": before, "afterHash": retirementFingerprint(after), "rule": comparison.RuleVersion}})
 	if _, err := tx.Exec(ctx, "INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'command',$4,$3)", string(scope.OwnerID), log.ID, changes, comparison.RestoreSummary); err != nil {
 		return err
 	}

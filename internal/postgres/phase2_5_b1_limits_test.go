@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -28,7 +27,7 @@ func TestPhase25B1_R12_FortyClassificationBatchesPerHour(t *testing.T) {
 		if err := f.db.QueryRow(f.ctx, `SELECT stage FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.organize:%' AND state='queued'`, f.scope.OwnerID).Scan(&stage); err != nil {
 			t.Fatal(err)
 		}
-		organizeJob := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process
+		organizeJob := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: organize.RuleVersion}).Process
 		runner := worker.New(f.store, map[string]worker.Handler{stage: organizeJob, "memory.organize": organizeJob}, slog.Default())
 		if _, err := runner.RunOnce(f.ctx); err != nil {
 			t.Fatal(err)
@@ -73,7 +72,7 @@ func TestPhase25B1_R13_DailyBudgetDefersWithoutAttempts(t *testing.T) {
 		if err := f.db.QueryRow(f.ctx, `SELECT stage FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.organize:%' AND state='queued'`, f.scope.OwnerID).Scan(&stage); err != nil {
 			t.Fatal(err)
 		}
-		organizeJob := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: kernel.OrganizeVersion}).Process
+		organizeJob := (organize.Service{Store: f.store.OrganizeStore(), Generator: jobCalls(f.store), Version: organize.RuleVersion}).Process
 		runner := worker.New(f.store, map[string]worker.Handler{stage: organizeJob, "memory.organize": organizeJob}, slog.Default())
 		worked, err := runner.RunOnce(f.ctx)
 		if err != nil {

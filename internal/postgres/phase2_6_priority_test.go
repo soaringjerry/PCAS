@@ -9,7 +9,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestPhase26A3ClassificationClaimsBeforeAllOtherBackgroundStages(t *testing.T) {
@@ -17,7 +16,7 @@ func TestPhase26A3ClassificationClaimsBeforeAllOtherBackgroundStages(t *testing.
 	m := phase26NewModel(t, f)
 	// Forty already classified rows supply comparison/handover inputs; the other
 	// 4960 rows still need classification. No quotas or paid history are cleared.
-	phase26Exec(t, f, `UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=ANY($2::uuid[])`, f.Scope.OwnerID, f.Claims[:40], kernel.OrganizeVersion)
+	phase26Exec(t, f, `UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=ANY($2::uuid[])`, f.Scope.OwnerID, f.Claims[:40], organize.RuleVersion)
 	phase26Proposal(t, f, 0, 4)
 	for _, stage := range []string{comparison.Stage, comparison.EntityStage, interpstore.EntityCandidatesStage, handover.Stage, organize.Stage} {
 		if _, err := phase26Schedule(f.Context, f.Store, stage); err != nil {
@@ -37,7 +36,7 @@ func TestPhase26A3ClassificationClaimsBeforeAllOtherBackgroundStages(t *testing.
 	if err != nil || j == nil || !strings.HasPrefix(j.Stage, organize.Stage+":") {
 		t.Fatalf("classification not dispatched first among all five due stages: %+v %v", j, err)
 	}
-	if err := (organize.Service{Store: f.Store.OrganizeStore(), Generator: jobCalls(f.Store), Version: kernel.OrganizeVersion}).Process(f.Context, *j); err != nil {
+	if err := (organize.Service{Store: f.Store.OrganizeStore(), Generator: jobCalls(f.Store), Version: organize.RuleVersion}).Process(f.Context, *j); err != nil {
 		t.Fatal(err)
 	}
 	if len(m.calls(organize.Stage)) != 1 || len(m.calls(comparison.Stage))+len(m.calls(comparison.EntityStage))+len(m.calls(interpstore.EntityCandidatesStage))+len(m.calls(handover.Stage)) != 0 {

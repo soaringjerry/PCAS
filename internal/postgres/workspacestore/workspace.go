@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
@@ -111,9 +112,9 @@ func (s *Workspace) SnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 		return out, err
 	}
 	where, args := memoryread.MemoryWhere(scope, false, memoryread.MemoryReadOptions{})
-	out.Organize.Version = kernel.OrganizeVersion
+	out.Organize.Version = organize.RuleVersion
 	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE coalesce((to_jsonb(cl)->>'organized')::int,0) >= `+kernel.OrganizeRequiredSQL("coalesce(to_jsonb(c)->>'category','')", "$5")+`),count(*)`+memoryread.MemoryJoins+` JOIN claims cl ON(cl.owner_id,cl.id)=(r.owner_id,r.id)`+where,
-		append(args, kernel.OrganizeVersion)...).Scan(&out.Organize.Done, &out.Organize.Total); err != nil {
+		append(args, organize.RuleVersion)...).Scan(&out.Organize.Done, &out.Organize.Total); err != nil {
 		return out, err
 	}
 	// Both counts use exactly the same visible current rows. Every revision has

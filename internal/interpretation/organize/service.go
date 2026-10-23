@@ -141,3 +141,11 @@ func (s Service) Process(ctx context.Context, job worker.Job) error {
 	}
 	return nil
 }
+
+// RuleVersion is the version of the organize rules. Version 3 reprocesses
+// previously organized rule memories only; other version-2 classifications
+// remain valid without relabeling. A test may set another version.
+var RuleVersion = 3
+
+// BatchLimit is the count of statements that one organize call labels.
+const BatchLimit = 40

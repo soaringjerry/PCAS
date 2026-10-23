@@ -12,7 +12,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -36,19 +35,19 @@ func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
 			case organize.Stage:
 				organizeTestMemory(t, s, scope, "虚构独立额度整理便签")
 				job = organizeTestJob(t, s, scope)
-				process = (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process
+				process = (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process
 			case comparison.Stage:
 				fake.set(`{"duplicates":[],"superseded":[]}`)
 				compareFixture(t, s, scope, "虚构独立额度比较便签甲", "虚构独立额度比较便签乙")
-				job = compareJob(t, s, scope, false, kernel.CompareVersion)
-				process = (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process
+				job = compareJob(t, s, scope, false, comparison.RuleVersion)
+				process = (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: comparison.RuleVersion}).Process
 			case comparison.EntityStage:
 				fake.set(`{"same":false,"keep":null}`)
 				_, a := compareEntityFixture(t, s, scope, "虚构额度同名", "虚构人物甲")
 				_, b := compareEntityFixture(t, s, scope, "虚构额度同名", "虚构人物乙")
 				compareEntityGroup(t, s, scope, "project", "虚构额度项目", a, b)
-				job = compareJob(t, s, scope, true, kernel.CompareVersion)
-				process = (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process
+				job = compareJob(t, s, scope, true, comparison.RuleVersion)
+				process = (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: comparison.EntityRuleVersion}).Process
 			}
 			for stage, limit := range map[string]int{organize.Stage: 40, comparison.Stage: 40, comparison.EntityStage: 30, interpstore.EntityCandidatesStage: 6, handover.Stage: 2} {
 				if stage == kind {
@@ -74,7 +73,7 @@ func TestOrganizeCompareIndependentHourlyCalls(t *testing.T) {
 				if err := s.Pool.QueryRow(ctx, "SELECT id::text,version FROM memory_records WHERE owner_id=$1 AND kind='entity' AND id<>$2 AND state='active' AND EXISTS(SELECT 1 FROM entity_versions v WHERE(v.owner_id,v.entity_id,v.version)=(memory_records.owner_id,memory_records.id,memory_records.version) AND v.entity_type='person') ORDER BY id LIMIT 1", scope.OwnerID, entity.ID).Scan(&existing.ID, &existing.Version); err != nil {
 					t.Fatal(err)
 				}
-				aliasProposalFixture(t, s, scope, existing, entity, kernel.EntityCompareVersion)
+				aliasProposalFixture(t, s, scope, existing, entity, comparison.EntityRuleVersion)
 				compareEntityGroup(t, s, scope, "project", "虚构额度项目", a)
 			}
 			job = leaseStage(t, s, scope, job.Record, fmt.Sprintf("%s:1:%s", kind, memory.NewID()))

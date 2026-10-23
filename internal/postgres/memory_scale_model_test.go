@@ -17,7 +17,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -286,11 +285,11 @@ func phase26Schedule(ctx context.Context, s *Store, stage string) (int, error) {
 func phase26Process(ctx context.Context, s *Store, j worker.Job) error {
 	switch strings.SplitN(j.Stage, ":", 2)[0] {
 	case organize.Stage:
-		return (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, j)
+		return (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, j)
 	case comparison.Stage:
-		return (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(ctx, j)
+		return (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: comparison.RuleVersion}).Process(ctx, j)
 	case comparison.EntityStage:
-		return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: kernel.EntityCompareVersion}).Process(ctx, j)
+		return (comparison.EntityService{Store: s.EntityCompareStore(), Generator: jobCalls(s), Version: comparison.EntityRuleVersion}).Process(ctx, j)
 	case interpstore.EntityCandidatesStage:
 		return (aliasscan.Service{Store: s.AliasScanStore(), Generator: jobCalls(s)}).Process(ctx, j)
 	case handover.Stage:

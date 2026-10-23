@@ -22,8 +22,8 @@ func backgroundFixture(t *testing.T, stage string) (*Store, memory.Scope, worker
 	switch stage {
 	case "compare":
 		compareFixture(t, s, scope, "虚构进展甲。", "虚构进展乙。", "虚构进展丙。")
-		j := compareJob(t, s, scope, false, kernel.CompareVersion)
-		return s, scope, j, (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process, func(w http.ResponseWriter, _ *http.Request) {
+		j := compareJob(t, s, scope, false, comparison.RuleVersion)
+		return s, scope, j, (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: comparison.RuleVersion}).Process, func(w http.ResponseWriter, _ *http.Request) {
 			secretaryModelReply(w, map[string]any{"duplicates": []any{}, "superseded": []any{}})
 		}
 	case "handover":

@@ -267,3 +267,22 @@ func relativeEventQuote(quote string) bool {
 }
 
 var relativeEventPattern = regexp.MustCompile(`[0-9一二两三四五六七八九十几]+(个)?[天日周月年](前|后)|[周星期礼拜]+[一二三四五六日天]`)
+
+// Trust is how far a memory can be relied on, in this order: inferred when
+// an AI said it or the model inferred it, reported when someone else's
+// words were passed on, tentative when the owner said it with reservation,
+// repeated when it was said in two conversations or sources, and stated
+// otherwise. The library's filter in SQL follows the same order.
+func Trust(text, acquisition string, ai bool, sources int) string {
+	switch {
+	case acquisition == "inferred" || ai:
+		return "inferred"
+	case acquisition == "reported":
+		return "reported"
+	case QualifiedCapture(text):
+		return "tentative"
+	case sources >= 2:
+		return "repeated"
+	}
+	return "stated"
+}

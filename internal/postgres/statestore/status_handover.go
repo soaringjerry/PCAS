@@ -105,19 +105,7 @@ func statusTrustTx(ctx context.Context, tx pgx.Tx, owner memory.ID, m workspace.
 	if err != nil {
 		return "", err
 	}
-	if inferred {
-		return "inferred", nil
-	}
-	if acquisition == "reported" {
-		return "reported", nil
-	}
-	if extraction.QualifiedCapture(m.Text) {
-		return "tentative", nil
-	}
-	if distinct >= 2 {
-		return "repeated", nil
-	}
-	return "stated", nil
+	return extraction.Trust(m.Text, acquisition, inferred, distinct), nil
 }
 
 func (s *State) handoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (HandoverInput, []handoverDependency, []memory.Ref, error) {

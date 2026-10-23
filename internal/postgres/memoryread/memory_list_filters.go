@@ -100,7 +100,8 @@ func trustedMemoryIDsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, opts
 	return total, ids, err
 }
 
-// Same precedence as memoryTrust/claimStatusesTx, with already aggregated proofs.
+// Same order as extraction.Trust over claimStatusesTx, with already
+// aggregated proofs.
 func memoryTrustFilterSQL(claim, proof, trust string) string {
 	human := "(" + claim + ".acquisition<>'inferred' AND NOT coalesce(" + proof + ".ai,false))"
 	if trust == "inferred" {

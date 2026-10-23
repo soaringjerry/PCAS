@@ -20,6 +20,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
@@ -222,7 +223,7 @@ func TestSecretaryFallbackPersistsOriginal(t *testing.T) {
 func TestSecretaryStablePrefixAndVisibility(t *testing.T) {
 	s := testStore(t)
 	scope := owner()
-	var prompts, systems []string
+	var inputs, systems []string
 	secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Messages []struct {
@@ -238,7 +239,7 @@ func TestSecretaryStablePrefixAndVisibility(t *testing.T) {
 				systems = append(systems, m.Content)
 			}
 			if m.Role == "user" {
-				prompts = append(prompts, m.Content)
+				inputs = append(inputs, m.Content)
 			}
 		}
 		secretaryModelReply(w, `{"reply":"好的","used":[],"actions":[]}`)
@@ -253,14 +254,14 @@ func TestSecretaryStablePrefixAndVisibility(t *testing.T) {
 	req := turnRequest("那今天有什么事")
 	req.ConversationID = &out.ConversationID
 	mustTurn(t, s, scope, req)
-	if len(systems) != 2 || systems[0] != systems[1] || systems[0] != deskstore.SecretaryInstructions {
+	if len(systems) != 2 || systems[0] != systems[1] || systems[0] != prompts.Must("secretary").Text() {
 		t.Fatal("system changed")
 	}
 	prefix := func(p string) string { return strings.Split(p, "本对话历史：")[0] }
-	if len(prompts) != 2 || prefix(prompts[0]) != prefix(prompts[1]) {
-		t.Fatal("unstable cache prefix", prompts)
+	if len(inputs) != 2 || prefix(inputs[0]) != prefix(inputs[1]) {
+		t.Fatal("unstable cache prefix", inputs)
 	}
-	for _, p := range prompts {
+	for _, p := range inputs {
 		if !strings.HasSuffix(p, "\n只输出 JSON 对象。\n") {
 			t.Fatal("format reminder must follow the utterance at the end")
 		}

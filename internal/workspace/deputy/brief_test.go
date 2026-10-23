@@ -8,6 +8,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -106,8 +107,8 @@ func TestBriefAddsSourcesAndTheirContextUpToItsLimit(t *testing.T) {
 		t.Fatalf("%v", b.MemoryIDs)
 	}
 	before = b.Len()
-	b.Request("拆成步骤", "breakdown", "虚构的日期说明")
-	if got := b.String()[before:]; got != "\n本次请求：拆成步骤\n虚构的日期说明\n"+OutputFormat("breakdown") {
+	b.Request("拆成步骤", "breakdown", true)
+	if got := b.String()[before:]; got != "\n本次请求：拆成步骤\n"+prompts.Must("recall-date").Text()+"\n"+OutputFormat("breakdown") {
 		t.Fatalf("%q", got)
 	}
 }

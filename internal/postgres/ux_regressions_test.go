@@ -13,9 +13,9 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/deputystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/ai"
@@ -141,7 +141,7 @@ func TestUncertainAndCorrectedCaptureRemainsQualified(t *testing.T) {
 	if extraction.Confirmation(source, item) != "candidate" {
 		t.Fatal("structured qualification ignored")
 	}
-	if !strings.Contains(deputystore.AssistantInstructions, "confirmation=adopted") || !strings.Contains(deputystore.AssistantInstructions, "confirmation=confirmed") {
+	if !strings.Contains(prompts.Must("assistant").Text(), "confirmation=adopted") || !strings.Contains(prompts.Must("assistant").Text(), "confirmation=confirmed") {
 		t.Fatal("model lacks source-backed/verified distinction")
 	}
 }

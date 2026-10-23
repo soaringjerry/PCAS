@@ -8,6 +8,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/testsupport"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -99,10 +100,10 @@ func TestUrgentIsATaskPatch(t *testing.T) {
 
 // The model is told when to set the mark, and the schema lets it.
 func TestSecretaryIsToldAboutUrgent(t *testing.T) {
-	if !strings.Contains(deskstore.SecretaryInstructions, "urgent：") || !strings.Contains(deskstore.SecretaryInstructions, "只说了一个具体时间不算着急") {
+	if !strings.Contains(prompts.Must("secretary").Text(), "urgent：") || !strings.Contains(prompts.Must("secretary").Text(), "只说了一个具体时间不算着急") {
 		t.Fatal("instructions do not explain urgent")
 	}
-	if strings.Count(string(deskstore.SecretaryOutputSchema), `"urgent"`) != 4 {
+	if strings.Count(string(prompts.MustSchema("secretary-output").Bytes()), `"urgent"`) != 4 {
 		t.Fatal("schema must declare and require urgent for create_task and update.set")
 	}
 }

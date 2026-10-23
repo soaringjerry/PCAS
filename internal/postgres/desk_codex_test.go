@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
 	"github.com/jackc/pgx/v5"
@@ -120,7 +120,7 @@ func exerciseCodexFormats(t *testing.T, binary, home string, live bool) {
 			t.Fatal(err)
 		}
 		start := time.Now()
-		raw, err := models.GenerateWithSearchSchema(ctx, "chatgpt", deskstore.SecretaryInstructions, prompt, deskstore.SecretaryOutputSchema)
+		raw, err := models.GenerateWithSearchSchema(ctx, "chatgpt", prompts.Must("secretary").Text(), prompt, prompts.MustSchema("secretary-output").Bytes())
 		if err != nil {
 			t.Fatal(err)
 		}

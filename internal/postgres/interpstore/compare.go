@@ -16,11 +16,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
-
-var CompareInstructions = prompts.Must("compare").Text()
 
 type CompareGroup struct {
 	Key  string `json:"key"`

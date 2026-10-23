@@ -119,6 +119,32 @@ func TestStoragePackagesDoNotMakeModelCalls(t *testing.T) {
 	}
 }
 
+// The instructions of a model call belong to the domain that builds the
+// call. A storage package does not import the prompt registry, so no
+// instruction, schema, or sentence of a model input is kept in storage.
+func TestStoragePackagesHoldNoInstructions(t *testing.T) {
+	for _, dir := range storagePackages {
+		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+		if err != nil || len(files) == 0 {
+			t.Fatal(dir, err, len(files))
+		}
+		for _, file := range files {
+			if strings.HasSuffix(file, "_test.go") {
+				continue
+			}
+			parsed, err := parser.ParseFile(token.NewFileSet(), file, nil, parser.ImportsOnly)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, imported := range parsed.Imports {
+				if imported.Path.Value == `"github.com/soaringjerry/PCAS/internal/prompts"` {
+					t.Errorf("%s imports the prompt registry", file)
+				}
+			}
+		}
+	}
+}
+
 // itemWrite matches an SQL statement that writes the items table.
 var itemWrite = regexp.MustCompile(`(?i)\b(insert\s+into|update|delete\s+from)\s+work_items\b`)
 

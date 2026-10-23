@@ -32,6 +32,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/retrieval"
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 
@@ -1226,12 +1227,12 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			if contextErr == nil {
 				failureStage = "budget"
 				p, _ := registryOf(s).Get(c.Agent.ID)
-				reservationID, contextErr = s.ReserveModelCostID(ctx, scope.OwnerID, p.Reserve(deskstore.SecretaryInstructions+prompt), nil)
+				reservationID, contextErr = s.ReserveModelCostID(ctx, scope.OwnerID, p.Reserve(prompts.Must("secretary").Text()+prompt), nil)
 			}
 			if contextErr == nil {
 				failureStage = "model"
 				workCtx, cancel := context.WithTimeout(requestCtx, 90*time.Second)
-				result, err := registryOf(s).GenerateWithSearchSchema(workCtx, c.Agent.ID, deskstore.SecretaryInstructions, prompt, deskstore.SecretaryOutputSchema)
+				result, err := registryOf(s).GenerateWithSearchSchema(workCtx, c.Agent.ID, prompts.Must("secretary").Text(), prompt, prompts.MustSchema("secretary-output").Bytes())
 				// HTTP providers may hide cancellation behind an unreachable error.
 				if err != nil && workCtx.Err() != nil {
 					err = workCtx.Err()

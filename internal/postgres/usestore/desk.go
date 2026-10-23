@@ -11,7 +11,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -64,5 +63,3 @@ func (s *Use) DeskItemsContextTx(ctx context.Context, tx pgx.Tx, scope memory.Sc
 func (s *Use) DeskNow(loc *time.Location) string {
 	return secretary.Now(s.BusinessNow(), loc)
 }
-
-var RecallDateInstructions = prompts.Must("recall-date").Text()

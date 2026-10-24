@@ -196,6 +196,8 @@ When a handover is written again is `handover.Schedule` and `projecthandover.Due
 
 Which topics are judged as projects, and in which order, is `topicproject.Schedule`: each eligible topic not yet answered for its evidence, what was spoken of last first, each queued check counting what its input leaves out. Storage reads the groups once through an index-friendly prefilter of `topicproject.Eligible`, which is checked again on each topic's input.
 
+The order in which proposed pairs of names are judged is `aliasscan.MergeOrder`: the strongest representative of each type first.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

@@ -111,17 +111,6 @@ func FillMemoryStatusesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, memor
 	return nil
 }
 
-type RetirementAccessKey struct{}
-
-// Existing answers may retain their original permissions and citations after
-// a duplicate merges. Supersession changes validity, not access to old text.
-func RetirementDependencyAllowed(ctx context.Context, status claimStatus) bool {
-	if access, _ := ctx.Value(RetirementAccessKey{}).(bool); access {
-		return true
-	}
-	return status.Retired == "" || status.Retired == "duplicate" && status.KeeperCurrent
-}
-
 func DependencyMemorySQL(owner, id string) string {
 	return fmt.Sprintf(`EXISTS(SELECT 1 FROM claims status WHERE status.owner_id=%[1]s AND status.id=%[2]s
  AND (coalesce(to_jsonb(status)->>'retired','')='' OR to_jsonb(status)->>'retired'='duplicate' AND EXISTS(

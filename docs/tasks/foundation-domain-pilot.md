@@ -194,6 +194,8 @@ Which remembered dates a review judges, and in which class, is `datereview.Class
 
 When a handover is written again is `handover.Schedule` and `projecthandover.Due`: when its input changed, not while one is being written, the owner's first only when some memory belongs in it, a project's only while the project is open, and an hour after the last at the earliest.
 
+Which topics are judged as projects, and in which order, is `topicproject.Schedule`: each eligible topic not yet answered for its evidence, what was spoken of last first, each queued check counting what its input leaves out. Storage reads the groups once through an index-friendly prefilter of `topicproject.Eligible`, which is checked again on each topic's input.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

@@ -190,6 +190,8 @@ What a run may still use is decided by `access.Verify` (`internal/workspace/acce
 
 A statement is written once by `claim.Remember`: what the owner erased is not written again, a merged key gives the memory it went into, a structured statement at a quotation that already gave a memory gives that memory (and fills the assistant's unconfirmed draft), a later source version saying the same is new evidence for the same memory, and only then is a new memory made, about the owner, a named entity, or an entity the source introduced. The owner's own memory keeps their words as its source.
 
+Which remembered dates a review judges, and in which class, is `datereview.Class` and `datereview.Pick`: a date never pinned down, a fixed arrangement without an hour, a dated row over for a day; one per memory, once per memory version and class. Storage lists the open dates of the current memories with the classes already judged.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

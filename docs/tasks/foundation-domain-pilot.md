@@ -198,6 +198,18 @@ Which topics are judged as projects, and in which order, is `topicproject.Schedu
 
 The order in which proposed pairs of names are judged is `aliasscan.MergeOrder`: the strongest representative of each type first.
 
+What stays in storage on purpose, each with its reason:
+
+| What | Why it stays |
+|---|---|
+| The claim of a queue job (`jobs.go`): windows, cursors, pause and hold of an import, the fair turn between cards and comparisons | `FOR UPDATE SKIP LOCKED` over indexed pages; the order is machinery, and the priorities are set at enqueue |
+| The order of secretary turns | Admission and replay under the owner lock |
+| The recovery of an interrupted deputy run, and the budget reservation | Both read and write the model-call journals and the spending; moving them waits for the journals to be one |
+| Which memories still need an organize or comparison pass | A set query over every current memory, through the indexes; the rule versions are `organize.RuleVersion` and `comparison.RuleVersion` |
+| The SQL that reads a model input | Reads only; what goes in and how much is the domain's (`datereview`, `topicproject`, `secretary`, `contextbuilder` limits) |
+| The tasks an effort estimate needs | The rule is the `effort.Store` contract; the job acknowledges itself in the same read |
+| The label of a source's best fragment | Made in the recall SQL that chooses the fragment |
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

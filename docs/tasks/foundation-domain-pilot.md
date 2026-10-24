@@ -192,6 +192,8 @@ A statement is written once by `claim.Remember`: what the owner erased is not wr
 
 Which remembered dates a review judges, and in which class, is `datereview.Class` and `datereview.Pick`: a date never pinned down, a fixed arrangement without an hour, a dated row over for a day; one per memory, once per memory version and class. Storage lists the open dates of the current memories with the classes already judged.
 
+When a handover is written again is `handover.Schedule` and `projecthandover.Due`: when its input changed, not while one is being written, the owner's first only when some memory belongs in it, a project's only while the project is open, and an hour after the last at the earliest.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

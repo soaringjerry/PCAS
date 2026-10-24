@@ -45,43 +45,49 @@ type HandoverInput struct {
 	InputHash    string                           `json:"inputHash"`
 }
 
+// EnqueueStatusHandoversTx queues the owners' handovers. handover.Schedule
+// decides; handoverScheduleUnit reads and queues.
 func EnqueueStatusHandoversTx(ctx context.Context, tx pgx.Tx, anchors map[memory.ID]memory.Ref, now time.Time) (int, error) {
 	count := 0
 	for owner, anchor := range anchors {
-		var pending bool
-		var hash string
-		var old *string
-		var built *time.Time
-		if err := tx.QueryRow(ctx, `SELECT library_handover_hash($1),
- (SELECT input_hash FROM handovers WHERE owner_id=$1 AND rule>=$2),
- (SELECT built_at FROM handovers WHERE owner_id=$1),
- EXISTS(SELECT 1 FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.handover:%' AND state IN('queued','leased'))`, string(owner), HandoverVersion).Scan(&hash, &old, &built, &pending); err != nil {
+		queued, err := handover.Schedule(ctx, handoverScheduleUnit{tx: tx, owner: owner, anchor: anchor}, now)
+		if err != nil {
 			return count, err
 		}
-		if pending || old != nil && *old == hash {
-			continue
+		if queued {
+			count++
 		}
-		if old == nil {
-			var exists bool
-			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM library_handover_members($1))", string(owner)).Scan(&exists); err != nil {
-				return count, err
-			}
-			if !exists {
-				continue
-			}
-		}
-		due := now
-		if built != nil {
-			due = kernel.MaxTime(now, built.Add(handover.MinimumInterval))
-		}
-		id := memory.NewID()
-		if _, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at)
- VALUES($1,$2,$3,$4,$5,$6,$7)`, string(id), string(owner), string(anchor.ID), anchor.Version, fmt.Sprintf("%s:%d:%s", handover.Stage, HandoverVersion, id), kernel.HandoverPriority, due); err != nil {
-			return count, err
-		}
-		count++
 	}
 	return count, nil
+}
+
+// handoverScheduleUnit is the storage of the handover schedule of one owner.
+type handoverScheduleUnit struct {
+	tx     pgx.Tx
+	owner  memory.ID
+	anchor memory.Ref
+}
+
+func (u handoverScheduleUnit) Written(ctx context.Context) (handover.Written, error) {
+	var w handover.Written
+	err := u.tx.QueryRow(ctx, `SELECT library_handover_hash($1),
+ (SELECT input_hash FROM handovers WHERE owner_id=$1 AND rule>=$2),
+ (SELECT built_at FROM handovers WHERE owner_id=$1),
+ EXISTS(SELECT 1 FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.handover:%' AND state IN('queued','leased'))`, string(u.owner), HandoverVersion).Scan(&w.Hash, &w.InputHash, &w.BuiltAt, &w.Pending)
+	return w, err
+}
+
+func (u handoverScheduleUnit) HasMembers(ctx context.Context) (bool, error) {
+	var exists bool
+	err := u.tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM library_handover_members($1))", string(u.owner)).Scan(&exists)
+	return exists, err
+}
+
+func (u handoverScheduleUnit) Queue(ctx context.Context, due time.Time) error {
+	id := memory.NewID()
+	_, err := u.tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at)
+ VALUES($1,$2,$3,$4,$5,$6,$7)`, string(id), string(u.owner), string(u.anchor.ID), u.anchor.Version, fmt.Sprintf("%s:%d:%s", handover.Stage, HandoverVersion, id), kernel.HandoverPriority, due)
+	return err
 }
 
 // Use evidence roles as well as acquisition: imported AI assertions must never

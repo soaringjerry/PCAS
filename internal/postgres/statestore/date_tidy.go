@@ -36,21 +36,18 @@ const (
 	dateTidyTextCharacters = datereview.TextCharacters
 	dateTidySameTitles     = datereview.SameTitles
 	dateTidySameCharacters = datereview.SameCharacters
-	dateTidyPastAfter      = datereview.PastAfter
 )
 
 // The input assembly below is the context builder of the date review service.
-type dateTidyEntry = datereview.Entry
 type dateTidyInput = datereview.Input
 type dateTidySame = datereview.Same
 
-// dateTidyEligible lists the dates that are open and are not a time to show:
-// never pinned down, a fixed arrangement with no hour, or over for a day. A
-// row already judged for this memory version and class is not listed again.
-const dateTidyEligible = `SELECT DISTINCT ON(d.claim_id) d.claim_id::text,d.claim_version,
- CASE WHEN d.kind='unclear' THEN 'unclear' WHEN d.kind='recurring' THEN 'habit' ELSE 'past' END AS class,
- d.kind,d.title,coalesce(to_char(d.at AT TIME ZONE $3,'YYYY-MM-DD HH24:MI'),''),d.recurrence,d.time_note,d.original_text,
- c.value #>> '{}',coalesce(to_char(rv.expressed_at AT TIME ZONE $3,'YYYY-MM-DD'),''),coalesce(c.acquisition,'')
+// dateTidyOpen lists the open dates of the current memories, each with the
+// classes already judged for its memory version; datereview.Pick chooses.
+const dateTidyOpen = `SELECT d.claim_id::text,d.claim_version,d.kind,d.at,coalesce(d.schedule_rule->>'clock',''),
+ ARRAY(SELECT k.class FROM date_tidy_checks k WHERE(k.owner_id,k.claim_id,k.claim_version)=(d.owner_id,d.claim_id,d.claim_version)),
+ d.title,coalesce(to_char(d.at AT TIME ZONE $2,'YYYY-MM-DD HH24:MI'),''),d.recurrence,d.time_note,d.original_text,
+ c.value #>> '{}',coalesce(to_char(rv.expressed_at AT TIME ZONE $2,'YYYY-MM-DD'),''),coalesce(c.acquisition,'')
  FROM deadlines d
  JOIN memory_records r ON(r.owner_id,r.id,r.version)=(d.owner_id,d.claim_id,d.claim_version)
  JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(d.owner_id,d.claim_id,d.claim_version)
@@ -58,20 +55,10 @@ const dateTidyEligible = `SELECT DISTINCT ON(d.claim_id) d.claim_id::text,d.clai
  LEFT JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(d.owner_id,d.claim_id,d.claim_version)
  WHERE d.owner_id=$1 AND r.state='active' AND cl.retired=''
  AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND c.scope->>'deadline_completed_version'=c.version::text)
- AND (d.kind='unclear' OR (d.kind='recurring' AND coalesce(d.schedule_rule->>'clock','')='') OR (d.kind IN('deadline','appointment') AND d.at<$2))
- AND ($4::uuid IS NULL OR d.claim_id=$4)
- AND NOT EXISTS(SELECT 1 FROM date_tidy_checks k WHERE(k.owner_id,k.claim_id,k.claim_version)=(d.owner_id,d.claim_id,d.claim_version)
-  AND k.class=CASE WHEN d.kind='unclear' THEN 'unclear' WHEN d.kind='recurring' THEN 'habit' ELSE 'past' END)
+ AND ($3::uuid IS NULL OR d.claim_id=$3)
  ORDER BY d.claim_id,d.id`
 
-type dateTidyRow struct {
-	Claim   string
-	Version int
-	Class   string
-	Entry   dateTidyEntry
-}
-
-func dateTidyRowsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time, claim *string) ([]dateTidyRow, string, error) {
+func dateTidyRowsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time, claim *string) ([]datereview.Due, string, error) {
 	var timezone string
 	if err := tx.QueryRow(ctx, "SELECT coalesce(nullif(settings->>'timezone',''),'UTC') FROM workspace_owners WHERE owner_id=$1", string(owner)).Scan(&timezone); errors.Is(err, pgx.ErrNoRows) {
 		timezone = "UTC"
@@ -81,20 +68,24 @@ func dateTidyRowsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Ti
 	if _, err := time.LoadLocation(timezone); err != nil {
 		timezone = "UTC"
 	}
-	rows, err := tx.Query(ctx, dateTidyEligible, string(owner), now.Add(-dateTidyPastAfter), timezone, claim)
+	rows, err := tx.Query(ctx, dateTidyOpen, string(owner), timezone, claim)
 	if err != nil {
 		return nil, "", err
 	}
 	defer rows.Close()
-	var out []dateTidyRow
+	var open []datereview.Open
 	for rows.Next() {
-		var r dateTidyRow
-		if err = rows.Scan(&r.Claim, &r.Version, &r.Class, &r.Entry.Kind, &r.Entry.Title, &r.Entry.At, &r.Entry.Recurrence, &r.Entry.TimeNote, &r.Entry.OriginalText, &r.Entry.Memory, &r.Entry.SaidOn, &r.Entry.Acquisition); err != nil {
+		var r datereview.Open
+		if err = rows.Scan(&r.Claim, &r.Version, &r.Kind, &r.At, &r.Clock, &r.Judged, &r.Entry.Title, &r.Entry.At, &r.Entry.Recurrence, &r.Entry.TimeNote, &r.Entry.OriginalText, &r.Entry.Memory, &r.Entry.SaidOn, &r.Entry.Acquisition); err != nil {
 			return nil, "", err
 		}
-		out = append(out, r)
+		r.Entry.Kind = r.Kind
+		open = append(open, r)
 	}
-	return out, timezone, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	return datereview.Pick(open, now), timezone, nil
 }
 
 // enqueueDateTidyTx queues one judgement per eligible date. The job is keyed by

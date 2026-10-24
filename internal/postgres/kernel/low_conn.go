@@ -49,10 +49,3 @@ func StatusCallLock(ctx context.Context, s *DB) (func(), error) {
 	_, release, err := s.OrganizeCallConnection(ctx, "status_busy", StatusInterval)
 	return release, err
 }
-
-func MaxTime(a, b time.Time) time.Time {
-	if a.After(b) {
-		return a
-	}
-	return b
-}

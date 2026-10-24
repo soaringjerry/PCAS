@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
@@ -123,3 +124,32 @@ func BatchesFor(names []Name, version int, legacy bool) []Batch {
 }
 
 func asJSON(v any) []byte { b, _ := json.Marshal(v); return b }
+
+// MergeOrder is the order in which the names' proposed pairs are judged: the
+// strongest representative of each type first, the one with the most
+// memories, a Chinese name before another, then by name and ID. It gives the
+// entity IDs.
+func MergeOrder(names []Name) []string {
+	ranked := append([]Name(nil), names...)
+	sort.SliceStable(ranked, func(i, j int) bool {
+		a, b := ranked[i], ranked[j]
+		if a.Type != b.Type {
+			return a.Type < b.Type
+		}
+		if a.MemoryCount != b.MemoryCount {
+			return a.MemoryCount > b.MemoryCount
+		}
+		if comparison.HasChinese(a.Name) != comparison.HasChinese(b.Name) {
+			return comparison.HasChinese(a.Name)
+		}
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return a.Ref.ID < b.Ref.ID
+	})
+	order := make([]string, len(ranked))
+	for i, e := range ranked {
+		order[i] = string(e.Ref.ID)
+	}
+	return order
+}

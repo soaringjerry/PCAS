@@ -27,7 +27,7 @@ type projectInputPart = projecthandover.Part
 type projectHandoverInput = projecthandover.Input
 
 func (s *Workspace) ReadProjectHandover(ctx context.Context, scope memory.Scope, id string) (workspace.ProjectHandover, error) {
-	out := kernel.EmptyProjectHandover(id)
+	out := projecthandover.Empty(id)
 	if err := kernel.RequireOwner(scope); err != nil {
 		return out, err
 	}

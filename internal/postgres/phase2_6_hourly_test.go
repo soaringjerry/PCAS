@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestPhase26G7T4ActualProviderAttemptAtEachHourlyBoundary(t *testing.T) {
@@ -19,7 +21,7 @@ func TestPhase26G7T4ActualProviderAttemptAtEachHourlyBoundary(t *testing.T) {
 	stages := []struct {
 		stage string
 		limit int
-	}{{kernel.OrganizeStage, 40}, {kernel.CompareStage, 40}, {kernel.EntityCompareStage, 30}, {interpstore.EntityCandidatesStage, 6}, {kernel.HandoverStage, 2}}
+	}{{organize.Stage, 40}, {comparison.Stage, 40}, {comparison.EntityStage, 30}, {interpstore.EntityCandidatesStage, 6}, {handover.Stage, 2}}
 	// Retained prior-hour history is an explicit precondition. Exactly FIVE
 	// attempts are made by the real provider, each consuming its final free slot.
 	for _, tc := range stages {

@@ -50,7 +50,7 @@ func TestDeputyGenerationRecoversWritesWithoutRepeatingPaidWork(t *testing.T) {
 				}
 				secretaryModelReply(w, "Fictitious checked draft.")
 			})
-			s.Models.Config.Providers[0].InputPerMillion = 1
+			registryOf(s).Config.Providers[0].InputPerMillion = 1
 			state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Fictitious recovery task"})
 			command := workspace.Command{Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "draft", Prompt: "Prepare a fictitious draft.", RequestID: string(memory.NewID()), ExpectedRevision: state.Revision}
 			if mode == "revision" {
@@ -181,7 +181,7 @@ func TestDeputyInterruptedSubmissionRetainsHoldAndNeverRetries(t *testing.T) {
 		cancel()
 		secretaryModelReply(w, "Interrupted fictitious response.")
 	})
-	s.Models.Config.Providers[0].InputPerMillion = 1
+	registryOf(s).Config.Providers[0].InputPerMillion = 1
 	state := workspaceCommand(t, s, scope, workspace.Command{Type: "addTask", Title: "Fictitious interrupted work"})
 	state = workspaceCommand(t, s, scope, workspace.Command{Type: "requestRun", ThingID: state.Tasks[0].ID, AgentID: "model", Kind: "draft", Prompt: "Prepare fictitious work."})
 	run := state.Runs[0]
@@ -209,7 +209,7 @@ func TestDeputyAbandonedInputRecordsSkippedApplication(t *testing.T) {
 	request := leasedDeputyAnswer(t, s, scope)
 	ctx := context.Background()
 	adapter := callstore.InteractiveCalls{Store: s.Calls}
-	provider, _ := s.Models.Get(request.ProviderID)
+	provider, _ := registryOf(s).Get(request.ProviderID)
 	id, err := adapter.Prepare(ctx, request, provider)
 	if err != nil {
 		t.Fatal(err)

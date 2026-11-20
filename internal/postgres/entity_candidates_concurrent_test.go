@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -59,7 +60,7 @@ func TestEntityCandidatesConcurrentSchedulerWorkerAndUserRequests(t *testing.T) 
 		return merges, pending, err
 	}
 	agent := f.answerAgent(t)
-	userStore, err := postgres.Open(f.ctx, f.db.Config().ConnString())
+	userStore, err := postgres.Open(f.ctx, f.db.Config().ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

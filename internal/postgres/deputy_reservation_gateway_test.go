@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
@@ -41,8 +42,8 @@ func TestDeputyGatewayReusesAdmissionBudgetAndOriginalUsage(t *testing.T) {
 		calls.Add(1)
 		secretaryModelReply(w, "Fictitious paid draft.")
 	})
-	s.Models.Config.Providers[0].InputPerMillion = 1
-	s.Models.Config.Providers[0].OutputPerMillion = 2
+	registryOf(s).Config.Providers[0].InputPerMillion = 1
+	registryOf(s).Config.Providers[0].OutputPerMillion = 2
 	request := leasedDeputyAnswer(t, s, scope)
 	ctx := context.Background()
 	paid, err := s.Gateway().Call(ctx, request)
@@ -72,7 +73,7 @@ func TestDeputyGatewayRecoversBillingWithoutSettlingReusedRun(t *testing.T) {
 				calls.Add(1)
 				secretaryModelReply(w, "Fictitious original response.")
 			})
-			s.Models.Config.Providers[0].InputPerMillion = 1
+			registryOf(s).Config.Providers[0].InputPerMillion = 1
 			request := leasedDeputyAnswer(t, s, scope)
 			ctx := context.Background()
 			if _, err := s.Pool.Exec(ctx, `CREATE FUNCTION reject_deputy_billing() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic billing failure'; END $$; CREATE TRIGGER reject_deputy_billing BEFORE INSERT ON model_usage FOR EACH ROW EXECUTE FUNCTION reject_deputy_billing()`); err != nil {
@@ -93,7 +94,7 @@ func TestDeputyGatewayRecoversBillingWithoutSettlingReusedRun(t *testing.T) {
 			if _, err := s.Pool.Exec(ctx, `DROP TRIGGER reject_deputy_billing ON model_usage`); err != nil {
 				t.Fatal(err)
 			}
-			peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
+			peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -118,7 +119,7 @@ func TestDeputyInterruptedReservationDistinguishesUnsubmittedAndUnknown(t *testi
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { t.Error("recovery submitted another model call") })
 			request := leasedDeputyAnswer(t, s, scope)
 			ctx := context.Background()
-			provider, _ := s.Models.Get("model")
+			provider, _ := registryOf(s).Get("model")
 			adapter := callstore.InteractiveCalls{Store: s.Calls}
 			invocation, err := adapter.Prepare(ctx, request, provider)
 			if err != nil {
@@ -168,7 +169,7 @@ func TestDeputyCancellationRetainsAdmissionHoldWithoutAnotherGeneration(t *testi
 		}
 	})
 	defer close(release)
-	s.Models.Config.Providers[0].InputPerMillion = 1
+	registryOf(s).Config.Providers[0].InputPerMillion = 1
 	request := leasedDeputyAnswer(t, s, scope)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

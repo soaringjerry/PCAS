@@ -21,6 +21,10 @@ import (
 // Stage is the queue stage. One job's stage is "memory.date_tidy:<class>".
 const Stage = "memory.date_tidy"
 
+// HourlyCalls is the number of date reviews that can reserve a model call in one
+// hour. Unused capacity is not lent to another stage.
+const HourlyCalls = 30
+
 // Entry is the date under review. Its JSON form is part of the model input.
 type Entry struct {
 	Kind         string `json:"kind"`

@@ -14,10 +14,10 @@ func (s *Memory) QueueEmbeddingBackfill(ctx context.Context, scope memory.Scope)
 	if err := kernel.RequireOwner(scope); err != nil {
 		return 0, err
 	}
-	if s.Models == nil || !s.Models.Available(s.Models.EmbeddingID()) {
+	if s.Models == nil || !s.ModelAvailable(s.Models.EmbeddingID()) {
 		return 0, memory.ErrUnavailable
 	}
-	p, ok := s.Models.Get(s.Models.EmbeddingID())
+	p, ok := s.Model(s.Models.EmbeddingID())
 	if !ok {
 		return 0, memory.ErrUnavailable
 	}

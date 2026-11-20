@@ -22,6 +22,10 @@ import (
 // "memory.topic_project:<topic id>:<input hash>:<project page>".
 const Stage = "memory.topic_project"
 
+// HourlyCalls is the number of topic project checks that can reserve a model call in one
+// hour. Unused capacity is not lent to another stage.
+const HourlyCalls = 2
+
 const (
 	// DailyLimit is the number of projects that this path creates in one local day.
 	DailyLimit = 4

@@ -54,7 +54,7 @@ func (s *Deputy) PrepareRunContext(ctx context.Context, scope memory.Scope, c wo
 		if !agent.Enabled {
 			return memory.ErrForbidden
 		}
-		if c.Type == "delegateTask" && (agent.Channel == "manual" || s.Models == nil || !s.Models.Available(agent.ID)) {
+		if c.Type == "delegateTask" && (agent.Channel == "manual" || !s.ModelAvailable(agent.ID)) {
 			return memory.ErrUnavailable
 		}
 		item := workspace.Item{ID: c.ID, Kind: "task", ProjectID: c.ProjectID}
@@ -69,7 +69,7 @@ func (s *Deputy) PrepareRunContext(ctx context.Context, scope memory.Scope, c wo
 		if err != nil {
 			return err
 		}
-		plan = memory.PlanQuery(c.Prompt, s.BusinessNow(), kernel.Location(settings))
+		plan = memory.PlanQuery(c.Prompt, s.BusinessNow(), settings.Location())
 		u, err := s.StartUseContextTx(ctx, tx, scope)
 		if err != nil {
 			return err

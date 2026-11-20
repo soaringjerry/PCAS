@@ -293,7 +293,7 @@ func (a BackgroundCalls) UnknownRecovery(ctx context.Context, job worker.Job) er
 		}
 		if recovery == "budget_exhausted" {
 			decision = &worker.JobError{Code: modelcall.ErrRecoveryBudgetExhausted.Error()}
-		} else if attempt >= limit || recovery == "exhausted" || job.Attempts >= kernel.MaxAttempts && !kernel.PersistentBackgroundStage(job.Stage) {
+		} else if attempt >= limit || recovery == "exhausted" || job.Attempts >= kernel.MaxAttempts && !a.Store.Limited(job.Stage) {
 			decision = &worker.JobError{Code: modelcall.ErrRetryExhausted.Error()}
 			reason := modelcall.ErrRetryExhausted.Error()
 			if attempt < limit && job.Attempts >= kernel.MaxAttempts {

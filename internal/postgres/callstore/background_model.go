@@ -56,7 +56,7 @@ func (a jobCallStore) ReleaseUnavailable(ctx context.Context, j worker.Job, rese
 }
 
 func (a jobCallStore) HourlyLimited(stage string) bool {
-	return kernel.HourlyBudgets[kernel.BaseStage(stage)] != 0
+	return a.store.Limited(stage)
 }
 
 func (a jobCallStore) RetryDelay(attempts int) time.Duration { return kernel.RetryDelay(attempts) }

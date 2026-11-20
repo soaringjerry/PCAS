@@ -15,6 +15,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/ai/siwc"
 	"github.com/soaringjerry/PCAS/internal/app"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/config"
 	"github.com/soaringjerry/PCAS/internal/httpapi"
@@ -49,7 +50,7 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 		return err
 	}
 	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
-	db, err := postgres.Open(startup, cfg.DatabaseURL)
+	db, err := postgres.Open(startup, cfg.DatabaseURL, stagelimits.Hourly())
 	cancel()
 	if err != nil {
 		return err
@@ -108,7 +109,7 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 		return err
 	}
 	models.ReloadSubscription = command == "worker"
-	db.SetModels(models)
+	composed := app.Compose(db, models)
 	blobDir := os.Getenv("PCAS_BLOB_DIR")
 	if blobDir == "" {
 		blobDir = "data/blobs"
@@ -159,7 +160,7 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 				}
 			}
 		}()
-		return worker.New(db, app.Handlers(db), logger).Run(ctx)
+		return worker.New(db, app.Handlers(composed), logger).Run(ctx)
 	}
 	webDir := os.Getenv("PCAS_WEB_DIR")
 	if webDir == "" {
@@ -169,7 +170,7 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	application := app.New(db)
+	application := app.New(composed)
 	notifier := postgres.NewNotifier(db, notify.Settings{Path: notify.SettingsPath()}, cfg.PublicURL)
 	api := httpapi.New(memory.NewService(db), application, httpapi.NewSessions(credentials, cfg.PublicURL), db.Ping, logger, httpapi.Options{Continuity: db, Connectors: db, Attachments: db, Writer: db, Workspace: app.NewWorkspace(notifier, application), Editor: db, Activity: db, Models: models, WebDir: webDir})
 	workCtx, stopWorkers := context.WithCancel(ctx)
@@ -177,7 +178,7 @@ func run(ctx context.Context, args []string, logger *slog.Logger) error {
 	go func() { _ = application.RunAgents(workCtx, logger) }()
 	go func() { _ = db.RunReminders(workCtx, logger) }()
 	go func() { _ = db.RunNotify(workCtx, logger, notifier.Channels) }()
-	go telegram.Run(workCtx, application, app.Voice(db), notifier.Settings, cfg.OwnerID, logger)
+	go telegram.Run(workCtx, application, app.Voice(composed), notifier.Settings, cfg.OwnerID, logger)
 	go func() { _ = db.RunConnectors(workCtx, logger) }()
 	server := &http.Server{Addr: cfg.HTTPAddress, Handler: api, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	stopped := make(chan error, 1)

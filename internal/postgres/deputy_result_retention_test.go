@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -40,14 +41,14 @@ func TestDeputyKnownAnswerSurvivesLeaseChangeButNotExecutionReplacement(t *testi
 				}
 				secretaryModelReply(w, "Fictitious known answer.")
 			})
-			s.Models.Config.Providers[0].InputPerMillion = 1
+			registryOf(s).Config.Providers[0].InputPerMillion = 1
 			request = leasedDeputyAnswer(t, s, scope)
 			paid, err := s.Gateway().Call(ctx, request)
 			retained := mode == "expired" || mode == "new_lease"
 			if retained && (err != nil || paid == nil || paid.Output != "Fictitious known answer.") || !retained && !errors.Is(err, modelcall.ErrNotApplicable) {
 				t.Fatal("result retention ignored execution identity", mode, paid, err)
 			}
-			peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
+			peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 			if err != nil {
 				t.Fatal(err)
 			}

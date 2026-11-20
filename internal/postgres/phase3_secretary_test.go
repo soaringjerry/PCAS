@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -62,12 +62,12 @@ func TestPhase3H5H8S3ActualVersionAndHandoverProvenance(t *testing.T) {
 	f := phase3LoadFixture(t)
 	m := phase3NewModel(t, f)
 	phase26Exec(t, f.phase26LoadedFixture, `UPDATE claims SET organized=2 WHERE owner_id=$1`, f.Scope.OwnerID)
-	phase26Isolate(t, f.phase26LoadedFixture, kernel.HandoverStage)
-	if _, err := phase26Schedule(f.Context, f.Store, kernel.HandoverStage); err != nil {
+	phase26Isolate(t, f.phase26LoadedFixture, handover.Stage)
+	if _, err := phase26Schedule(f.Context, f.Store, handover.Stage); err != nil {
 		t.Fatal(err)
 	}
-	phase26Isolate(t, f.phase26LoadedFixture, kernel.HandoverStage)
-	globalJob := phase26ClaimStage(t, f.phase26LoadedFixture, kernel.HandoverStage)
+	phase26Isolate(t, f.phase26LoadedFixture, handover.Stage)
+	globalJob := phase26ClaimStage(t, f.phase26LoadedFixture, handover.Stage)
 	if err := phase26Process(f.Context, f.Store, globalJob); err != nil {
 		t.Fatal(err)
 	}

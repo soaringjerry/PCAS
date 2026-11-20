@@ -12,9 +12,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -49,7 +52,7 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 	f := phase26LoadFixture(t)
 	m := phase26NewModel(t, f)
 	s := f.Store
-	if stage != kernel.OrganizeStage {
+	if stage != organize.Stage {
 		phase26Exec(t, f, `UPDATE claims SET organized=2 WHERE owner_id=$1`, f.Scope.OwnerID)
 	}
 	phase26Exec(t, f, `INSERT INTO record_grants(owner_id,record_id,principal_id) SELECT owner_id,id,'phase26' FROM memory_records WHERE owner_id=$1 ON CONFLICT DO NOTHING`, f.Scope.OwnerID)
@@ -58,12 +61,12 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 		// all its links must move even when the keeper policy prefers counts.
 		phase26Exec(t, f, `INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) SELECT $1,x,1,$3,'person' FROM unnest($2::uuid[]) x ON CONFLICT DO NOTHING`, f.Scope.OwnerID, f.Claims[:1300], f.Entities[4])
 	}
-	if stage == kernel.EntityCompareStage {
+	if stage == comparison.EntityStage {
 		phase26Proposal(t, f, 0, 4)
 	}
 	if merge {
 		m.Reply = func(call phase26Call) string {
-			if call.Stage != kernel.EntityCompareStage {
+			if call.Stage != comparison.EntityStage {
 				return m.goldReply(call)
 			}
 			var p struct {
@@ -82,7 +85,7 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 		}
 	}
 	phase26Isolate(t, f, stage)
-	userStore, err := Open(f.Context, s.Pool.Config().ConnString())
+	userStore, err := Open(f.Context, s.Pool.Config().ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +273,7 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 	t.Logf("stage=%s merge=%t baseline=%v concurrent_max=%v foreground_calls=%v schedules=%d processor_elapsed=%s SQLSTATE=%v state=%s health=%s", stage, merge, baseline, max, calls, schedules.Load(), elapsed, sqlstates, state, health)
 	t.Logf("scheduler owner-lock deferrals=%d", schedulerDefers)
 	t.Run("no_repeated_owner_lock_deferrals", func(t *testing.T) {
-		if stage == interpstore.EntityCandidatesStage || stage == kernel.HandoverStage || merge {
+		if stage == interpstore.EntityCandidatesStage || stage == handover.Stage || merge {
 			phase26Finding(t, "S-P26-002")
 		}
 		if schedulerDefers > 1 {
@@ -283,7 +286,7 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 	if schedules.Load() == 0 || len(m.calls(stage)) != 1 || state != "done" {
 		t.Errorf("overlap/completion/paid-call mismatch schedules=%d provider=%d state=%s", schedules.Load(), len(m.calls(stage)), state)
 	}
-	if stage == kernel.EntityCompareStage {
+	if stage == comparison.EntityStage {
 		var pending int
 		if err := s.Pool.QueryRow(f.Context, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND stage LIKE 'memory.entity_compare:%' AND state IN('queued','leased')`, f.Scope.OwnerID).Scan(&pending); err != nil {
 			t.Fatal(err)
@@ -306,14 +309,14 @@ func phase26ConcurrentCase(t *testing.T, stage string, merge bool, overHTTP ...b
 	}
 }
 func TestBackgroundStagesAllowConcurrentForegroundScale(t *testing.T) {
-	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, kernel.EntityCompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage} {
+	for _, stage := range []string{organize.Stage, comparison.Stage, comparison.EntityStage, interpstore.EntityCandidatesStage, handover.Stage} {
 		t.Run(strings.TrimPrefix(stage, "memory."), func(t *testing.T) {
 			phase26ConcurrentCase(t, stage, false)
 		})
 	}
 }
 func TestLargeEntityMergeAllowsConcurrentForegroundScale(t *testing.T) {
-	phase26ConcurrentCase(t, kernel.EntityCompareStage, true)
+	phase26ConcurrentCase(t, comparison.EntityStage, true)
 }
 
 // The real processors share a session call fence. A parallel attempt must
@@ -321,19 +324,19 @@ func TestLargeEntityMergeAllowsConcurrentForegroundScale(t *testing.T) {
 func TestIndependentBackgroundStagesYieldSharedCallFence(t *testing.T) {
 	f := phase26LoadFixture(t)
 	m := phase26NewModel(t, f)
-	phase26Isolate(t, f, kernel.OrganizeStage)
+	phase26Isolate(t, f, organize.Stage)
 	if _, err := f.Store.ScheduleOrganize(f.Context, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	a := phase26ClaimStage(t, f, kernel.OrganizeStage)
+	a := phase26ClaimStage(t, f, organize.Stage)
 	if _, err := f.Store.ScheduleStatus(f.Context, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	b := phase26ClaimStage(t, f, kernel.HandoverStage)
+	b := phase26ClaimStage(t, f, handover.Stage)
 	entered, release := make(chan struct{}, 1), make(chan struct{})
 	m.mu.Lock()
 	m.Before = func(ctx context.Context, c phase26Call) {
-		if c.Stage == kernel.OrganizeStage {
+		if c.Stage == organize.Stage {
 			entered <- struct{}{}
 			select {
 			case <-release:
@@ -356,7 +359,7 @@ func TestIndependentBackgroundStagesYieldSharedCallFence(t *testing.T) {
 	if !errors.As(err, &busy) || !busy.NoAttempt || busy.Code != "status_busy" {
 		t.Errorf("shared call fence consumed an attempt/charge: %v", err)
 	}
-	if len(m.calls(kernel.HandoverStage)) != 0 {
+	if len(m.calls(handover.Stage)) != 0 {
 		t.Error("parallel fenced attempt called provider")
 	}
 	close(release)
@@ -366,7 +369,7 @@ func TestIndependentBackgroundStagesYieldSharedCallFence(t *testing.T) {
 	if err := phase26Process(f.Context, f.Store, b); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.calls(kernel.OrganizeStage)) != 1 || len(m.calls(kernel.HandoverStage)) != 1 {
+	if len(m.calls(organize.Stage)) != 1 || len(m.calls(handover.Stage)) != 1 {
 		t.Error("fence recovery duplicated a provider call")
 	}
 	t.Log("all five stages share the call fence; simultaneous result-writer contention must additionally cover extraction/user writes")

@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
-	"github.com/soaringjerry/PCAS/internal/memory"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soaringjerry/PCAS/internal/memory"
 )
 
 func sampleCopy() (copyManifest, containerInspection) {

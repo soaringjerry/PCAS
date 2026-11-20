@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -22,7 +23,7 @@ func TestCompareUnavailableBudgetAndSharedOrganizeLock(t *testing.T) {
 	refs := compareFixture(t, s, scope, "合成限额检查记忆", "合成限额检查另一条记忆")
 	key := "PCAS_TEST_COMPARE_CHANNEL_AVAILABLE"
 	t.Setenv(key, "")
-	s.Models.Config.Providers[0].KeyEnv = key
+	registryOf(s).Config.Providers[0].KeyEnv = key
 	j := compareJob(t, s, scope, false, kernel.CompareVersion)
 	assertDeferred := func(code string) {
 		t.Helper()
@@ -37,7 +38,7 @@ func TestCompareUnavailableBudgetAndSharedOrganizeLock(t *testing.T) {
 		t.Fatal("unavailable called provider")
 	}
 	t.Setenv(key, "fictional-key")
-	s.Models.Config.Providers[0].InputPerMillion = 1
+	registryOf(s).Config.Providers[0].InputPerMillion = 1
 	if _, err := s.Pool.Exec(ctx, `UPDATE workspace_owners SET settings=jsonb_set(settings,'{dailyBudget}','0') WHERE owner_id=$1`, string(scope.OwnerID)); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +130,7 @@ func TestClassificationDispatchPrecedesComparison(t *testing.T) {
 		t.Fatal(err)
 	}
 	j, err := s.Claim(ctx, 5*time.Minute)
-	if err != nil || j == nil || !strings.HasPrefix(j.Stage, kernel.OrganizeStage+":") {
+	if err != nil || j == nil || !strings.HasPrefix(j.Stage, organize.Stage+":") {
 		t.Fatal("classification must dispatch first", j, err)
 	}
 }

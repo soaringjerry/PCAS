@@ -20,7 +20,7 @@ func (s *Owners) EnsureOwner(ctx context.Context, tx pgx.Tx, scope memory.Scope)
 	}
 	agents := []workspace.Agent{{ID: "manual", Name: "手动交接", Channel: "manual", Enabled: true, MemoryKinds: []string{"fact", "preference", "decision", "intention", "plan"}, Note: "复制上下文到任意 AI，再粘贴结果"}}
 	if s.Models != nil {
-		for _, p := range s.Models.Providers() {
+		for _, p := range s.Models.List() {
 			if p.Embedding || p.Transcription {
 				continue
 			}

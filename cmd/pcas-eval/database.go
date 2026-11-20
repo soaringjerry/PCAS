@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 )
@@ -74,7 +75,7 @@ func openTemporary(ctx context.Context, dsn string) (*postgres.Store, *pgxpool.P
 			_ = conn.Close(context.Background())
 		}
 	}
-	store, err := postgres.Open(ctx, isolatedDSN)
+	store, err := postgres.Open(ctx, isolatedDSN, stagelimits.Hourly())
 	if err != nil {
 		cleanup()
 		return nil, nil, noop, err

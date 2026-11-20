@@ -48,7 +48,7 @@ func (s *Budgets) ReserveModelCostID(ctx context.Context, owner memory.ID, cost 
 			if stage == handover.Stage {
 				reason = "memory.handover_hourly_limit"
 			}
-			if err := kernel.HourlyLimit(ctx, tx, stage, reason); err != nil {
+			if err := s.HourlyLimit(ctx, tx, stage, reason); err != nil {
 				return err
 			}
 		}
@@ -62,7 +62,7 @@ func (s *Budgets) ReserveModelCostID(ctx context.Context, owner memory.ID, cost 
 			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM background_usage WHERE job_id=$1)", string(j.ID)).Scan(&exists); err != nil {
 				return err
 			}
-			if exists && j.Attempts != 1 && cost > 0 && kernel.HourlyBudgets[kernel.BaseStage(j.Stage)] == 0 {
+			if exists && j.Attempts != 1 && cost > 0 && !s.Limited(j.Stage) {
 				// Only the journal's bounded, linked recovery can replace an
 				// unknown paid invocation. Existing known-failure policy stays.
 				var recovery bool

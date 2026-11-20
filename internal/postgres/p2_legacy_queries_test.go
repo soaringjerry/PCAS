@@ -675,7 +675,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 		if a.Channel == "manual" {
 			a.Available = true
 		}
-		if p, ok := s.Models.Get(a.ID); ok {
+		if p, ok := registryOf(s).Get(a.ID); ok {
 			a.Default = a.ID == s.Models.ExtractionID()
 			a.Protocol = p.Protocol
 			a.Available = s.Models.Available(a.ID)
@@ -689,7 +689,7 @@ func (s *Store) p2LegacySnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.
 			}
 		}
 	}
-	if s.Models != nil && s.Models.ChatGPT != nil && s.Models.ChatGPT.DefaultReady() {
+	if s.Models != nil && registryOf(s).ChatGPT != nil && registryOf(s).ChatGPT.DefaultReady() {
 		// Preserve per-agent visibility/preferences; only reorder the default.
 		for i, a := range out.Agents {
 			if a.ID == "chatgpt-direct" {
@@ -925,7 +925,7 @@ func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope
 
 func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *deskstore.SecretaryContext) (string, map[string]workspace.Memory, error) {
 	var prompt strings.Builder
-	loc := kernel.Location(c.Settings)
+	loc := c.Settings.Location()
 	c.Plan = memory.PlanQuery(req.Text, time.Now(), loc)
 	var projectID *string
 	if req.ThingID != nil {
@@ -1225,13 +1225,13 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			var reservationID string
 			if contextErr == nil {
 				failureStage = "budget"
-				p, _ := s.Models.Get(c.Agent.ID)
+				p, _ := registryOf(s).Get(c.Agent.ID)
 				reservationID, contextErr = s.ReserveModelCostID(ctx, scope.OwnerID, p.Reserve(deskstore.SecretaryInstructions+prompt), nil)
 			}
 			if contextErr == nil {
 				failureStage = "model"
 				workCtx, cancel := context.WithTimeout(requestCtx, 90*time.Second)
-				result, err := s.Models.GenerateWithSearchSchema(workCtx, c.Agent.ID, deskstore.SecretaryInstructions, prompt, deskstore.SecretaryOutputSchema)
+				result, err := registryOf(s).GenerateWithSearchSchema(workCtx, c.Agent.ID, deskstore.SecretaryInstructions, prompt, deskstore.SecretaryOutputSchema)
 				// HTTP providers may hide cancellation behind an unreachable error.
 				if err != nil && workCtx.Err() != nil {
 					err = workCtx.Err()
@@ -1246,7 +1246,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 				}
 				contextErr = err
 				if contextErr == nil {
-					p, _ := s.Models.Get(c.Agent.ID)
+					p, _ := registryOf(s).Get(c.Agent.ID)
 					if err := s.RecordReturnedUsage(ctx, result.Text, usagelog.ModelUsage{
 						OwnerID: scope.OwnerID, ID: memory.NewID(), At: time.Now().UTC(),
 						Purpose: "secretary", AgentID: c.Agent.ID, Model: p.Model,
@@ -1333,7 +1333,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 					_ = actionTx.Rollback(ctx)
 					return err
 				}
-				receipt, actionErr := s.ExecuteSecretaryActionTx(actionCtx, actionTx, scope, a, actionAliases, c.Agent, kernel.Location(c.Settings), deskstore.PointerValue(req.ThingID))
+				receipt, actionErr := s.ExecuteSecretaryActionTx(actionCtx, actionTx, scope, a, actionAliases, c.Agent, c.Settings.Location(), deskstore.PointerValue(req.ThingID))
 				if actionErr != nil || receipt.Status == "skipped" {
 					if err = actionTx.Rollback(ctx); err != nil {
 						return err
@@ -1377,7 +1377,7 @@ func (s *Store) p2LegacyDeskTurn(ctx context.Context, scope memory.Scope, req wo
 			if answer.Remember && text != "" {
 				out.Turn.Receipts = append(out.Turn.Receipts, workspace.DeskReceipt{Op: "remember", Text: "记下了，会整理进记忆", Status: "done"})
 			}
-			out.Turn.Cards, err = s.SecretaryCardsTx(ctx, tx, scope, answer, sent, c.Sources, c.Aliases, kernel.Location(c.Settings), c.Plan.Recall)
+			out.Turn.Cards, err = s.SecretaryCardsTx(ctx, tx, scope, answer, sent, c.Sources, c.Aliases, c.Settings.Location(), c.Plan.Recall)
 			if err != nil {
 				return err
 			}
@@ -1478,7 +1478,7 @@ func (s *Store) p2LegacyRecall(ctx context.Context, scope memory.Scope, in memor
 	var vector []byte
 	var model string
 	if query != "" && s.Models != nil && s.Models.EmbeddingID() != "" {
-		provider, _ := s.Models.Get(s.Models.EmbeddingID())
+		provider, _ := registryOf(s).Get(s.Models.EmbeddingID())
 		var embeddings []memory.Embedding
 		var e error
 		var reservationID string
@@ -1489,7 +1489,7 @@ func (s *Store) p2LegacyRecall(ctx context.Context, scope memory.Scope, in memor
 			reservationID, e = s.ReserveModelCostID(ctx, scope.OwnerID, reserved, nil)
 		}
 		if e == nil {
-			embeddings, e = s.Models.EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
+			embeddings, e = registryOf(s).EmbedProvider(ctx, provider, []string{provider.EmbeddingQueryPrefix + query})
 			// The embedding adapter exposes no token usage; keep its existing
 			// estimate for a returned vector, release it when nothing returned.
 			if e != nil {

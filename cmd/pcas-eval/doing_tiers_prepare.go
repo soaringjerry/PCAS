@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/app"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 
@@ -56,7 +59,7 @@ func seedTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.Poo
 	return seeded, nil
 }
 
-func prepareTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.Pool, scope memory.Scope, bridge *tierBridge, checkpoint string) (doing.Preparation, error) {
+func prepareTierSuite(ctx context.Context, store app.Store, pool *pgxpool.Pool, scope memory.Scope, bridge *tierBridge, checkpoint string) (doing.Preparation, error) {
 	start := time.Now()
 	p := doing.Preparation{StartedAt: start.UTC().Format(time.RFC3339), Stages: []doing.PreparationStage{}}
 	defer func() { bridge.reset("", doing.Suite{}, doing.Task{}, "") }()
@@ -65,9 +68,9 @@ func prepareTierSuite(ctx context.Context, store *postgres.Store, pool *pgxpool.
 		schedule func(context.Context, time.Time) (int, error)
 		handlers map[string]worker.Handler
 	}{
-		{"organize", store.ScheduleOrganize, map[string]worker.Handler{kernel.OrganizeStage: app.Organize(store).Process}},
-		{"compare", store.ScheduleCompare, map[string]worker.Handler{kernel.CompareStage: app.Compare(store).Process, kernel.EntityCompareStage: app.EntityCompare(store).Process}},
-		{"status", store.ScheduleStatus, map[string]worker.Handler{kernel.HandoverStage: app.Handover(store).Process}},
+		{"organize", store.ScheduleOrganize, map[string]worker.Handler{organize.Stage: app.Organize(store).Process}},
+		{"compare", store.ScheduleCompare, map[string]worker.Handler{comparison.Stage: app.Compare(store).Process, comparison.EntityStage: app.EntityCompare(store).Process}},
+		{"status", store.ScheduleStatus, map[string]worker.Handler{handover.Stage: app.Handover(store).Process}},
 	}
 	for _, stage := range stages {
 		at := time.Now()

@@ -7,7 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
@@ -70,12 +73,12 @@ func TestPhase26G7A3IndependentHourlyBudgets(t *testing.T) {
 	stages := []struct {
 		stage string
 		limit int
-	}{{kernel.OrganizeStage, 40}, {kernel.CompareStage, 40}, {kernel.EntityCompareStage, 30}, {interpstore.EntityCandidatesStage, 6}, {kernel.HandoverStage, 2}}
+	}{{organize.Stage, 40}, {comparison.Stage, 40}, {comparison.EntityStage, 30}, {interpstore.EntityCandidatesStage, 6}, {handover.Stage, 2}}
 	for _, tc := range stages {
 		for i := 0; i < tc.limit; i++ {
 			phase26Exec(t, f, `INSERT INTO background_usage(id,owner_id,reserved_cost,stage) VALUES($1,$2,0,$3)`, memory.NewID(), f.Scope.OwnerID, tc.stage)
 		}
-		if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return kernel.HourlyLimit(f.Context, tx, tc.stage, "phase26_limit") }); err == nil {
+		if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return f.Store.HourlyLimit(f.Context, tx, tc.stage, "phase26_limit") }); err == nil {
 			t.Errorf("%s exceeded frozen hourly cap=%d", tc.stage, tc.limit)
 		}
 		// Other stage allowances remain usable until THEIR own independent cap.
@@ -88,7 +91,7 @@ func TestPhase26G7A3IndependentHourlyBudgets(t *testing.T) {
 				t.Fatal(err)
 			}
 			if n < other.limit {
-				if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return kernel.HourlyLimit(f.Context, tx, other.stage, "phase26_limit") }); err != nil {
+				if err := pgx.BeginFunc(f.Context, f.Store.Pool, func(tx pgx.Tx) error { return f.Store.HourlyLimit(f.Context, tx, other.stage, "phase26_limit") }); err != nil {
 					t.Errorf("%s borrowed/exhausted %s allowance: %v", tc.stage, other.stage, err)
 				}
 			}
@@ -111,13 +114,13 @@ func TestPhase26G2A5B5InvalidOutputsPreserveGoodData(t *testing.T) {
 	m.mu.Unlock()
 	owner := f.Scope.OwnerID
 	before := phase26Digest(t, f, []string{"claim_revisions", "deadlines", "assistant_requirements", "handovers"})
-	phase26Isolate(t, f, kernel.OrganizeStage)
+	phase26Isolate(t, f, organize.Stage)
 	for i := 0; i < 4; i++ {
 		phase26Exec(t, f, `UPDATE claims SET organize_after='-infinity' WHERE owner_id=$1`, owner)
-		if _, err := phase26Schedule(f.Context, f.Store, kernel.OrganizeStage); err != nil {
+		if _, err := phase26Schedule(f.Context, f.Store, organize.Stage); err != nil {
 			t.Fatal(err)
 		}
-		j := phase26ClaimStage(t, f, kernel.OrganizeStage)
+		j := phase26ClaimStage(t, f, organize.Stage)
 		if err := phase26Process(f.Context, f.Store, j); err != nil {
 			e := phase26FinishError(t, f, j, err)
 			if e.NoAttempt {
@@ -130,16 +133,16 @@ func TestPhase26G2A5B5InvalidOutputsPreserveGoodData(t *testing.T) {
 	if err := f.Store.Pool.QueryRow(f.Context, `SELECT count(*) FROM claims WHERE owner_id=$1 AND organized>=2`, owner).Scan(&marked); err != nil {
 		t.Fatal(err)
 	}
-	if marked != 0 || len(m.calls(kernel.OrganizeStage)) != 4 {
-		t.Errorf("failed classification marked=%d actualcalls=%d", marked, len(m.calls(kernel.OrganizeStage)))
+	if marked != 0 || len(m.calls(organize.Stage)) != 4 {
+		t.Errorf("failed classification marked=%d actualcalls=%d", marked, len(m.calls(organize.Stage)))
 	}
 	// Handover failure must retain old body/time and remain readable.
-	phase26Isolate(t, f, kernel.HandoverStage)
-	if _, err := phase26Schedule(f.Context, f.Store, kernel.HandoverStage); err != nil {
+	phase26Isolate(t, f, handover.Stage)
+	if _, err := phase26Schedule(f.Context, f.Store, handover.Stage); err != nil {
 		t.Fatal(err)
 	}
-	phase26Isolate(t, f, kernel.HandoverStage)
-	j := phase26ClaimStage(t, f, kernel.HandoverStage)
+	phase26Isolate(t, f, handover.Stage)
+	j := phase26ClaimStage(t, f, handover.Stage)
 	phase26FinishError(t, f, j, phase26Process(f.Context, f.Store, j))
 	after := phase26Digest(t, f, []string{"claim_revisions", "deadlines", "assistant_requirements", "handovers"})
 	for table, hash := range before {
@@ -159,5 +162,5 @@ func TestPhase26G2A5B5InvalidOutputsPreserveGoodData(t *testing.T) {
 		t.Errorf("failure reasons not visible: %s", health)
 	}
 	t.Logf("four invalid classification calls preserve pending memories; health=%s", health)
-	phase26InvalidHealth(t, health, kernel.OrganizeStage)
+	phase26InvalidHealth(t, health, organize.Stage)
 }

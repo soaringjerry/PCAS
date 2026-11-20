@@ -21,6 +21,10 @@ import (
 // "memory.entity_candidates:<rule version>:<nonce>".
 const Stage = "memory.entity_candidates"
 
+// HourlyCalls is the number of alias scans that can reserve a model call in one
+// hour. Unused capacity is not lent to another stage.
+const HourlyCalls = 6
+
 // PairTypesAllowed reports whether names of these two types can be one entity.
 // Two names of one type can, for the five entity types. A topic can also be a
 // place or an organization.

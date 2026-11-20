@@ -192,13 +192,13 @@ func TestImageFailuresRetainOriginalAndUseCaption(t *testing.T) {
 			s, scope, f := m1Setup(t)
 			ref := m1Upload(t, s, scope)
 			if mode == "no-vision" {
-				s.Models.Config.Providers[0].Protocol = "text-only-fixture"
+				registryOf(s).Config.Providers[0].Protocol = "text-only-fixture"
 			} // Text-only channel simulated independently of any real model.
 			if mode == "500" {
 				f.fail = true
 			}
 			if mode == "budget" {
-				s.Models.Config.Providers[0].InputPerMillion = 1000
+				registryOf(s).Config.Providers[0].InputPerMillion = 1000
 				workspaceCommand(t, s, scope, workspace.Command{Type: "updateSettings", Patch: kernel.JSON(map[string]any{"dailyBudget": 0.001})})
 			}
 			req := turnRequest("帮我记一下")
@@ -477,8 +477,8 @@ func TestWebAudioUsesExistingTranscription(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"text": "明天交物业费"})
 	}))
 	defer asr.Close()
-	s.Models.Config.Transcription = "asr"
-	s.Models.Config.Providers = append(s.Models.Config.Providers, ai.Provider{ID: "asr", Protocol: "openai", Transcription: true, BaseURL: asr.URL, Model: "fake", CostMode: "free"})
+	registryOf(s).Config.Transcription = "asr"
+	registryOf(s).Config.Providers = append(registryOf(s).Config.Providers, ai.Provider{ID: "asr", Protocol: "openai", Transcription: true, BaseURL: asr.URL, Model: "fake", CostMode: "free"})
 	upload, err := s.IngestAttachment(context.Background(), scope, memory.IngestRequest{Connector: "file-import", ExternalID: string(memory.NewID()), ExternalVersion: "1", Title: "synthetic.ogg", MediaType: "audio/ogg"}, strings.NewReader("synthetic audio"))
 	if err != nil {
 		t.Fatal(err)
@@ -517,12 +517,12 @@ func TestExternallyDeletedImageExpiresUndoAndClearsContext(t *testing.T) {
 func TestParsedLegacyImagesAreNotReread(t *testing.T) {
 	s, scope, f := m1Setup(t)
 	ref := m1Upload(t, s, scope)
-	s.Models.Config.Providers[0].Protocol = "text-only-fixture"
+	registryOf(s).Config.Providers[0].Protocol = "text-only-fixture"
 	job := leaseStage(t, s, scope, ref, "source.parse")
 	if err := s.ProcessAttachment(context.Background(), job); err != nil {
 		t.Fatal(err)
 	}
-	s.Models.Config.Providers[0].Protocol = "openai"
+	registryOf(s).Config.Providers[0].Protocol = "openai"
 	req := turnRequest("帮我记一下")
 	req.Attachments = []memory.Ref{ref}
 	out := mustTurn(t, s, scope, req)

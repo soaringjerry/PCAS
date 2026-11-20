@@ -60,7 +60,7 @@ func (s *Work) ReadProjectTimeline(ctx context.Context, scope memory.Scope, proj
 		now := time.Now()
 		for _, item := range items {
 			if item.Kind == "task" {
-				item.StartDate, err = effort.StartDate(item.Due, item.EstimatedHours, kernel.Location(settings))
+				item.StartDate, err = effort.StartDate(item.Due, item.EstimatedHours, settings.Location())
 				if err != nil {
 					return err
 				}

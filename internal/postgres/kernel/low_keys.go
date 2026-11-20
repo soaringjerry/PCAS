@@ -1,9 +1,6 @@
 package kernel
 
-import (
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
-	"github.com/soaringjerry/PCAS/internal/memory"
-)
+import "github.com/soaringjerry/PCAS/internal/memory"
 
 // Internal commands still persist in order for validation and undo collection.
 // Publish history and its memory source only after the whole secretary action,
@@ -11,12 +8,6 @@ import (
 type SecretaryHistoryKey struct{}
 
 type SecretaryCreationKey struct{}
-
-// These stages keep paid snapshots and retry until success or changed inputs.
-func PersistentBackgroundStage(stage string) bool {
-	_, ok := HourlyBudgets[BaseStage(stage)]
-	return ok
-}
 
 const MaxAttempts = 5
 
@@ -39,5 +30,3 @@ type CardMemory struct {
 	Trust       string     `json:"trust"`
 	Ref         memory.Ref `json:"-"`
 }
-
-type CardDeadline = organize.Deadline

@@ -214,7 +214,7 @@ func run() error {
 		return err
 	}
 	defer cleanup()
-	store.SetModels(models)
+	composed := app.Compose(store, models)
 	seeded, err := fixture.Seed(ctx, store, pool, c, anchor, "eval", !*rawOnly)
 	if err != nil {
 		return err
@@ -307,7 +307,7 @@ func run() error {
 		before := len(observed.Calls())
 		start := time.Now()
 		request := string(memory.NewID())
-		out, err := app.Secretary(store).DeskTurn(ctx, seeded.Scope, workspace.DeskTurnRequest{RequestID: request, AgentID: "eval", Text: q.Text})
+		out, err := app.Secretary(composed).DeskTurn(ctx, seeded.Scope, workspace.DeskTurnRequest{RequestID: request, AgentID: "eval", Text: q.Text})
 		if err != nil {
 			return fmt.Errorf("%s product secretary: %w", q.ID, err)
 		}

@@ -7,19 +7,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
 func TestPhase26G3A1PaidResultsSurviveWriteFailureAndRestart(t *testing.T) {
-	for _, tc := range []struct{ stage, table string }{{kernel.CompareStage, "memory_comparison_batches"}, {kernel.EntityCompareStage, "entity_alias_receipts"}, {interpstore.EntityCandidatesStage, "background_markers"}} {
+	for _, tc := range []struct{ stage, table string }{{comparison.Stage, "memory_comparison_batches"}, {comparison.EntityStage, "entity_alias_receipts"}, {interpstore.EntityCandidatesStage, "background_markers"}} {
 		t.Run(strings.TrimPrefix(tc.stage, "memory."), func(t *testing.T) {
 			f := phase26LoadFixture(t)
 			m := phase26NewModel(t, f)
 			s, ctx := f.Store, f.Context
 			phase26Exec(t, f, `UPDATE claims SET organized=2 WHERE owner_id=$1`, f.Scope.OwnerID)
-			if tc.stage == kernel.EntityCompareStage {
+			if tc.stage == comparison.EntityStage {
 				phase26Proposal(t, f, 0, 4)
 			}
 			phase26Isolate(t, f, tc.stage)
@@ -71,7 +72,7 @@ func TestPhase26G3A1PaidResultsSurviveWriteFailureAndRestart(t *testing.T) {
 			if err := tx.Rollback(ctx); err != nil {
 				t.Fatal(err)
 			}
-			restarted, err := Open(ctx, s.Pool.Config().ConnString())
+			restarted, err := Open(ctx, s.Pool.Config().ConnString(), stagelimits.Hourly())
 			if err != nil {
 				t.Fatal(err)
 			}

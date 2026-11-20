@@ -44,11 +44,11 @@ func TestStatusRecurringSpacedHourKeepsSpecificAmbiguity(t *testing.T) {
 		_, memories := statusRegressionInput(t, r)
 		items := []any{}
 		for _, m := range memories {
-			d := kernel.CardDeadline{N: m.N, Kind: "recurring", Recurrence: strings.TrimSuffix(m.Text, "有课"), Title: "虚构课表"}
+			d := organize.Deadline{N: m.N, Kind: "recurring", Recurrence: strings.TrimSuffix(m.Text, "有课"), Title: "虚构课表"}
 			if m.Text == texts[0] {
 				d.TimeNote = "没说上午还是下午"
 			}
-			items = append(items, map[string]any{"n": m.N, "category": "rule", "durable": true, "unrestricted": true, "scope": "", "deadlines": []kernel.CardDeadline{d}})
+			items = append(items, map[string]any{"n": m.N, "category": "rule", "durable": true, "unrestricted": true, "scope": "", "deadlines": []organize.Deadline{d}})
 		}
 		secretaryModelReply(w, map[string]any{"items": items})
 	})

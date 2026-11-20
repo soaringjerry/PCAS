@@ -16,6 +16,10 @@ import (
 // "memory.effort:<project id>:<job nonce>".
 const Stage = "memory.effort"
 
+// HourlyCalls is the number of effort estimates that can reserve a model call in one
+// hour. Unused capacity is not lent to another stage.
+const HourlyCalls = 10
+
 // Snapshot is the input of one estimation. It is saved with the paid result,
 // so that a recovered result is applied to the tasks that the model saw.
 type Snapshot struct {

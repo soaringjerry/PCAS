@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -23,7 +24,7 @@ func b1EmptyStore(t *testing.T) *Store {
 	if dsn == "" {
 		t.Skip("set PCAS_TEST_DATABASE_URL to run PostgreSQL integration tests")
 	}
-	admin, err := Open(context.Background(), dsn)
+	admin, err := Open(context.Background(), dsn, stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +49,7 @@ func b1EmptyStore(t *testing.T) *Store {
 	q := u.Query()
 	q.Set("search_path", schema+",public")
 	u.RawQuery = q.Encode()
-	s, err := Open(context.Background(), u.String())
+	s, err := Open(context.Background(), u.String(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +305,7 @@ func TestPhase2B1_G3_SecondStartupMakesNoFurtherChanges(t *testing.T) {
 	if err := s.Pool.QueryRow(context.Background(), sql).Scan(&migrationBefore); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := Open(context.Background(), s.Pool.Config().ConnString())
+	reopened, err := Open(context.Background(), s.Pool.Config().ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

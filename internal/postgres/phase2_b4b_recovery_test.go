@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
@@ -29,7 +30,7 @@ func TestPhase2B4bWorkerChild(t *testing.T) {
 	if os.Getenv("PCAS_B4B_WORKER_CHILD") != "1" {
 		return
 	}
-	s, err := Open(context.Background(), os.Getenv("PCAS_B4B_WORKER_DSN"))
+	s, err := Open(context.Background(), os.Getenv("PCAS_B4B_WORKER_DSN"), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +108,7 @@ func b4bKilledWorkerRecovery(t *testing.T, longMessage bool) {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestPhase2B4bWorkerChild$", "-test.v")
 	cmd.Stdout = log
 	cmd.Stderr = log
-	cmd.Env = append(os.Environ(), "PCAS_B4B_WORKER_CHILD=1", "PCAS_B4B_WORKER_DSN="+s.Pool.Config().ConnConfig.ConnString(), "PCAS_B4B_WORKER_URL="+s.Models.Config.Providers[0].BaseURL, "PCAS_B4B_WORKER_JOB="+jobFile)
+	cmd.Env = append(os.Environ(), "PCAS_B4B_WORKER_CHILD=1", "PCAS_B4B_WORKER_DSN="+s.Pool.Config().ConnConfig.ConnString(), "PCAS_B4B_WORKER_URL="+registryOf(s).Config.Providers[0].BaseURL, "PCAS_B4B_WORKER_JOB="+jobFile)
 	if err = cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

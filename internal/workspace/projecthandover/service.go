@@ -22,6 +22,10 @@ import (
 // "memory.project_handover:<project id>".
 const Stage = "memory.project_handover"
 
+// HourlyCalls is the number of project handovers that can reserve a model call in one
+// hour. Unused capacity is not lent to another stage.
+const HourlyCalls = 10
+
 // SectionSentences is the number of sentences that one section keeps. Five
 // short sentences keep the overview readable in ten seconds. Sentences beyond
 // the limit and sentences without valid evidence are counted, never silent.

@@ -169,7 +169,7 @@ func phase35Source(t *testing.T, s *Store, scope memory.Scope, items []intakesto
 func phase35HTTP(t *testing.T, s *Store, scope memory.Scope) *phase3HTTP {
 	t.Helper()
 	// Complete real route wiring, including endpoints used only on page mount.
-	api := httpapi.New(s, s, b1Auth{scope}, s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Continuity: s, Connectors: s, Editor: s, Writer: s, Activity: s, Attachments: s, Models: s.Models})
+	api := httpapi.New(s, s, b1Auth{scope}, s.Ping, slog.New(slog.NewTextHandler(io.Discard, nil)), httpapi.Options{Workspace: s, Continuity: s, Connectors: s, Editor: s, Writer: s, Activity: s, Attachments: s, Models: registryOf(s)})
 	srv := httptest.NewServer(api)
 	t.Cleanup(srv.Close)
 	return &phase3HTTP{Base: srv.URL, Client: srv.Client()}

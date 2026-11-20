@@ -21,6 +21,10 @@ import (
 // Stage is the queue stage of a global handover job.
 const Stage = "memory.handover"
 
+// HourlyCalls is the number of handovers that can reserve a model call in one
+// hour. Unused capacity is not lent to another stage.
+const HourlyCalls = 2
+
 // Titles are the nine sections, in their fixed order.
 var Titles = []string{"他是谁和现在的处境", "怎么跟他配合", "现在手上的事", "时间和节奏", "资源和限制", "口味和标准", "重要的人", "他的叫法", "他看重什么"}
 

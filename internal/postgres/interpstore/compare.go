@@ -57,9 +57,9 @@ func nextCompareGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version
 }
 
 func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time, version int, entity bool, anchors ...memory.Ref) (bool, error) {
-	stage := kernel.CompareStage
+	stage := comparison.Stage
 	if entity {
-		stage = kernel.EntityCompareStage
+		stage = comparison.EntityStage
 		if version == kernel.CompareVersion {
 			version = kernel.EntityCompareVersion
 		}
@@ -106,11 +106,7 @@ func (s *Interp) ScheduleCompareVersion(ctx context.Context, now time.Time, vers
 	if now.IsZero() || version < 1 {
 		return 0, memory.ErrInvalid
 	}
-	if s.Models == nil {
-		return 0, nil
-	}
-	p, ok := s.Models.Get(s.Models.ExtractionID())
-	if !ok || p.Embedding || p.Transcription {
+	if _, ok := s.TextModel(); !ok {
 		return 0, nil
 	}
 	count := 0
@@ -161,7 +157,7 @@ func (s *Interp) ScheduleCompareVersion(ctx context.Context, now time.Time, vers
 				}
 			}
 			e := kernel.BackgroundResultTx(ctx, s.Pool, owner, func(ctx context.Context, tx pgx.Tx) error {
-				if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), kernel.BaseStage(map[bool]string{false: kernel.CompareStage, true: kernel.EntityCompareStage}[entity])); err != nil {
+				if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), kernel.BaseStage(map[bool]string{false: comparison.Stage, true: comparison.EntityStage}[entity])); err != nil {
 					return err
 				}
 				if input != nil {
@@ -180,9 +176,9 @@ func (s *Interp) ScheduleCompareVersion(ctx context.Context, now time.Time, vers
 				return err
 			})
 			if e != nil {
-				stage := kernel.CompareStage
+				stage := comparison.Stage
 				if entity {
-					stage = kernel.EntityCompareStage
+					stage = comparison.EntityStage
 				}
 				if !s.ScheduleYielded(ctx, owner, stage, e) {
 					failed = e
@@ -203,7 +199,7 @@ func (s *Interp) RunCompare(ctx context.Context, logger *slog.Logger) {
 			return
 		}
 		if _, err := s.ScheduleCompare(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			s.RecordScheduleFailure(ctx, kernel.CompareStage, err)
+			s.RecordScheduleFailure(ctx, comparison.Stage, err)
 		}
 		if _, err := s.ScheduleEntityCandidates(ctx, time.Now()); err != nil && ctx.Err() == nil {
 			s.RecordScheduleFailure(ctx, EntityCandidatesStage, err)
@@ -228,10 +224,6 @@ func compareJobVersion(j worker.Job) (int, error) {
 	return v, nil
 }
 
-func compareHourlyTx(ctx context.Context, tx pgx.Tx) error {
-	return organizeCompareHourlyTx(ctx, tx, "compare_hourly_limit")
-}
-
 // CompareStore gives the statement comparison service its reads and writes.
 func (s *Interp) CompareStore() comparison.Store { return compareStore{s} }
 
@@ -239,7 +231,7 @@ type compareStore struct{ store *Interp }
 
 func (a compareStore) Reschedule(ctx context.Context) {
 	if _, err := a.store.ScheduleCompare(ctx, time.Now()); err != nil {
-		a.store.RecordScheduleFailure(ctx, kernel.CompareStage, err)
+		a.store.RecordScheduleFailure(ctx, comparison.Stage, err)
 	}
 }
 
@@ -258,11 +250,7 @@ type compareSession struct {
 
 func (a compareSession) Ready() error {
 	unavailable := &worker.JobError{Code: "provider_unavailable", Until: time.Now().Add(kernel.CompareInterval), NoAttempt: true}
-	if a.store.Models == nil {
-		return unavailable
-	}
-	p, ok := a.store.Models.Get(a.store.Models.ExtractionID())
-	if !ok || p.Embedding || p.Transcription || !a.store.Models.Available(p.ID) {
+	if p, ok := a.store.TextModel(); !ok || !a.store.ModelAvailable(p.ID) {
 		return unavailable
 	}
 	return nil
@@ -282,7 +270,7 @@ func (a compareSession) NextBatch(ctx context.Context, j worker.Job, version int
 		if input == nil {
 			return kernel.Acknowledge(ctx, tx, j)
 		}
-		return kernel.HourlyLimit(ctx, tx, kernel.CompareStage, "compare_hourly_limit")
+		return a.store.HourlyLimit(ctx, tx, comparison.Stage, "compare_hourly_limit")
 	})
 	if err != nil || input == nil {
 		return nil, nil, false, err
@@ -306,7 +294,7 @@ func (a compareSession) Apply(ctx context.Context, j worker.Job, record json.Raw
 		input.Memories[i].Ref = input.Refs[i]
 	}
 	return kernel.BackgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(j.OwnerID), kernel.CompareStage); err != nil {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(j.OwnerID), comparison.Stage); err != nil {
 			return err
 		}
 		if err := kernel.LockJob(ctx, tx, j); err != nil {

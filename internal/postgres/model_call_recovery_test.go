@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -73,7 +74,7 @@ func TestAccountingRecoveryReusesOriginalPaidResultAfterRestart(t *testing.T) {
 	}
 	// A new Store has no pending cache or configured provider. Recovery must
 	// read the durable original result rather than regenerate changed input.
-	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +106,7 @@ func TestActiveLeaseCannotStartAnotherInvocation(t *testing.T) {
 	organizeTestMemory(t, s, scope, "Fictitious unfinished report.")
 	j := organizeTestJob(t, s, scope)
 	request := modelcall.Request{OwnerID: scope.OwnerID, ExecutionID: j.ID, RootExecutionID: j.ID, Function: "organize", Stage: j.Stage, Instructions: prompts.Must("organize"), Prompt: kernel.JSON(map[string]string{"test": "fictitious"}), Policy: j}
-	provider, _ := s.Models.Get(s.Models.ExtractionID())
+	provider, _ := registryOf(s).Get(s.Models.ExtractionID())
 	adapter := callstore.BackgroundCalls{Store: s.Calls}
 	ctx := context.Background()
 	invocation, err := adapter.Prepare(ctx, request, provider)
@@ -148,7 +149,7 @@ func TestFailedCallAccountingRecoveryDoesNotApplyPartialOutput(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, "DROP TRIGGER reject_test_usage ON model_usage"); err != nil {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +247,7 @@ func TestLegacyPaidResultRecoversWithoutInventedCallMetadata(t *testing.T) {
 	if _, err := s.Pool.Exec(ctx, "DROP TRIGGER reject_test_application ON claim_revisions"); err != nil {
 		t.Fatal(err)
 	}
-	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

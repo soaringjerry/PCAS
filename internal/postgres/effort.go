@@ -86,7 +86,7 @@ type effortUnit struct {
 
 func (u effortUnit) Location() (*time.Location, error) {
 	settings, err := kernel.QueryDocument[workspace.Settings](u.ctx, u.tx, "SELECT settings FROM workspace_owners WHERE owner_id=$1", string(u.scope.OwnerID))
-	return kernel.Location(settings), err
+	return settings.Location(), err
 }
 
 func (u effortUnit) Task(id string) (workspace.Item, bool, error) {

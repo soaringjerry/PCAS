@@ -224,6 +224,17 @@ type Settings struct {
 	// City is where the owner usually is, for weather and "nearby" questions.
 	City string `json:"city,omitempty"`
 }
+
+// Location is the time zone of the settings. A zone that cannot be loaded
+// gives UTC.
+func (s Settings) Location() *time.Location {
+	loc, err := time.LoadLocation(s.Timezone)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}
+
 type Doc struct {
 	Version   int    `json:"version"`
 	BasedOn   *int   `json:"basedOn"`

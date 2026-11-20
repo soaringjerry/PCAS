@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/soaringjerry/PCAS/internal/ai"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/blob"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
@@ -29,7 +30,7 @@ func integrationStore(t *testing.T) *postgres.Store {
 	if dsn == "" {
 		t.Skip("set PCAS_TEST_DATABASE_URL to a disposable test database")
 	}
-	s, err := postgres.Open(context.Background(), dsn)
+	s, err := postgres.Open(context.Background(), dsn, stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

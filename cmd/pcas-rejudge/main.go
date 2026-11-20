@@ -5,9 +5,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
+
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
-	"os"
 )
 
 func main() {
@@ -18,7 +20,7 @@ func main() {
 		os.Exit(1)
 	}
 	ctx := context.Background()
-	s, err := postgres.Open(ctx, os.Getenv("PCAS_DATABASE_URL"))
+	s, err := postgres.Open(ctx, os.Getenv("PCAS_DATABASE_URL"), stagelimits.Hourly())
 	if err != nil {
 		fail(err)
 	}

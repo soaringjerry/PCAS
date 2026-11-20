@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
@@ -45,7 +46,7 @@ func phase25B3ConcurrentStatus(t *testing.T, rebuilding bool) {
 		}
 	}
 	agent := f.answerAgent(t)
-	userStore, err := postgres.Open(f.ctx, f.db.Config().ConnString())
+	userStore, err := postgres.Open(f.ctx, f.db.Config().ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

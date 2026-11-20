@@ -11,7 +11,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/activitystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
@@ -70,11 +69,13 @@ type Store struct {
 // SetModels gives the store the configured models. The store reads their
 // configuration and availability. It makes no model call: the application
 // builds the gateway over CallRecords.
-func (s *Store) SetModels(models *ai.Registry) { s.Models = models }
+func (s *Store) SetModels(models kernel.Models) { s.Models = models }
 
 func (s *Store) SetBlobs(blobs memory.BlobStore) { s.Blobs = blobs }
 
-func Open(ctx context.Context, url string) (*Store, error) {
+// Open connects to the database. hourly gives the number of calls that each
+// limited background stage can reserve in one hour.
+func Open(ctx context.Context, url string, hourly map[string]int) (*Store, error) {
 	config, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, fmt.Errorf("invalid database configuration")
@@ -89,9 +90,7 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("database unavailable")
 	}
-	db := &kernel.DB{Pool: pool}
-	db.Slots = make(chan struct{}, config.MaxConns-1)
-	return newStore(db), nil
+	return newStore(kernel.NewDB(pool, hourly)), nil
 }
 
 func (s *Store) Close()                         { s.Pool.Close() }

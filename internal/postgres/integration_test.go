@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
@@ -28,7 +29,7 @@ func testStore(t *testing.T) *Store {
 		t.Skip("set PCAS_TEST_DATABASE_URL to run PostgreSQL integration tests")
 	}
 	ctx := context.Background()
-	admin, err := Open(ctx, dsn)
+	admin, err := Open(ctx, dsn, stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +58,7 @@ func testStore(t *testing.T) *Store {
 	q := u.Query()
 	q.Set("search_path", schema+",public")
 	u.RawQuery = q.Encode()
-	store, err := Open(ctx, u.String())
+	store, err := Open(ctx, u.String(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -42,7 +42,7 @@ func (l lazyJobCalls) GenerateWithRefs(ctx context.Context, job worker.Job, purp
 // indexer composes the vector indexer as the application does.
 func indexer(s *Store) retrieval.Indexer {
 	out := retrieval.Indexer{Store: s.IndexStore(), Calls: s.Gateway()}
-	if models := s.Models; models != nil {
+	if models := registryOf(s); models != nil {
 		out.Providers = models
 	}
 	return out

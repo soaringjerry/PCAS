@@ -14,6 +14,10 @@ import (
 // "memory.organize:<rule version>:<nonce>".
 const Stage = "memory.organize"
 
+// HourlyCalls is the number of classifications that can reserve a model call in one
+// hour. Unused capacity is not lent to another stage.
+const HourlyCalls = 40
+
 // Batch is the model input that storage reads for one job.
 type Batch struct {
 	Memories []Memory

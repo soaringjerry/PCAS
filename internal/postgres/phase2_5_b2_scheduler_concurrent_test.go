@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -81,7 +82,7 @@ func phase25B12ConcurrentScheduler(t *testing.T, kind string) {
 		return marked, pending, err
 	}
 	agent := f.answerAgent(t)
-	userStore, err := postgres.Open(f.ctx, f.db.Config().ConnString())
+	userStore, err := postgres.Open(f.ctx, f.db.Config().ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}

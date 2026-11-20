@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -58,7 +59,7 @@ func TestP3RejudgeOnlySupersededAndReusesPaidWrite(t *testing.T) {
 	if _, e = s.Pool.Exec(ctx, "DROP TRIGGER fictional_rejudge_failure ON background_markers"); e != nil {
 		t.Fatal(e)
 	}
-	reopened, e := Open(ctx, s.Pool.Config().ConnString())
+	reopened, e := Open(ctx, s.Pool.Config().ConnString(), stagelimits.Hourly())
 	if e != nil {
 		t.Fatal(e)
 	}

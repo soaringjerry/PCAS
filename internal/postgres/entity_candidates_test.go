@@ -344,7 +344,7 @@ func TestEntityCandidatesHourlyBudgetAndRuleRecheck(t *testing.T) {
 	// Even a saturated scan ledger cannot consume classification capacity.
 	seedStageUsage(t, s, scope, interpstore.EntityCandidatesStage, 6)
 	organizeTestMemory(t, s, scope, "虚构名单调用后的整理哨兵")
-	organizeJob := leaseStage(t, s, scope, j.Record, fmt.Sprintf("%s:%d:%s", kernel.OrganizeStage, kernel.OrganizeVersion, memory.NewID()))
+	organizeJob := leaseStage(t, s, scope, j.Record, fmt.Sprintf("%s:%d:%s", organize.Stage, kernel.OrganizeVersion, memory.NewID()))
 	f.set(`{"items":[{"n":1,"category":"event","durable":false,"deadlines":[]}]}`)
 	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, organizeJob); err != nil || len(f.all()) != 2 {
 		t.Fatal("scan must not consume classification capacity", err, len(f.all()))

@@ -87,9 +87,9 @@ func compareJob(t *testing.T, s *Store, scope memory.Scope, entity bool, version
 	if _, err := s.ScheduleCompareVersion(ctx, time.Now(), version); err != nil {
 		t.Fatal(err)
 	}
-	stage := kernel.CompareStage
+	stage := comparison.Stage
 	if entity {
-		stage = kernel.EntityCompareStage
+		stage = comparison.EntityStage
 	}
 	if _, err := s.Pool.Exec(ctx, "DELETE FROM memory_jobs WHERE owner_id=$1 AND state='queued' AND stage NOT LIKE $2", string(scope.OwnerID), stage+":%"); err != nil {
 		t.Fatal(err)

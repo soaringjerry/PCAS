@@ -26,13 +26,14 @@ import (
 // Gateway builds the model gateway over the store's records and models.
 func (s *Store) Gateway() *modelcall.Gateway {
 	var providers modelcall.Providers
-	if s.Models != nil {
-		providers = s.Models
+	models := registryOf(s)
+	if models != nil {
+		providers = models
 	}
 	records := s.CallRecords()
 	gateway := modelcall.New(providers, records, records, records)
-	if s.Models != nil {
-		gateway.WithDirectCalls(s.Models, s.DirectCallRecords())
+	if models != nil {
+		gateway.WithDirectCalls(models, s.DirectCallRecords())
 	}
 	return gateway
 }
@@ -51,7 +52,7 @@ func (s *Store) deputySteps() deputy.Steps {
 
 func (s *Store) recaller() retrieval.Recaller {
 	recaller := retrieval.Recaller{Store: s, Calls: s.Gateway()}
-	if models := s.Models; models != nil {
+	if models := registryOf(s); models != nil {
 		recaller.Providers = models
 	}
 	return recaller
@@ -87,7 +88,7 @@ func (s *Store) heavyUse(ctx, persist context.Context, scope memory.Scope, agent
 }
 
 func (s *Store) attachmentReader() attachment.Reader {
-	return attachment.Reader{Models: s.Models, Calls: s.Gateway(), ErrorType: secretary.ErrorType}
+	return attachment.Reader{Models: registryOf(s), Calls: s.Gateway(), ErrorType: secretary.ErrorType}
 }
 
 // ProcessAttachment handles the job of one uploaded file.

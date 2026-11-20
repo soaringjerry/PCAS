@@ -130,9 +130,9 @@ func TestQueryEmbeddingWithoutAUsableProviderFallsBackWithoutACallOrCharge(t *te
 			switch kind {
 			case "missing_key":
 				t.Setenv("PCAS_QUERY_TEST_MISSING_KEY", "")
-				s.Models.Config.Providers[0].KeyEnv = "PCAS_QUERY_TEST_MISSING_KEY"
+				registryOf(s).Config.Providers[0].KeyEnv = "PCAS_QUERY_TEST_MISSING_KEY"
 			case "unsupported":
-				s.Models.Config.Providers[0].Embedding = false
+				registryOf(s).Config.Providers[0].Embedding = false
 			default:
 				s.SetModels(nil)
 			}
@@ -196,7 +196,7 @@ func TestQueryEmbeddingInterruptedProcessLeavesAnUnknownHeldCall(t *testing.T) {
 	s, scope := testStore(t), owner()
 	mustIngest(t, s, scope, input())
 	queryEmbeddingModel(t, s, queryEmbeddingReply)
-	provider, _ := s.Models.Get("vector")
+	provider, _ := registryOf(s).Get("vector")
 	request := modelcall.DirectRequest{OwnerID: scope.OwnerID, ExecutionID: memory.NewID(), Function: "query_embedding", Stage: "query", Provider: provider, Estimate: 0.00005, Operation: "embedding", Inputs: 1, Bytes: 16}
 	request.RootExecutionID = request.ExecutionID
 	adapter := callstore.DirectCalls{Store: s.Calls}

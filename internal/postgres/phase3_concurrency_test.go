@@ -11,8 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/statestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
@@ -28,13 +31,13 @@ func phase3ConcurrentStage(t *testing.T, stage string) {
 	f := p3.phase26LoadedFixture
 	m := phase26NewModel(t, f)
 	s, ctx := f.Store, f.Context
-	if stage != kernel.OrganizeStage {
+	if stage != organize.Stage {
 		phase26Exec(t, f, `UPDATE claims SET organized=2 WHERE owner_id=$1`, f.Scope.OwnerID)
 	}
-	if stage == kernel.EntityCompareStage {
+	if stage == comparison.EntityStage {
 		phase26Proposal(t, f, 0, 4)
 	}
-	user, err := Open(ctx, s.Pool.Config().ConnString())
+	user, err := Open(ctx, s.Pool.Config().ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +139,7 @@ func phase3ConcurrentStage(t *testing.T, stage string) {
 	t.Logf("T2 stage=%s extended_projects=30 schedules=6 paid_calls=%d health=%s", stage, len(m.calls(stage)), health)
 }
 func TestPhase3T2T4EachExistingStageConcurrentHTTPScale(t *testing.T) {
-	for _, stage := range []string{kernel.OrganizeStage, kernel.CompareStage, kernel.EntityCompareStage, interpstore.EntityCandidatesStage, kernel.HandoverStage} {
+	for _, stage := range []string{organize.Stage, comparison.Stage, comparison.EntityStage, interpstore.EntityCandidatesStage, handover.Stage} {
 		t.Run(stage, func(t *testing.T) { phase3ConcurrentStage(t, stage) })
 	}
 }
@@ -149,7 +152,7 @@ func TestPhase3T2T4EachExistingStageConcurrentHTTPScale(t *testing.T) {
 func phase3StageName(t *testing.T, logical string) string {
 	t.Helper()
 	matches := []string{}
-	for stage := range kernel.HourlyBudgets {
+	for stage := range stagelimits.Hourly() {
 		if logical == "project_handover" && strings.Contains(stage, "project") && strings.Contains(stage, "handover") || logical == "effort" && strings.Contains(stage, "effort") {
 			matches = append(matches, stage)
 		}
@@ -220,13 +223,13 @@ func TestPhase3G1G2G3G4G5ExistingPipelineRegressions(t *testing.T) {
 }
 
 func TestPhase3G3ClassificationAndGlobalHandoverPaidResultRecovery(t *testing.T) {
-	for _, tc := range []struct{ stage, table string }{{kernel.OrganizeStage, "claim_revisions"}, {kernel.HandoverStage, "handovers"}} {
+	for _, tc := range []struct{ stage, table string }{{organize.Stage, "claim_revisions"}, {handover.Stage, "handovers"}} {
 		t.Run(tc.stage, func(t *testing.T) {
 			p3 := phase3LoadFixture(t)
 			f := p3.phase26LoadedFixture
 			m := phase26NewModel(t, f)
 			s, ctx := f.Store, f.Context
-			if tc.stage == kernel.HandoverStage {
+			if tc.stage == handover.Stage {
 				phase26Exec(t, f, `UPDATE claims SET organized=2 WHERE owner_id=$1`, f.Scope.OwnerID)
 			}
 			phase26Isolate(t, f, tc.stage)
@@ -281,7 +284,7 @@ func TestPhase3G3ClassificationAndGlobalHandoverPaidResultRecovery(t *testing.T)
 			if err := tx.Rollback(ctx); err != nil {
 				t.Fatal(err)
 			}
-			restarted, err := Open(ctx, s.Pool.Config().ConnString())
+			restarted, err := Open(ctx, s.Pool.Config().ConnString(), stagelimits.Hourly())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -299,15 +302,12 @@ func TestPhase3G3ClassificationAndGlobalHandoverPaidResultRecovery(t *testing.T)
 func TestPhase3G7ExistingStagesActualFinalSlotAndExhaustion(t *testing.T) {
 	TestPhase26G7T4ActualProviderAttemptAtEachHourlyBoundary(t)
 }
-func TestPhase3G7AllSevenFrozenCeilingsAndGlobal140(t *testing.T) {
+func TestEachLimitedStageKeepsItsContractCeiling(t *testing.T) {
 	phase3Finding(t, "S-P3-001")
 	// Phase 3 fixed seven ceilings. Phase 3.5 added topic projects at two calls
 	// in one hour, and phase 3.6 added the date review with its own ceiling.
-	expected := map[string]int{kernel.OrganizeStage: 40, kernel.CompareStage: 40, kernel.EntityCompareStage: 30, interpstore.EntityCandidatesStage: 6, kernel.HandoverStage: 2, phase3StageName(t, "project_handover"): 10, phase3StageName(t, "effort"): 10, workspacestore.TopicProjectStage: 2, statestore.DateTidyStage: statestore.DateTidyHourly}
-	if !reflect.DeepEqual(kernel.HourlyBudgets, expected) {
-		t.Fatal("stage ceilings differ from contract", kernel.HourlyBudgets)
-	}
-	if kernel.OrganizeCompareHourlyLimit != 140 {
-		t.Fatal("global configured ceiling is not140", kernel.OrganizeCompareHourlyLimit)
+	expected := map[string]int{organize.Stage: 40, comparison.Stage: 40, comparison.EntityStage: 30, interpstore.EntityCandidatesStage: 6, handover.Stage: 2, phase3StageName(t, "project_handover"): 10, phase3StageName(t, "effort"): 10, workspacestore.TopicProjectStage: 2, statestore.DateTidyStage: statestore.DateTidyHourly}
+	if !reflect.DeepEqual(stagelimits.Hourly(), expected) {
+		t.Fatal("stage ceilings differ from contract", stagelimits.Hourly())
 	}
 }

@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
@@ -50,7 +52,7 @@ func phase35TopicJob(t *testing.T, f *phase35Fixture, topic int) worker.Job {
 		// pending outcome, not proof that eligibility failed. Verify the observable
 		// reason/count before replaying that real scheduler operation.
 		var deferred int
-		e := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage=$2 AND outcome='failure' AND reason LIKE 'schedule_%' AND at>now()-interval '1 minute'`, f.Scope.OwnerID, kernel.HandoverStage).Scan(&deferred)
+		e := f.Store.Pool.QueryRow(f.Context, `SELECT coalesce(sum(count),0) FROM background_stage_events WHERE owner_id=$1 AND stage=$2 AND outcome='failure' AND reason LIKE 'schedule_%' AND at>now()-interval '1 minute'`, f.Scope.OwnerID, handover.Stage).Scan(&deferred)
 		if e != nil || deferred == 0 {
 			t.Fatalf("eligible topic has no task and no observable scheduling deferral: %v count=%d err=%v", err, deferred, e)
 		}
@@ -202,8 +204,8 @@ func TestPhase35C2G7T4DailyCapDefersToLocalNextDayReusesPaidOutput(t *testing.T)
 	if calls.Load() != 1 || phase35TopicLink(t, f, 0) == "" {
 		t.Fatalf("next-day calls=%d link=%s", calls.Load(), phase35TopicLink(t, f, 0))
 	}
-	if kernel.HourlyBudgets[phase35TopicStage] != 2 {
-		t.Fatalf("independent topic hourly budget=%d want=2", kernel.HourlyBudgets[phase35TopicStage])
+	if stagelimits.Hourly()[phase35TopicStage] != 2 {
+		t.Fatalf("independent topic hourly budget=%d want=2", stagelimits.Hourly()[phase35TopicStage])
 	}
 }
 func TestPhase35C3G5ExistingProjectBeyondFirstPage(t *testing.T) {
@@ -348,7 +350,7 @@ func TestPhase35C2G3TopicPaidRetryAfterWriteFailure(t *testing.T) {
 		t.Fatal("paid topic output lost", paid, err)
 	}
 	phase26Exec(t, f.phase26LoadedFixture, `DROP TRIGGER phase35_reject_topic ON topic_project_links; DROP FUNCTION phase35_reject_topic()`)
-	peer, err := Open(ctx, s.Pool.Config().ConnString())
+	peer, err := Open(ctx, s.Pool.Config().ConnString(), stagelimits.Hourly())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,10 +368,10 @@ func TestPhase35C2G7IndependentHourlyAndNoBorrowing(t *testing.T) {
 	s, ctx := phase26DisposableStore(t)
 	scope := owner()
 	phase35Snapshot(t, s, scope)
-	if kernel.HourlyBudgets[phase35TopicStage] != 2 {
-		t.Fatalf("published topic budget=%d want 2", kernel.HourlyBudgets[phase35TopicStage])
+	if stagelimits.Hourly()[phase35TopicStage] != 2 {
+		t.Fatalf("published topic budget=%d want 2", stagelimits.Hourly()[phase35TopicStage])
 	}
-	for stage, limit := range kernel.HourlyBudgets {
+	for stage, limit := range stagelimits.Hourly() {
 		if stage == phase35TopicStage {
 			continue
 		}
@@ -378,7 +380,7 @@ func TestPhase35C2G7IndependentHourlyAndNoBorrowing(t *testing.T) {
 		}
 	}
 	if err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		return kernel.HourlyLimit(ctx, tx, phase35TopicStage, "phase35_topic_hourly_limit")
+		return s.HourlyLimit(ctx, tx, phase35TopicStage, "phase35_topic_hourly_limit")
 	}); err != nil {
 		t.Fatal("other stages consumed topic capacity", err)
 	}
@@ -386,7 +388,7 @@ func TestPhase35C2G7IndependentHourlyAndNoBorrowing(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		return kernel.HourlyLimit(ctx, tx, phase35TopicStage, "phase35_topic_hourly_limit")
+		return s.HourlyLimit(ctx, tx, phase35TopicStage, "phase35_topic_hourly_limit")
 	})
 	var deferred *worker.JobError
 	if !errors.As(err, &deferred) || !deferred.NoAttempt || deferred.Until.IsZero() {

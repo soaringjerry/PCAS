@@ -30,7 +30,7 @@ const DateTidyStage = datereview.Stage
 // One small call per date. Thirty an hour clears a backlog of a few hundred
 // rows within a day without holding the provider; a normal day adds a handful.
 // Jobs past the hour's budget wait for the next hour; none is dropped.
-const DateTidyHourly = kernel.DateTidyHourly
+const DateTidyHourly = datereview.HourlyCalls
 
 // Open to-dos and ideas shown so the model does not make a second copy. The
 // secretary is shown the same 40 and 20 (2.6 C6); what is left out is counted.

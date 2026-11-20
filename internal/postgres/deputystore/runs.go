@@ -131,7 +131,7 @@ func (s *Deputy) RunCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 		if err != nil {
 			return err
 		}
-		loc := kernel.Location(settings)
+		loc := settings.Location()
 		plan := memory.PlanQuery(c.Prompt, s.BusinessNow(), loc)
 		if prepared, ok := ctx.Value(RunContextKey{}).(PreparedRunContext); ok {
 			plan = prepared.Plan
@@ -269,11 +269,10 @@ func (s *Deputy) RunCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 			run.Status = "waiting"
 			dbStatus = "waiting"
 		} else {
-			if s.Models == nil || !s.Models.Available(agent.ID) {
+			if !s.ModelAvailable(agent.ID) {
 				return memory.ErrUnavailable
 			}
-			p, _ := s.Models.Get(agent.ID)
-			run.Cost = p.Reserve(deputyInstructions + run.Brief)
+			run.Cost = s.Models.Estimate(agent.ID, deputyInstructions+run.Brief)
 			loc, err := time.LoadLocation(settings.Timezone)
 			if err != nil {
 				return err
@@ -599,8 +598,8 @@ func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr er
 	ctx = modelcall.WithExecution(ctx, execution)
 	workCtx, cancel := context.WithDeadline(ctx, started.Add(secretary.TurnTimeout-10*time.Second))
 	defer cancel()
-	if s.Models != nil && s.Models.ReloadSubscription && s.Models.Codex != nil {
-		defer s.Models.Codex.Close()
+	if s.Models != nil {
+		defer s.Models.EndJob()
 	}
 	if savedInput != nil {
 		run = savedInput.Run

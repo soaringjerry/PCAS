@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
@@ -167,7 +168,7 @@ func statusTime(text string) (hour, minute int, note string, ok bool) {
 	return hour, minute, "", true
 }
 
-func validateCardDeadline(d kernel.CardDeadline, m kernel.CardMemory, loc *time.Location, now time.Time) (kernel.CardDeadline, bool) {
+func validateCardDeadline(d organize.Deadline, m kernel.CardMemory, loc *time.Location, now time.Time) (organize.Deadline, bool) {
 	if !kernel.OneOf(d.Kind, "deadline", "appointment", "recurring") || strings.TrimSpace(d.Title) == "" || utf8.RuneCountInString(d.Title) > 60 {
 		return d, false
 	}
@@ -216,7 +217,7 @@ func validateCardDeadline(d kernel.CardDeadline, m kernel.CardMemory, loc *time.
 	return d, true
 }
 
-func statusDeadlineID(owner memory.ID, m kernel.CardMemory, d kernel.CardDeadline) string {
+func statusDeadlineID(owner memory.ID, m kernel.CardMemory, d organize.Deadline) string {
 	at := ""
 	if d.At != nil {
 		at = *d.At
@@ -224,7 +225,7 @@ func statusDeadlineID(owner memory.ID, m kernel.CardMemory, d kernel.CardDeadlin
 	sum := sha256.Sum256([]byte(fmt.Sprintf("%s/%s/%d/%s/%s/%s", owner, m.Ref.ID, m.Ref.Version, d.Kind, at, d.Recurrence)))
 	return fmt.Sprintf("%x-%x-%x-%x-%x", sum[0:4], sum[4:6], sum[6:8], sum[8:10], sum[10:16])
 }
-func writeCardDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, memories []kernel.CardMemory, output []kernel.CardDeadline, timezone string, now time.Time) error {
+func writeCardDeadlinesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, memories []kernel.CardMemory, output []organize.Deadline, timezone string, now time.Time) error {
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
 		return err

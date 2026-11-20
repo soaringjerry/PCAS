@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/contextbuilder/reader"
 	"github.com/soaringjerry/PCAS/internal/input/attachment"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -16,34 +17,52 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 )
 
+// Store is the store with the configured models: what the application
+// composes its services from. Storage reads the models through its own
+// interface; the services call them through the gateway.
+type Store struct {
+	*postgres.Store
+	// Models is nil when no model is configured.
+	Models *ai.Registry
+}
+
+// Compose gives the store the configured models and returns what the
+// application composes its services from.
+func Compose(db *postgres.Store, models *ai.Registry) Store {
+	if models != nil {
+		db.SetModels(models)
+	}
+	return Store{Store: db, Models: models}
+}
+
 // Application is the store with the services that make model calls. A caller
 // that needs the secretary or the deputy uses it in place of the store.
 // Compose it after the store has its models.
 type Application struct {
-	*postgres.Store
+	Store
 	secretary secretary.Service
 	deputy    deputy.Steps
 	recall    retrieval.Recaller
 }
 
 // New composes the application over the store.
-func New(db *postgres.Store) *Application {
+func New(db Store) *Application {
 	return &Application{Store: db, secretary: Secretary(db), deputy: DeputySteps(db), recall: Recall(db)}
 }
 
 // Stages makes the calls of the readers and the self-check.
-func Stages(db *postgres.Store) stagecall.Caller {
+func Stages(db Store) stagecall.Caller {
 	return stagecall.Caller{Calls: Gateway(db), ErrorType: secretary.ErrorType}
 }
 
 // Reader reads groups of memory for the secretary and the deputy.
-func Reader(db *postgres.Store) reader.Service {
+func Reader(db Store) reader.Service {
 	return reader.Service{Store: db.ReaderStore(), Calls: Stages(db), ErrorType: secretary.ErrorType}
 }
 
 // Recall returns the service that searches memory. It requests the vector
 // of a query from the model.
-func Recall(db *postgres.Store) retrieval.Recaller {
+func Recall(db Store) retrieval.Recaller {
 	recaller := retrieval.Recaller{Store: db, Calls: Gateway(db)}
 	if models := db.Models; models != nil {
 		recaller.Providers = models
@@ -52,23 +71,23 @@ func Recall(db *postgres.Store) retrieval.Recaller {
 }
 
 // Attachments parses original files with the configured models.
-func Attachments(db *postgres.Store) attachment.Reader {
+func Attachments(db Store) attachment.Reader {
 	return attachment.Reader{Models: db.Models, Calls: Gateway(db), ErrorType: secretary.ErrorType}
 }
 
 // Attachment returns the handler of the job of an uploaded file.
-func Attachment(db *postgres.Store) worker.Handler {
+func Attachment(db Store) worker.Handler {
 	read := Attachments(db).Read
 	return func(ctx context.Context, job worker.Job) error { return db.ProcessAttachmentWith(ctx, job, read) }
 }
 
 // Secretary returns the service that answers the owner's sentences.
-func Secretary(db *postgres.Store) secretary.Service {
+func Secretary(db Store) secretary.Service {
 	return secretary.Service{Store: db.DeskStore(), Calls: Gateway(db), Stages: Stages(db), Reader: Reader(db), Recall: Recall(db).Recall, ReadAttachment: Attachments(db).Read}
 }
 
 // DeputySteps are the steps of a deputy run that a domain service makes.
-func DeputySteps(db *postgres.Store) deputy.Steps {
+func DeputySteps(db Store) deputy.Steps {
 	return deputy.Steps{Reader: Reader(db), Calls: deputy.Calls{Gateway: Gateway(db)}}
 }
 

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
@@ -17,9 +19,9 @@ type cardRule struct {
 	AppliesTo string `json:"appliesTo"`
 }
 type cardOutput struct {
-	Fields    map[string][]int      `json:"fields"`
-	Rules     []cardRule            `json:"rules"`
-	Deadlines []kernel.CardDeadline `json:"deadlines"`
+	Fields    map[string][]int    `json:"fields"`
+	Rules     []cardRule          `json:"rules"`
+	Deadlines []organize.Deadline `json:"deadlines"`
 }
 type cardGroup struct {
 	Key, Kind, Name string
@@ -38,7 +40,7 @@ func (s *Store) RunStatus(ctx context.Context, logger *slog.Logger) {
 			return
 		}
 		if _, err := s.ScheduleStatus(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			s.RecordScheduleFailure(ctx, kernel.HandoverStage, err)
+			s.RecordScheduleFailure(ctx, handover.Stage, err)
 		}
 		select {
 		case <-ctx.Done():

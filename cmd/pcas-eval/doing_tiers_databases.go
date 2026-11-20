@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
 	"github.com/soaringjerry/PCAS/internal/app"
+	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres"
 	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
@@ -21,6 +22,7 @@ import (
 type tierDatabase struct {
 	name   string
 	store  *postgres.Store
+	app    app.Store
 	pool   *pgxpool.Pool
 	bridge *tierBridge
 	scope  memory.Scope
@@ -75,7 +77,7 @@ func cloneTierDatabases(ctx context.Context, preparedDSN string, scope memory.Sc
 		cloneURI := *uri
 		cloneURI.Path = "/" + d.name
 		cloneDSN := cloneURI.String()
-		d.store, err = postgres.Open(ctx, cloneDSN)
+		d.store, err = postgres.Open(ctx, cloneDSN, stagelimits.Hourly())
 		if err != nil {
 			cleanup()
 			return nil, func() {}, fmt.Errorf("clone_store_failed")
@@ -86,7 +88,7 @@ func cloneTierDatabases(ctx context.Context, preparedDSN string, scope memory.Sc
 			return nil, func() {}, fmt.Errorf("clone_pool_failed")
 		}
 		d.bridge = newTierBridge(model, fake)
-		d.bridge.configure(d.store)
+		d.app = d.bridge.configure(d.store)
 		ready <- d
 	}
 	return ready, cleanup, nil
@@ -118,7 +120,7 @@ func tierProvider(name string, databases chan *tierDatabase, categories map[stri
 		}
 		d.bridge.reset("", s, t, name)
 		request := workspace.DeskTurnRequest{RequestID: string(memory.NewID()), AgentID: "v2-tiers", Text: t.Request}
-		out, err := app.Secretary(d.store).DeskTurn(usestore.WithMemoryTier(ctx, name), d.scope, request)
+		out, err := app.Secretary(d.app).DeskTurn(usestore.WithMemoryTier(ctx, name), d.scope, request)
 		usage, inputChars, contextChars := d.bridge.metrics()
 		e := doing.Evidence{InputChars: inputChars, ContextChars: contextChars, Usage: &usage}
 		for _, n := range usage.Calls {

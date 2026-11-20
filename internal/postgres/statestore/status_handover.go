@@ -72,7 +72,7 @@ func EnqueueStatusHandoversTx(ctx context.Context, tx pgx.Tx, anchors map[memory
 		}
 		due := now
 		if built != nil {
-			due = kernel.MaxTime(now, built.Add(time.Hour))
+			due = kernel.MaxTime(now, built.Add(handover.MinimumInterval))
 		}
 		id := memory.NewID()
 		if _, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at)
@@ -105,19 +105,7 @@ func statusTrustTx(ctx context.Context, tx pgx.Tx, owner memory.ID, m workspace.
 	if err != nil {
 		return "", err
 	}
-	if inferred {
-		return "inferred", nil
-	}
-	if acquisition == "reported" {
-		return "reported", nil
-	}
-	if extraction.QualifiedCapture(m.Text) {
-		return "tentative", nil
-	}
-	if distinct >= 2 {
-		return "repeated", nil
-	}
-	return "stated", nil
+	return extraction.Trust(m.Text, acquisition, inferred, distinct), nil
 }
 
 func (s *State) handoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Scope) (HandoverInput, []handoverDependency, []memory.Ref, error) {
@@ -180,7 +168,6 @@ func ParseHandover(text string, memories []kernel.CardMemory) (string, bool) {
 	}
 	return handover.Parse(text, trusts)
 }
-func emptyHandover() string { return handover.Empty() }
 
 // HandoverStore gives the global handover service its reads and writes.
 func (s *State) HandoverStore() handover.Store { return handoverStore{s} }

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestPhase26A2SchedulerReportsConcreteLockFailure(t *testing.T) {
@@ -95,7 +94,7 @@ func TestPhase26A2LongDeferralWarnsOnceAndResetsAfterCompletion(t *testing.T) {
 	}
 	phase26Exec(t, f, `UPDATE memory_jobs SET available_at=now() WHERE id=$1`, j.ID)
 	retry := phase26ClaimStage(t, f, organize.Stage)
-	if err := (organize.Service{Store: f.Store.OrganizeStore(), Generator: jobCalls(f.Store), Version: kernel.OrganizeVersion}).Process(f.Context, retry); err != nil {
+	if err := (organize.Service{Store: f.Store.OrganizeStore(), Generator: jobCalls(f.Store), Version: organize.RuleVersion}).Process(f.Context, retry); err != nil {
 		t.Fatal(err)
 	}
 	var retained int

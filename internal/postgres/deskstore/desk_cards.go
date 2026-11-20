@@ -2,8 +2,6 @@ package deskstore
 
 import (
 	"context"
-	"net/url"
-	"sort"
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
@@ -15,129 +13,34 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
-func (s *Desk) SecretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, answer SecretaryOutput, sent map[string]workspace.Memory, sentSources map[string]workspace.DeskSourceItem, aliases map[string]workspace.Item, loc *time.Location, recall bool) ([]workspace.DeskCard, error) {
-	cards := []workspace.DeskCard{}
-	sources := []workspace.DeskSourceItem{}
-	timeline := []workspace.DeskTimelineItem{}
-	refs := []memory.Ref{}
-	for _, alias := range answer.Used {
-		if _, ok := sentSources[alias]; ok {
-			continue
-		}
-		if m, ok := sent[alias]; ok {
-			refs = append(refs, memory.Ref{ID: memory.ID(m.ID), Version: m.Version})
-		}
-	}
-	metadata, err := secretaryTimelineMetadataTx(ctx, tx, scope, kernel.UniqueRefs(refs))
-	if err != nil {
-		return nil, err
-	}
-	seen := map[string]bool{}
-	for _, alias := range answer.Used {
-		if source, ok := sentSources[alias]; ok {
-			if !seen[source.MemoryID] {
-				seen[source.MemoryID] = true
-				sources = append(sources, source)
-			}
-			// Source citations do not participate in this batch's timeline.
-			continue
-		}
-		m, ok := sent[alias]
-		if !ok || seen[m.ID] {
-			continue
-		}
-		seen[m.ID] = true
-		// Claim grants do not necessarily grant the model the source itself.
-		// Provenance is resolved for the owner response, never added to the prompt.
-		meta := metadata[m.ID]
-		if len(m.Sources) == 0 && meta.Source.SourceID != "" {
-			m.Sources = []workspace.SourceRef{meta.Source.SourceRef}
-		}
-		source := workspace.DeskSourceItem{Kind: "claim", MemoryID: m.ID, Version: m.Version, Text: m.Text}
-		if len(m.Sources) > 0 {
-			source.SourceID = m.Sources[0].SourceID
-			source.SourceVersion = m.Sources[0].Version
-			source.At = StringPointer(m.Sources[0].At)
-		}
-		sources = append(sources, source)
-		entry := workspace.DeskTimelineItem{
-			At: secretary.TimelineAt(meta.Memory.ExpressedAt, meta.Source), Text: m.Text,
-			Status: secretary.TimelineStatus(meta.Tasks, meta.Changed), MemoryID: StringPointer(m.ID),
-			EventFrom: meta.Memory.EventFrom, EventTo: meta.Memory.EventTo,
-			EventPrecision: meta.Memory.EventPrecision, Mentions: meta.Memory.Mentions,
-		}
-		if len(meta.Tasks) > 0 {
-			entry.ThingID = StringPointer(meta.Tasks[0].ID)
-		}
-		timeline = append(timeline, entry)
-	}
-	if len(sources) > 0 {
-		cards = append(cards, workspace.DeskCard{Kind: "sources", Items: sources})
-	}
-	links := []workspace.DeskLinkItem{}
-	for _, link := range answer.Links {
-		u, err := url.Parse(link)
-		if err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil && len(link) <= 500 && len(links) < 3 {
-			links = append(links, workspace.DeskLinkItem{URL: u.String(), Host: u.Hostname()})
-		}
-	}
-	if len(links) > 0 {
-		cards = append(cards, workspace.DeskCard{Kind: "links", Items: links})
-	}
-	if secretary.TimelineVisible(timeline, recall) {
-		sort.SliceStable(timeline, func(i, j int) bool { return secretary.TimelineBefore(timeline[i], timeline[j]) })
-		cards = append(cards, workspace.DeskCard{Kind: "timeline", Title: "相关记录", Items: timeline})
-	}
-	tasks := []workspace.DeskTaskItem{}
-	seen = map[string]bool{}
-	for _, alias := range answer.Show {
-		item, ok := aliases[alias]
-		if !ok || item.Kind != "task" || seen[item.ID] {
-			continue
-		}
-		seen[item.ID] = true
-		current, err := itemstore.GetItem(ctx, tx, scope, item.ID)
-		if err != nil {
-			return nil, err
-		}
-		// The title was sanitized before generation; use the fresh due/status only.
-		task := workspace.DeskTaskItem{ThingID: item.ID, Title: item.Title, Due: StringPointer(current.Due), Status: current.Status}
-		if current.ProjectID != "" {
-			for _, p := range aliases {
-				if p.ID == current.ProjectID {
-					task.Project = StringPointer(p.Title)
-					break
-				}
-			}
-		}
-		tasks = append(tasks, task)
-	}
-	if len(tasks) > 0 {
-		cards = append(cards, workspace.DeskCard{Kind: "tasks", Items: tasks})
-	}
-	return cards, nil
+// SecretaryCardsTx builds the owner's cards of a turn. secretary.Cards
+// decides; cardUnit reads.
+func (s *Desk) SecretaryCardsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, answer SecretaryOutput, sent map[string]workspace.Memory, sentSources map[string]workspace.DeskSourceItem, aliases map[string]workspace.Item, _ *time.Location, recall bool) ([]workspace.DeskCard, error) {
+	return secretary.Cards(ctx, cardUnit{tx: tx, scope: scope}, answer, sent, sentSources, aliases, recall)
 }
 
-type secretaryTimelineMetadata struct {
-	Memory  workspace.Memory
-	Source  secretaryTimelineSource
-	Tasks   []secretaryTimelineTask
-	Changed bool
+// cardUnit reads for the cards of one turn.
+type cardUnit struct {
+	tx    pgx.Tx
+	scope memory.Scope
 }
 
-type (
-	secretaryTimelineTask   = secretary.TimelineTask
-	secretaryTimelineSource = secretary.TimelineSource
-)
+func (u cardUnit) Timeline(ctx context.Context, refs []memory.Ref) (map[string]secretary.TimelineMetadata, error) {
+	return secretaryTimelineMetadataTx(ctx, u.tx, u.scope, refs)
+}
+
+func (u cardUnit) Item(ctx context.Context, id string) (workspace.Item, error) {
+	return itemstore.GetItem(ctx, u.tx, u.scope, id)
+}
 
 // Resolve metadata and the creating turn's surviving items in one batch. Source
 // provenance belongs only to the owner's cards, never to the model's prompt.
-func secretaryTimelineMetadataTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, refs []memory.Ref) (map[string]secretaryTimelineMetadata, error) {
-	result := map[string]secretaryTimelineMetadata{}
+func secretaryTimelineMetadataTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, refs []memory.Ref) (map[string]secretary.TimelineMetadata, error) {
+	result := map[string]secretary.TimelineMetadata{}
 	if len(refs) == 0 {
 		return result, nil
 	}
-	rows, err := kernel.QueryDocuments[secretaryTimelineMetadata](ctx, tx, `WITH cited AS (
+	rows, err := kernel.QueryDocuments[secretary.TimelineMetadata](ctx, tx, `WITH cited AS (
  SELECT c.*,rv.expressed_at FROM jsonb_to_recordset($2::jsonb) AS i(id uuid,version integer)
  JOIN claim_revisions c ON c.owner_id=$1 AND c.claim_id=i.id AND c.version=i.version
  JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)

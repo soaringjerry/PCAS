@@ -10,7 +10,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestP3ReorganizeTenCasesOnlyRulesAndWithdrawalCounts(t *testing.T) {
@@ -85,7 +84,7 @@ func TestP3ReorganizeTenCasesOnlyRulesAndWithdrawalCounts(t *testing.T) {
 		t.Fatal(n, e)
 	}
 	job := organizeTestJob(t, s, scope)
-	if e := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, job); e != nil {
+	if e := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, job); e != nil {
 		t.Fatal(e)
 	}
 	for i, ref := range refs {
@@ -148,7 +147,7 @@ func TestP3RuleReorganizeFailureKeepsGoodLabelsAndTables(t *testing.T) {
 		t.Fatal(e)
 	}
 	job := organizeTestJob(t, s, scope)
-	if e := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, job); e != nil {
+	if e := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, job); e != nil {
 		t.Fatal(e)
 	}
 	var category string

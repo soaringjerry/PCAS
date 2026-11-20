@@ -28,7 +28,7 @@ func ReviewCandidate(ctx context.Context, v *workspace.Candidate, c workspace.Co
 		if v.State != "pending" {
 			return memory.ErrConflict
 		}
-		if err := requireText(c.Text); err != nil {
+		if err := RequireText(c.Text); err != nil {
 			return err
 		}
 		v.Kind = c.Kind

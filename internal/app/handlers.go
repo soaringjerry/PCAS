@@ -57,7 +57,7 @@ func AliasScan(db Store) aliasscan.Service {
 
 // Compare connects the statement comparison service to storage and generation.
 func Compare(db Store) comparison.Service {
-	return comparison.Service{Store: db.CompareStore(), Generator: JobCalls(db), Version: kernel.CompareVersion}
+	return comparison.Service{Store: db.CompareStore(), Generator: JobCalls(db), Version: comparison.RuleVersion}
 }
 
 // Extraction connects the extraction service to storage and generation.
@@ -67,12 +67,12 @@ func Extraction(db Store) extraction.Service {
 
 // Organize connects the organize service to storage and generation.
 func Organize(db Store) organize.Service {
-	return organize.Service{Store: db.OrganizeStore(), Generator: JobCalls(db), Version: kernel.OrganizeVersion}
+	return organize.Service{Store: db.OrganizeStore(), Generator: JobCalls(db), Version: organize.RuleVersion}
 }
 
 // EntityCompare connects the entity comparison service to storage and generation.
 func EntityCompare(db Store) comparison.EntityService {
-	return comparison.EntityService{Store: db.EntityCompareStore(), Generator: JobCalls(db), Version: kernel.EntityCompareVersion}
+	return comparison.EntityService{Store: db.EntityCompareStore(), Generator: JobCalls(db), Version: comparison.EntityRuleVersion}
 }
 
 // Embedding returns the service of the vector index stages.

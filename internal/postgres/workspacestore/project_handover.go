@@ -82,7 +82,7 @@ func EnqueueProjectHandoversTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	for _, c := range candidates {
 		due := now
 		if c.written != nil {
-			due = kernel.MaxTime(due, c.written.Add(time.Hour))
+			due = kernel.MaxTime(due, c.written.Add(projecthandover.MinimumInterval))
 		}
 		if _, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, ProjectHandoverStage+":"+c.id+":"+string(memory.NewID()), kernel.HandoverPriority, due); err != nil {
 			return 0, err
@@ -297,7 +297,7 @@ func currentProjectEvidenceTx(ctx context.Context, tx pgx.Tx, scope memory.Scope
 }
 
 func (s *Workspace) AdoptProjectMemoryTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run *workspace.Run, item workspace.Item, text, actionID string, auto bool) error {
-	source, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "capture", ExternalID: "project-adoption:" + run.ID + ":" + actionID, ExternalVersion: "1", Title: "采纳项目进展", Text: text, MediaType: "text/plain"})
+	source, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "capture", ExternalID: "project-adoption:" + run.ID + ":" + actionID, ExternalVersion: "1", Title: projecthandover.AdoptionTitle, Text: text, MediaType: "text/plain"})
 	if err != nil {
 		return err
 	}

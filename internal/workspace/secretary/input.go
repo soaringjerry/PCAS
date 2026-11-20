@@ -12,6 +12,24 @@ import (
 // OutdatedAnswer replaces an earlier answer whose evidence has changed.
 const OutdatedAnswer = "（先前回答的依据已更新，请按现在的资料回答）"
 
+// The words of a turn in the owner's records.
+const (
+	// Original is the title of the owner's sentence to the secretary.
+	Original = "秘书原话"
+	// IncompleteOriginal is the title of a sentence whose turn did not finish.
+	IncompleteOriginal = "未完成的秘书原话"
+	// ErasedReply replaces an answer whose memories were removed, and
+	// DeletedReply one whose own sentence was deleted.
+	ErasedReply  = "（这条回答依据的记忆已变更）"
+	DeletedReply = "（内容已删除）"
+)
+
+// ActionSummary is the line of the owner's log for an action of a turn.
+func ActionSummary(op string) string { return "秘书：" + op }
+
+// ProjectMade is the receipt and the log line of a project that an action made.
+func ProjectMade(name string) string { return "建了项目「" + name + "」" }
+
 // projectEvidenceLimit is the longest goal and evidence of one project in
 // the model input, in characters. Its basis is the size of the project list:
 // the list is sent on each turn.

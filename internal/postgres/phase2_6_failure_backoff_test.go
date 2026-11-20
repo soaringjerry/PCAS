@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 )
 
 func TestPhase26G2A5ComparisonInvalidOutputKeepsSameBatchPending(t *testing.T) {
@@ -29,7 +28,7 @@ func TestPhase26G2A5ComparisonInvalidOutputKeepsSameBatchPending(t *testing.T) {
 		}
 		phase26Isolate(t, f, comparison.Stage)
 		j := phase26ClaimStage(t, f, comparison.Stage)
-		if err := (comparison.Service{Store: f.Store.CompareStore(), Generator: jobCalls(f.Store), Version: kernel.CompareVersion}).Process(f.Context, j); err != nil {
+		if err := (comparison.Service{Store: f.Store.CompareStore(), Generator: jobCalls(f.Store), Version: comparison.RuleVersion}).Process(f.Context, j); err != nil {
 			t.Fatal(err)
 		}
 		var attempts, completed int

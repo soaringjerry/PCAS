@@ -8,12 +8,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
-	"github.com/soaringjerry/PCAS/internal/postgres/usestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/workspacestore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -65,7 +63,7 @@ func (s *Deputy) finishPaidRevise(ctx context.Context, scope memory.Scope, curre
 		retryCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		_ = pgx.BeginFunc(retryCtx, s.Pool, func(tx pgx.Tx) error {
-			tag, err := tx.Exec(retryCtx, `UPDATE agent_runs SET lease_until=clock_timestamp(),document=document||jsonb_build_object('error','模型结果已保存，文档写入失败，正在重试写入') WHERE owner_id=$1 AND id=$2 AND lease_token=$3 AND status='running'`, string(scope.OwnerID), current.ID, token)
+			tag, err := tx.Exec(retryCtx, `UPDATE agent_runs SET lease_until=clock_timestamp(),document=document||jsonb_build_object('error',$4::text) WHERE owner_id=$1 AND id=$2 AND lease_token=$3 AND status='running'`, string(scope.OwnerID), current.ID, token, deputy.RevisionWriteRetry)
 			if err != nil || tag.RowsAffected() == 0 {
 				return err
 			}
@@ -77,18 +75,6 @@ func (s *Deputy) finishPaidRevise(ctx context.Context, scope memory.Scope, curre
 		return err
 	}
 	run := snapshot.Run
-	var result struct {
-		Body     string `json:"body"`
-		Complete *bool  `json:"complete"`
-	}
-	reason := ""
-	if json.Unmarshal([]byte(paid.Output), &result) != nil {
-		reason = "改写输出格式不合格"
-	} else if strings.TrimSpace(result.Body) == "" {
-		reason = "改写正文为空"
-	} else if result.Complete == nil || !*result.Complete {
-		reason = "副手未输出完整正文（截断或未完成）"
-	}
 	if paid.InvocationID == "" {
 		if err := s.RecordUsage(ctx, usagelog.ModelUsage{OwnerID: scope.OwnerID, ID: memory.ID(paid.Reservation), Purpose: "deputy", AgentID: paid.Provider, Model: paid.Model, InputTokens: paid.InputTokens, OutputTokens: paid.OutputTokens, InputEstimated: paid.InputEstimated, OutputEstimated: paid.OutputEstimated, CostEstimated: paid.CostEstimated, Cost: paid.Cost, RunID: run.ID, MemoryRefs: paid.Refs, Tier: run.MemoryTier}); err != nil {
 			return err
@@ -108,37 +94,12 @@ func (s *Deputy) finishPaidRevise(ctx context.Context, scope memory.Scope, curre
 		if !active {
 			return worker.ErrLeaseLost
 		}
-		base, err := workspacestore.DocumentVersionTx(ctx, tx, scope, run.DocumentID, run.BaseVersion)
-		if err != nil {
-			reason = "基准文档已删除或版本不存在"
-		} else if strings.TrimSpace(result.Body) == strings.TrimSpace(base.Body) {
-			reason = "改写正文与基准完全相同"
-		}
-		run.Status = "done"
-		run.Output = result.Body
-		run.FinishedAt = kernel.Stamp()
-		run.Cost = paid.Cost
-		if reason != "" {
-			run.Status = "failed"
-			run.Error = reason
+		ending, invalid := deputy.FinishRevision(ctx, revisionUnit{finishUnit{tx: tx, scope: scope}}, run, paid.Output, paid.Cost, time.Now())
+		run = ending.Run
+		if invalid {
 			if err := kernel.StageEvent(ctx, tx, scope.OwnerID, "deputy", "failure", "revise_invalid_output", 1); err != nil {
 				return err
 			}
-		}
-		if reason == "" {
-			if err := validateReviseTargetTx(ctx, tx, scope, run); err != nil {
-				run.StaleContext = true
-				run.Error = "目标文档在工作期间已改变；结果保留，未覆盖当前文档"
-			} else if usestore.CheckUseRunPromptTx(ctx, tx, scope, run) != nil {
-				run.StaleContext = true
-				run.Error = "事项在工作期间已改变；结果保留，未采纳"
-			}
-		}
-		if accessstore.VerifyRunAccessTx(ctx, tx, scope, run) != nil {
-			run.StaleContext = true
-			run.Status = "failed"
-			run.Output = ""
-			run.Error = "工作资料已删除或访问状态已改变"
 		}
 		for _, ref := range run.ContextVersions {
 			if _, err := tx.Exec(ctx, `INSERT INTO run_dependencies(owner_id,run_id,memory_id,memory_version) SELECT $1,$2,record_id,version FROM record_versions WHERE owner_id=$1 AND record_id=$3 AND version=$4 ON CONFLICT DO NOTHING`, string(scope.OwnerID), run.ID, string(ref.ID), ref.Version); err != nil {
@@ -153,15 +114,11 @@ func (s *Deputy) finishPaidRevise(ctx context.Context, scope memory.Scope, curre
 				return err
 			}
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,clock_timestamp(),$4) ON CONFLICT DO NOTHING`, string(scope.OwnerID), run.ThingID, kernel.RunNoticePrefix+run.ID, deputy.NoticeReason(run)); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO workspace_notices(owner_id,thing_id,trigger_id,due_at,reason) VALUES($1,$2,$3,clock_timestamp(),$4) ON CONFLICT DO NOTHING`, string(scope.OwnerID), run.ThingID, kernel.RunNoticePrefix+run.ID, ending.Notice); err != nil {
 			return err
 		}
 		if paid.InvocationID != "" {
-			outcome, why := "applied", ""
-			if run.Status != "done" || run.StaleContext {
-				outcome, why = "not_applicable", "revision_not_adopted"
-			}
-			return (callstore.InteractiveCalls{Store: s.Calls}).RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, run, paid.InvocationID, outcome, why)
+			return (callstore.InteractiveCalls{Store: s.Calls}).RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, run, paid.InvocationID, ending.Answer.Outcome, ending.Answer.Reason)
 		}
 		return kernel.DiscardPaidResult(ctx, tx, worker.Job{OwnerID: scope.OwnerID, ID: memory.ID(run.ID)})
 	})
@@ -193,4 +150,16 @@ func manualReviseReasonTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, ru
 		return "", err
 	}
 	return deputy.RevisionRejection(text, &base.Body, doc.Body), nil
+}
+
+// revisionUnit checks a paid revision in the transaction of its last write.
+type revisionUnit struct{ finishUnit }
+
+func (u revisionUnit) Base(ctx context.Context, run workspace.Run) (string, bool) {
+	base, err := workspacestore.DocumentVersionTx(ctx, u.tx, u.scope, run.DocumentID, run.BaseVersion)
+	return base.Body, err == nil
+}
+
+func (u revisionUnit) TargetCurrent(ctx context.Context, run workspace.Run) bool {
+	return validateReviseTargetTx(ctx, u.tx, u.scope, run) == nil
 }

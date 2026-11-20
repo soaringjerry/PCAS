@@ -19,6 +19,11 @@ type desk struct {
 	changed  []Change
 	docs     map[string]workspace.Doc
 	projects map[string]bool
+	// The remembered dates that the turn showed.
+	checkOnly, changedDate bool
+	shown                  map[string]workspace.Memory
+	dates                  map[string]string
+	closed                 []string
 }
 
 func newDesk(items ...workspace.Item) *desk {
@@ -108,8 +113,22 @@ func (d *desk) ResolveProject(_ context.Context, value string, aliases map[strin
 	}
 	return "", memory.ErrInvalid
 }
-func (d *desk) CloseDate(_ context.Context, a Action) (workspace.DeskReceipt, error) {
-	return workspace.DeskReceipt{Op: a.Op, Status: "done", Text: "date closed"}, nil
+func (d *desk) CheckOnly(context.Context) bool { return d.checkOnly }
+func (d *desk) Shown(_ context.Context, alias string) (workspace.Memory, bool) {
+	m, ok := d.shown[alias]
+	return m, ok
+}
+func (d *desk) RememberedDate(_ context.Context, id string) (string, int, bool, error) {
+	title, ok := d.dates[id]
+	return title, 3, ok, nil
+}
+func (d *desk) MemoryActive(context.Context, string) error { return nil }
+func (d *desk) CloseRememberedDate(_ context.Context, id string, version int, as string) error {
+	if d.changedDate {
+		return memory.ErrConflict
+	}
+	d.closed = append(d.closed, id+" "+as)
+	return nil
 }
 func (d *desk) Document(alias string) (workspace.Doc, bool) { doc, ok := d.docs[alias]; return doc, ok }
 func (d *desk) DelegateTurns() []string                     { return nil }
@@ -207,5 +226,30 @@ func TestUpdateNamesWhatChangedForTheOwner(t *testing.T) {
 	receipt = execute(d, Action{Op: "delegate", Ref: "T1", Kind: "plan", Prompt: "虚构的计划"}, aliases)
 	if receipt.Text != "交给 虚构副手：虚构的计划" || d.commands[0].Type != "requestRun" || d.commands[0].ThingID != "t1" || d.commands[0].AgentID != "a1" {
 		t.Fatalf("%+v %+v", receipt, d.commands)
+	}
+}
+
+func TestARememberedDateIsClosedOnlyWhenItIsClearWhichAndHow(t *testing.T) {
+	d := newDesk()
+	d.shown = map[string]workspace.Memory{"M1": {ID: "m1"}, "M2": {ID: "m2"}}
+	d.dates = map[string]string{"m1": "交房租"}
+	env := Env{Aliases: map[string]workspace.Item{}, Location: time.UTC}
+	for want, a := range map[string]Action{
+		"不再提：交房租":      {Op: "close_date", Ref: "M1", As: "dropped"},
+		"没说清是做完了还是不要了": {Op: "close_date", Ref: "M1", As: "maybe"},
+		"找不到说的是哪一条":    {Op: "close_date", Ref: "M9"},
+		"这条记忆上没有期限或安排": {Op: "close_date", Ref: "M2"},
+	} {
+		receipt, err := Execute(context.Background(), d, a, env)
+		if err != nil || !strings.Contains(receipt.Text+receipt.Reason, want) {
+			t.Errorf("%s: %+v %v", want, receipt, err)
+		}
+	}
+	if len(d.closed) != 1 || d.closed[0] != "m1 dropped" {
+		t.Fatalf("%v", d.closed)
+	}
+	d.checkOnly = true
+	if receipt, _ := Execute(context.Background(), d, Action{Op: "close_date", Ref: "M1"}, env); receipt.Status == "done" || len(d.closed) != 1 {
+		t.Fatal("a check-only turn closed a remembered date")
 	}
 }

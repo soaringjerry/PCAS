@@ -504,3 +504,25 @@ func NewItem(kind, title string) Item {
 	}
 	return Item{ID: string(memory.NewID()), Kind: kind, Version: 1, Title: title, Name: title, Status: status, DependsOn: []string{}, Checklist: []Check{}, Triggers: []Trigger{}, Sources: []SourceRef{}, History: []Revision{{At: at, By: "user", Summary: "创建"}}, Evolution: []Revision{{At: at, By: "user", Summary: "提出"}}, Conditions: []Condition{}, RemindersOn: true, NextSteps: []string{}, CreatedAt: at, UpdatedAt: at}
 }
+
+// DeadlineClose is how a remembered date is closed: done, dropped, or turned
+// into a task. An empty value means it was met.
+func DeadlineClose(as string) (string, bool) {
+	switch as {
+	case "":
+		return "done", true
+	case "done", "dropped", "task":
+		return as, true
+	}
+	return as, false
+}
+
+// ReauthorizeTitle is the title of an item whose content the reader may no
+// longer see; it reaches the model and the owner in its place.
+const ReauthorizeTitle = "事项内容需要重新授权或核验"
+
+// UnclassifiedScope is the scope of a requirement that is not classified yet.
+const UnclassifiedScope = "适用范围待归类"
+
+// ExpiredNote is added to the time note of a date that passed without being closed.
+const ExpiredNote = "已过期，不知是否完成"

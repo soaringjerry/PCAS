@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 // A domain package holds business rules. It reaches storage through its own
@@ -24,6 +25,8 @@ var domainPackages = []string{
 	"./internal/retrieval",
 	"./internal/modelcall/...",
 	"./internal/prompts",
+	"./internal/connectors",
+	"./internal/notify",
 }
 
 func TestDomainPackagesDoNotDependOnThePostgreSQLAdapter(t *testing.T) {
@@ -142,6 +145,43 @@ func TestStoragePackagesHoldNoInstructions(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// storageSentences are the string literals in Chinese that a storage file
+// still holds: words that the owner or the model reads. They belong to the
+// domain that decides them. Two stay inside SQL that builds them row by row:
+// the label of a source's best fragment in the recall query, and the text
+// of a receipt in the scrub of a deleted turn. A file may hold fewer, never
+// more; a new file holds none.
+var storageSentences = map[string]int{
+	"intakestore/editing.go":   1,
+	"intakestore/retrieval.go": 1,
+}
+
+func TestStorageWritesNoNewSentences(t *testing.T) {
+	err := filepath.Walk("../postgres", func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return err
+		}
+		parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			return err
+		}
+		count := 0
+		ast.Inspect(parsed, func(node ast.Node) bool {
+			if literal, ok := node.(*ast.BasicLit); ok && literal.Kind == token.STRING && strings.IndexFunc(literal.Value, func(r rune) bool { return unicode.Is(unicode.Han, r) }) >= 0 {
+				count++
+			}
+			return true
+		})
+		if allowed := storageSentences[strings.TrimPrefix(filepath.ToSlash(path), "../postgres/")]; count > allowed {
+			t.Errorf("%s holds %d sentences for the owner or the model; at most %d may stay in storage", path, count, allowed)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -46,7 +46,9 @@ func oneOf(value string, values ...string) bool {
 	}
 	return false
 }
-func requireText(v string) error {
+
+// RequireText fails on a text that is empty or longer than one megabyte.
+func RequireText(v string) error {
 	if strings.TrimSpace(v) == "" || len(v) > 1<<20 {
 		return memory.ErrInvalid
 	}
@@ -169,7 +171,7 @@ func Apply(ctx context.Context, item *workspace.Item, c workspace.Command, fx Ef
 		}
 		summary = "调整提醒"
 	case "addCheck":
-		if err := requireText(c.Text); err != nil {
+		if err := RequireText(c.Text); err != nil {
 			return "", err
 		}
 		item.Checklist = append(item.Checklist, workspace.Check{ID: string(memory.NewID()), Text: c.Text})
@@ -236,13 +238,13 @@ func Apply(ctx context.Context, item *workspace.Item, c workspace.Command, fx Ef
 		item.Wake = nil
 		summary = "放下想法"
 	case "ideaNote":
-		if err := requireText(c.Note); err != nil {
+		if err := RequireText(c.Note); err != nil {
 			return "", err
 		}
 		item.Body += "\n" + c.Note
 		summary = c.Note
 	case "addCondition":
-		if err := requireText(c.Description); err != nil {
+		if err := RequireText(c.Description); err != nil {
 			return "", err
 		}
 		kind := "event"

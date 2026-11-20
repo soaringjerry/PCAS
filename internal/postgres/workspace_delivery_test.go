@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/httpapi"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -49,7 +48,7 @@ func TestWorkspaceDeliveryVersionsAndConditionalRead(t *testing.T) {
 	if cached.Code != 304 || cached.Body.Len() != 0 {
 		t.Fatal("unchanged snapshot must have no body", cached.Code, cached.Body.String())
 	}
-	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: kernel.OrganizeVersion}).Process(ctx, job); err != nil {
+	if err := (organize.Service{Store: s.OrganizeStore(), Generator: jobCalls(s), Version: organize.RuleVersion}).Process(ctx, job); err != nil {
 		t.Fatal(err)
 	}
 	after, err := s.Snapshot(ctx, scope)

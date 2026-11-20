@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -66,15 +65,9 @@ func (s *Memory) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if err != nil {
 		return out, err
 	}
-	type excerpt struct {
-		Ref                                      memory.Ref
-		Text, Nature, Confirmation, Role, Branch string
-		Gaps                                     []string
-		From, To                                 any
-	}
-	entries := []excerpt{}
+	entries := []retrieval.SummaryEntry{}
 	for rows.Next() {
-		var e excerpt
+		var e retrieval.SummaryEntry
 		if err := rows.Scan(&e.Ref.ID, &e.Ref.Version, &e.Ref.Kind, &e.Text, &e.Nature, &e.Confirmation, &e.Role, &e.Branch, &e.Gaps, &e.From, &e.To); err != nil {
 			rows.Close()
 			return out, err
@@ -86,50 +79,18 @@ func (s *Memory) summarizeTx(ctx context.Context, tx pgx.Tx, scope memory.Scope,
 	if err != nil {
 		return out, err
 	}
-	if len(entries) > 500 {
-		entries = entries[:500]
-		out.Coverage.Gaps = append(out.Coverage.Gaps, "相关材料超过摘要覆盖范围，请展开经历或完整历史继续查询")
+	more := len(entries) > retrieval.SummaryEntries
+	if more {
+		entries = entries[:retrieval.SummaryEntries]
 	}
 	var pending int
 	err = tx.QueryRow(ctx, `SELECT count(*) FROM memory_jobs WHERE owner_id=$1 AND record_id=$2 AND record_version=$3 AND state!='done' AND stage!='memory.summary'`, string(scope.OwnerID), string(in.ID), out.Root.Version).Scan(&pending)
 	if err != nil {
 		return out, err
 	}
-	if pending > 0 {
-		out.Coverage.Gaps = append(out.Coverage.Gaps, "来源仍有待处理或失败步骤；摘要只使用目前可读内容")
-		out.Coverage.PendingSources = append(out.Coverage.PendingSources, in.ID)
-	}
-	var text strings.Builder
-	remaining := in.Tokens * 2
-	for _, e := range entries {
-		out.Dependencies = append(out.Dependencies, e.Ref)
-		out.Coverage.Gaps = append(out.Coverage.Gaps, e.Gaps...)
-		label := string(e.Ref.Kind)
-		if e.Ref.Kind == memory.SourceKind {
-			label = "原文摘录，保留当时表达"
-		}
-		if e.Nature != "" {
-			label = e.Nature + " / " + e.Confirmation
-		}
-		if e.Role != "" {
-			label += " / " + e.Role
-		}
-		if e.Branch != "" {
-			label += " / " + e.Branch
-		}
-		line := fmt.Sprintf("[%s v%d] %s：%s\n", e.Ref.ID, e.Ref.Version, label, e.Text)
-		runes := []rune(line)
-		if len(runes) > remaining {
-			out.Coverage.Gaps = append(out.Coverage.Gaps, "摘要受上下文预算限制，展开来源可查看全文")
-			continue
-		}
-		text.WriteString(line)
-		remaining -= len(runes)
-	}
-	out.Text = text.String()
-	out.Coverage.Complete = len(out.Coverage.Gaps) == 0
+	out.Text, out.Dependencies, out.Coverage = retrieval.Summary(entries, more, pending > 0, in.ID, in.Tokens)
 	hash := sha256.Sum256(kernel.JSON(struct {
-		Entries  []excerpt
+		Entries  []retrieval.SummaryEntry
 		Coverage memory.Coverage
 	}{entries, out.Coverage}))
 	var previous []byte

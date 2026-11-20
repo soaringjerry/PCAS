@@ -91,22 +91,6 @@ func ClaimStatusesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ids []stri
 	return out, rows.Err()
 }
 
-func memoryTrust(text, acquisition string, status claimStatus) string {
-	if acquisition == "inferred" || status.AI {
-		return "inferred"
-	}
-	if acquisition == "reported" {
-		return "reported"
-	}
-	if extraction.QualifiedCapture(text) {
-		return "tentative"
-	}
-	if status.EvidenceGroups >= 2 {
-		return "repeated"
-	}
-	return "stated"
-}
-
 func FillMemoryStatusesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, memories []workspace.Memory) error {
 	ids := make([]string, len(memories))
 	for i, m := range memories {
@@ -119,7 +103,7 @@ func FillMemoryStatusesTx(ctx context.Context, tx pgx.Tx, owner memory.ID, memor
 	for i := range memories {
 		m := &memories[i]
 		status := statuses[m.ID]
-		m.Trust = memoryTrust(m.Text, m.Acquisition, status)
+		m.Trust = extraction.Trust(m.Text, m.Acquisition, status.AI, status.EvidenceGroups)
 		m.Retired = status.Retired
 		m.RetiredBy = status.By
 		m.MergedFrom = status.MergedFrom

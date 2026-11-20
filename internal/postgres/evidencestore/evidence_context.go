@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
@@ -115,14 +114,14 @@ func conversationWindowTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 		return out, nil
 	}
 	if anchor.Version != anchor.currentVersion {
-		out.Gaps = append(out.Gaps, "引用原话是较早版本；周边消息按目前保留的版本显示。")
+		out.Gaps = append(out.Gaps, contextbuilder.WindowEarlierVersion)
 	}
 	if anchor.conversation == "" || anchor.branch == "historical" {
 		out.Messages = append(out.Messages, anchor.ConversationMessage)
 		if anchor.conversation == "" {
-			out.Gaps = append(out.Gaps, "这份原文没有可展开的会话归属。")
+			out.Gaps = append(out.Gaps, contextbuilder.WindowNoConversation)
 		} else {
-			out.Gaps = append(out.Gaps, "这条属于历史旁支，仅显示引用原话，避免混合不同分支。")
+			out.Gaps = append(out.Gaps, contextbuilder.WindowHistorical)
 		}
 		return finish()
 	}
@@ -203,7 +202,7 @@ func conversationWindowTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, in
 		for _, p := range points {
 			if !p.permitted {
 				out.Messages = []memory.ConversationMessage{anchor.ConversationMessage}
-				out.Gaps = append(out.Gaps, "部分上下文不可用，仅能核对引用原话。对象和原因不明时不要补猜。")
+				out.Gaps = append(out.Gaps, contextbuilder.WindowPartial)
 				return finish()
 			}
 		}
@@ -231,102 +230,55 @@ type (
 	EvidenceContextGroup = contextbuilder.EvidenceGroup
 )
 
+// EvidenceContextsTx gives the source conversations of the claims that the
+// principal may read. contextbuilder.Evidence decides what fits.
 func EvidenceContextsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principal string, thingID *string, claims []EvidenceContextClaim) ([]EvidenceContextGroup, []string, error) {
-	groups := []EvidenceContextGroup{}
-	gaps := []string{}
-	claims = slices.Clone(claims)
-	slices.SortStableFunc(claims, func(a, b EvidenceContextClaim) int {
-		if memory.ContextDependent(a.Text) == memory.ContextDependent(b.Text) {
-			return 0
-		}
-		if memory.ContextDependent(a.Text) {
-			return -1
-		}
-		return 1
-	})
-	var anchors map[memory.Ref]useEvidenceAnchor
+	src := evidenceSource{tx: tx, scope: scope, principal: principal, thing: thingID}
 	if enabled, _ := ctx.Value(UseEvidenceBatchKey{}).(bool); enabled {
-		var err error
-		anchors, err = useEvidenceAnchorsTx(ctx, tx, scope, claims)
+		anchors, err := useEvidenceAnchorsTx(ctx, tx, scope, claims)
 		if err != nil {
 			return nil, nil, err
 		}
+		src.anchors = anchors
 	}
-	characters := 0
-	seen := map[memory.Ref]int{}
-	for _, claim := range claims {
-		var source string
-		var version, start, end int
-		var err error
-		if anchors != nil {
-			err = useEvidenceRow(anchors, claim.Ref, &source, &version, &start, &end)
-		} else {
-			err = tx.QueryRow(ctx, `SELECT e.source_id::text,e.source_version,coalesce((e.locator->>'start_rune')::int,0),coalesce((e.locator->>'end_rune')::int,0)
+	return contextbuilder.Evidence(ctx, src, claims)
+}
+
+// evidenceSource reads anchors and windows in the transaction of a turn or a
+// run. anchors holds the anchors read at once for a memory use, or nil.
+type evidenceSource struct {
+	tx        pgx.Tx
+	scope     memory.Scope
+	principal string
+	thing     *string
+	anchors   map[memory.Ref]useEvidenceAnchor
+}
+
+func (e evidenceSource) Anchor(ctx context.Context, ref memory.Ref) (contextbuilder.EvidenceAnchor, bool, error) {
+	var a useEvidenceAnchor
+	if e.anchors != nil {
+		var ok bool
+		a, ok = e.anchors[ref]
+		if !ok {
+			return contextbuilder.EvidenceAnchor{}, false, nil
+		}
+	} else {
+		err := e.tx.QueryRow(ctx, `SELECT e.source_id::text,e.source_version,coalesce((e.locator->>'start_rune')::int,0),coalesce((e.locator->>'end_rune')::int,0)
    FROM evidence e JOIN memory_records r ON(r.owner_id,r.id,r.version)=(e.owner_id,e.source_id,e.source_version)
    JOIN record_versions rv ON(rv.owner_id,rv.record_id,rv.version)=(r.owner_id,r.id,r.version)
    JOIN source_contexts c ON(c.owner_id,c.source_id,c.source_version)=(r.owner_id,r.id,r.version)
    WHERE e.owner_id=$1 AND e.target_id=$2 AND e.target_version=$3 AND r.state='active' AND rv.state='active' AND c.conversation_key<>'' AND c.branch<>'historical'
-   ORDER BY e.id LIMIT 1`, string(scope.OwnerID), string(claim.Ref.ID), claim.Ref.Version).Scan(&source, &version, &start, &end)
-		}
+   ORDER BY e.id LIMIT 1`, string(e.scope.OwnerID), string(ref.ID), ref.Version).Scan(&a.source, &a.version, &a.start, &a.end)
 		if errors.Is(err, pgx.ErrNoRows) {
-			if memory.ContextDependent(claim.Text) {
-				gaps = append(gaps, claim.Label+" 含未明确指代，当前没有可用的原对话上下文；不要猜测对象。")
-			}
-			continue
+			return contextbuilder.EvidenceAnchor{}, false, nil
 		}
 		if err != nil {
-			return nil, nil, err
+			return contextbuilder.EvidenceAnchor{}, false, err
 		}
-		sourceRef := memory.Ref{ID: memory.ID(source), Version: version, Kind: memory.SourceKind}
-		if index, ok := seen[sourceRef]; ok {
-			truncatedAnchor := false
-			for _, msg := range groups[index].Window.Messages {
-				if msg.Anchor && strings.Contains(msg.Text, "未读部分可能包含限定") {
-					truncatedAnchor = true
-				}
-			}
-			if !truncatedAnchor {
-				groups[index].Label += ", " + claim.Label
-				continue
-			}
-		}
-		if len(groups) >= 4 {
-			gaps = append(gaps, claim.Label+" 的来源上下文尚未补齐；涉及对象、原因或限定时请说明资料不足。")
-			continue
-		}
-		window, err := conversationWindowTx(ctx, tx, scope, memory.ConversationRequest{ID: memory.ID(source), Version: version}, principal, thingID)
-		if errors.Is(err, memory.ErrNotFound) || errors.Is(err, memory.ErrForbidden) {
-			gaps = append(gaps, claim.Label+" 的证据上下文不可用。不要猜测对象。")
-			continue
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-		for i := range window.Messages {
-			msg := &window.Messages[i]
-			text := []rune(msg.Text)
-			if len(text) > 900 {
-				at := 0
-				if msg.Anchor {
-					at = max(0, min(start-200, len(text)-900))
-					if end-start > 900 {
-						window.Gaps = append(window.Gaps, "引用原话本身超过阅读预算，当前片段无法覆盖全部限定。")
-					}
-				}
-				msg.Text = string(text[at:at+900]) + "\n（此消息仅显示片段，未读部分可能包含限定。）"
-			}
-		}
-		count := 0
-		for _, m := range window.Messages {
-			count += len([]rune(m.Text))
-		}
-		if characters+count > 10000 {
-			gaps = append(gaps, claim.Label+" 的来源上下文超过本次预算；不要根据摘要补猜。")
-			continue
-		}
-		characters += count
-		seen[sourceRef] = len(groups)
-		groups = append(groups, EvidenceContextGroup{Label: claim.Label, Window: window})
 	}
-	return groups, gaps, nil
+	return contextbuilder.EvidenceAnchor{Source: memory.Ref{ID: memory.ID(a.source), Version: a.version, Kind: memory.SourceKind}, Start: a.start, End: a.end}, true, nil
+}
+
+func (e evidenceSource) Window(ctx context.Context, source memory.Ref) (memory.ConversationResult, error) {
+	return conversationWindowTx(ctx, e.tx, e.scope, memory.ConversationRequest{ID: source.ID, Version: source.Version}, e.principal, e.thing)
 }

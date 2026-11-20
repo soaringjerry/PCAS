@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/soaringjerry/PCAS/internal/interpretation/aliasscan"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -86,7 +87,7 @@ func nextEntityPairTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 	}
 	// Preserve the established strongest-representative-first merge order.
 	// Eligibility comes exclusively from model-created candidates, not names.
-	ranked := append([]EntityCandidateName(nil), names...)
+	ranked := append([]aliasscan.Name(nil), names...)
 	sort.SliceStable(ranked, func(i, j int) bool {
 		a, b := ranked[i], ranked[j]
 		if a.Type != b.Type {
@@ -517,7 +518,7 @@ func mergeEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, merged, kept
 		return err
 	}
 	changes := kernel.JSON([]map[string]any{{"table": "entity_merge", "id": string(merged.ID), "before": snapshot, "afterHash": fingerprint, "rule": version}})
-	if _, err := tx.Exec(ctx, `INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'worker','合并同一实体的叫法',$3)`, string(owner), string(memory.NewID()), changes); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO action_log(owner_id,id,source,summary,changes) VALUES($1,$2,'worker',$4,$3)`, string(owner), string(memory.NewID()), changes, comparison.MergeSummary); err != nil {
 		return err
 	}
 	return nil

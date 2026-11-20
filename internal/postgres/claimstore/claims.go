@@ -173,7 +173,7 @@ func (s *Claims) RememberTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, 
 		return result, err
 	}
 	if in.Actor == "user" {
-		receipt, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "memory-input", ExternalID: string(id), ExternalVersion: "1", Title: "用户确认的记忆", Text: in.Text, MediaType: "text/plain"})
+		receipt, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "memory-input", ExternalID: string(id), ExternalVersion: "1", Title: claim.ConfirmedTitle, Text: in.Text, MediaType: "text/plain"})
 		if err != nil {
 			return result, err
 		}

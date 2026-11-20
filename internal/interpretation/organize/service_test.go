@@ -141,3 +141,25 @@ func TestScheduleRuleOccursOnItsDaysOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestAModelDateThatCannotBeTrustedStaysUnclearWithItsReason(t *testing.T) {
+	early, late := "2026-02-01", "2026-03-10"
+	out, err := NormalizeDeadlines([]Deadline{
+		{Kind: "deadline", Title: "交表", At: &early},
+		{Kind: "deadline", Title: "体检", At: &late, TimeNote: "上午"},
+		{Kind: "recurring", Title: "健身"},
+		{Kind: "recurring", Title: "例会", Recurrence: "每周一 09:30"},
+	}, "2026-03-01T00:00:00Z", time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out[0].Kind != "unclear" || out[0].TimeNote != "日期无法校验；" || out[1].At == nil || !*out[1].DateOnly {
+		t.Fatalf("%+v %+v", out[0], out[1])
+	}
+	if out[2].Kind != "unclear" || out[2].TimeNote != "未说明周期；" || out[3].ScheduleRule == nil || out[3].ScheduleRule.Clock != "09:30" {
+		t.Fatalf("%+v %+v", out[2], out[3])
+	}
+	if _, err := NormalizeDeadlines([]Deadline{{Kind: "birthday", Title: "x"}}, "", time.UTC); err == nil {
+		t.Fatal("an unknown kind was accepted")
+	}
+}

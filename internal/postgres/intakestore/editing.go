@@ -4,13 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/interpretation/claim"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
@@ -21,65 +21,66 @@ import (
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
+// MemoryCommandTx applies a memory command of the owner. claim.Edit
+// decides; editUnit reads and writes.
 func (s *Intake) MemoryCommandTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) error {
-	if !memory.ID(c.ID).Valid() {
-		return memory.ErrInvalid
-	}
-	if err := ActiveClaim(ctx, tx, scope, c.ID); err != nil {
-		return err
-	}
-	if c.Type == "deleteMemory" {
-		return s.DeleteTx(ctx, tx, scope, memory.DeleteRequest{Targets: []memory.Ref{{ID: memory.ID(c.ID), Kind: memory.ClaimKind}}, BlockReimport: true, IncludeSources: c.IncludeSources})
-	}
-	if c.Type == "pinMemory" {
-		_, err := tx.Exec(ctx, "UPDATE activity SET pinned=NOT pinned WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), c.ID)
-		return err
-	}
-	if c.Type == "setMemoryVisibility" {
-		for _, id := range c.AgentIDs {
-			var exists bool
-			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM workspace_agents WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), id).Scan(&exists); err != nil {
-				return err
-			}
-			if !exists {
-				return memory.ErrInvalid
-			}
-		}
-		if _, err := tx.Exec(ctx, "DELETE FROM record_grants WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), c.ID); err != nil {
-			return err
-		}
-		for _, id := range c.AgentIDs {
-			if _, err := tx.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", string(scope.OwnerID), c.ID, id); err != nil {
-				return err
-			}
-		}
-		return sourcestore.InvalidateTx(ctx, tx, scope, c.ID)
-	}
-	claim, err := readClaim(ctx, tx, scope, memory.ID(c.ID), 0)
-	if err != nil {
-		return err
-	}
-	prior := claim
-	if c.Type == "editMemory" {
-		if err := kernel.RequireText(c.Text); err != nil {
-			return err
-		}
-		claim.Value = kernel.JSON(c.Text)
-	}
-	claim.Confirmation = "confirmed"
-	claim.Acquisition = "direct"
-	ref, err := s.correctTx(ctx, tx, scope, memory.CorrectRequest{Target: claim.Ref, Replacement: claim, Reason: c.Reason})
-	if err != nil {
-		return err
-	}
-	var before, after string
-	_ = json.Unmarshal(prior.Value, &before)
-	_ = json.Unmarshal(claim.Value, &after)
-	if c.Type == "editMemory" {
-		return SampleTx(ctx, tx, scope, workspace.Sample{ID: string(memory.NewID()), Kind: "correction", Prompt: before, Response: after, Origin: workspace.Origin{Label: "记忆纠正", MemoryID: c.ID}, Version: ref.Version, State: "candidate", Epistemic: "confirmed", CreatedAt: kernel.Stamp()})
-	}
-	return RecordUseTx(ctx, tx, scope, memory.UseEvent{Ref: ref, EventID: c.RequestID, Kind: "confirmation", At: time.Now()})
+	return claim.Edit(ctx, editUnit{store: s, tx: tx, scope: scope}, c, time.Now())
 }
+
+// editUnit is the storage of one memory command.
+type editUnit struct {
+	store *Intake
+	tx    pgx.Tx
+	scope memory.Scope
+}
+
+func (u editUnit) Active(ctx context.Context, id string) error {
+	return ActiveClaim(ctx, u.tx, u.scope, id)
+}
+
+func (u editUnit) Delete(ctx context.Context, id string, includeSources bool) error {
+	return u.store.DeleteTx(ctx, u.tx, u.scope, memory.DeleteRequest{Targets: []memory.Ref{{ID: memory.ID(id), Kind: memory.ClaimKind}}, BlockReimport: true, IncludeSources: includeSources})
+}
+
+func (u editUnit) TogglePin(ctx context.Context, id string) error {
+	_, err := u.tx.Exec(ctx, "UPDATE activity SET pinned=NOT pinned WHERE owner_id=$1 AND record_id=$2", string(u.scope.OwnerID), id)
+	return err
+}
+
+func (u editUnit) AgentExists(ctx context.Context, id string) (bool, error) {
+	var exists bool
+	err := u.tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM workspace_agents WHERE owner_id=$1 AND id=$2)", string(u.scope.OwnerID), id).Scan(&exists)
+	return exists, err
+}
+
+func (u editUnit) SetVisibility(ctx context.Context, id string, agents []string) error {
+	if _, err := u.tx.Exec(ctx, "DELETE FROM record_grants WHERE owner_id=$1 AND record_id=$2", string(u.scope.OwnerID), id); err != nil {
+		return err
+	}
+	for _, agent := range agents {
+		if _, err := u.tx.Exec(ctx, "INSERT INTO record_grants(owner_id,record_id,principal_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", string(u.scope.OwnerID), id, agent); err != nil {
+			return err
+		}
+	}
+	return sourcestore.InvalidateTx(ctx, u.tx, u.scope, id)
+}
+
+func (u editUnit) Read(ctx context.Context, id string) (memory.Claim, error) {
+	return readClaim(ctx, u.tx, u.scope, memory.ID(id), 0)
+}
+
+func (u editUnit) Correct(ctx context.Context, request memory.CorrectRequest) (memory.Ref, error) {
+	return u.store.correctTx(ctx, u.tx, u.scope, request)
+}
+
+func (u editUnit) Sample(ctx context.Context, sample workspace.Sample) error {
+	return SampleTx(ctx, u.tx, u.scope, sample)
+}
+
+func (u editUnit) RecordUse(ctx context.Context, event memory.UseEvent) error {
+	return RecordUseTx(ctx, u.tx, u.scope, event)
+}
+
 func readClaim(ctx context.Context, tx pgx.Tx, scope memory.Scope, id memory.ID, version int) (memory.Claim, error) {
 	var c memory.Claim
 	var subject string
@@ -137,25 +138,9 @@ func (s *Intake) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 	if err != nil {
 		return out, err
 	}
-	c := in.Replacement
-	changeType := in.ChangeType
-	if changeType == "" {
-		changeType = "correction"
-	}
-	if !kernel.OneOf(changeType, "correction", "change", "supplement", "evidence") {
-		return out, memory.ErrInvalid
-	}
-	if !c.SubjectID.Valid() || kernel.RequireText(c.Predicate) != nil || !json.Valid(c.Value) || !kernel.OneOf(c.Nature, "fact", "preference", "intention", "plan", "decision") || !kernel.OneOf(c.Acquisition, "direct", "reported", "inferred", "execution") || !kernel.OneOf(c.Confirmation, "unknown", "candidate", "adopted", "confirmed", "disputed") {
-		return out, memory.ErrInvalid
-	}
-	if c.Scope == nil {
-		c.Scope = map[string]json.RawMessage{}
-	}
-	if c.ValidTime.Precision == "" {
-		c.ValidTime.Precision = "unknown"
-	}
-	if !kernel.OneOf(c.ValidTime.Precision, "unknown", "instant", "day", "month", "year", "range") || c.ValidTime.From != nil && c.ValidTime.To != nil && c.ValidTime.From.After(*c.ValidTime.To) {
-		return out, memory.ErrInvalid
+	c, changeType, err := claim.CheckCorrection(in)
+	if err != nil {
+		return out, err
 	}
 	var entity bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM entities WHERE owner_id=$1 AND id=$2)", string(scope.OwnerID), string(c.SubjectID)).Scan(&entity); err != nil {
@@ -198,7 +183,7 @@ func (s *Intake) correctTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, i
 		SELECT owner_id,gen_random_uuid(),source_id,source_version,target_id,$3,locator,acquisition,stance FROM evidence WHERE owner_id=$1 AND target_id=$2 AND target_version=$4`, string(scope.OwnerID), string(out.ID), version, prior.Version); err != nil {
 		return out, err
 	}
-	source, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "corrections", ExternalID: string(out.ID), ExternalVersion: fmt.Sprint(version), Title: "用户纠正", Text: string(kernel.JSON(map[string]any{"before": prior.Value, "after": c.Value, "reason": in.Reason})), MediaType: "text/plain"})
+	source, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "corrections", ExternalID: string(out.ID), ExternalVersion: fmt.Sprint(version), Title: claim.CorrectionTitle, Text: string(kernel.JSON(map[string]any{"before": prior.Value, "after": c.Value, "reason": in.Reason})), MediaType: "text/plain"})
 	if err != nil {
 		return out, err
 	}

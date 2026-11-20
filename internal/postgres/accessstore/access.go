@@ -138,7 +138,7 @@ func SanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 		case "task":
 			used = true
 			if !allowed {
-				item.Title = "事项内容需要重新授权或核验"
+				item.Title = workspace.ReauthorizeTitle
 			}
 		}
 		if used && allowed {
@@ -148,7 +148,7 @@ func SanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 	for field, blocks := range owned {
 		text := itemstore.BlockText(blocks)
 		if field == "title" && text == "" {
-			text = "事项内容需要重新授权或核验"
+			text = workspace.ReauthorizeTitle
 		}
 		itemstore.SetField(&item, field, text)
 	}

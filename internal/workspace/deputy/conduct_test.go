@@ -79,7 +79,13 @@ func (f *fakeRun) Finish(_ context.Context, end End) error {
 	f.log = append(f.log, "finished")
 	return nil
 }
+
+// answerTime is how long the fake answer takes. The self-check gets the
+// answer's time as its budget, so an instant answer would leave it none.
+const answerTime = 50 * time.Millisecond
+
 func (f *fakeRun) Answer(context.Context, modelcall.Request) (*modelcall.PaidResult, error) {
+	time.Sleep(answerTime)
 	f.log = append(f.log, "answer")
 	if f.answerErr != nil {
 		return nil, f.answerErr

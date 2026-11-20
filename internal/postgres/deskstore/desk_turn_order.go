@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/secretary"
 )
 
 var errSecretaryBusy = errors.New("secretary turn busy")
@@ -265,7 +266,7 @@ func (s *Desk) WithOrderedSecretaryTurn(ctx, callerCtx context.Context, owner, r
 // actions. Remove only this transaction's new, unpublished chunk job. Existing
 // sources/jobs must not be silently changed, even on an identity collision.
 func (s *Desk) CaptureIncompleteSecretaryTurn(ctx context.Context, tx pgx.Tx, scope memory.Scope, request, text string) error {
-	in, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk-incomplete", ExternalID: request, ExternalVersion: "1", Title: "未完成的秘书原话", Text: text, MediaType: "text/plain"})
+	in, err := s.IngestTx(ctx, tx, scope, memory.IngestRequest{Connector: "desk-incomplete", ExternalID: request, ExternalVersion: "1", Title: secretary.IncompleteOriginal, Text: text, MediaType: "text/plain"})
 	if err != nil {
 		return err
 	}
@@ -279,5 +280,5 @@ func (s *Desk) CaptureIncompleteSecretaryTurn(ctx context.Context, tx pgx.Tx, sc
 	if tag.RowsAffected() != 1 {
 		return memory.ErrConflict
 	}
-	return intakestore.SaveCandidate(ctx, tx, scope, workspace.Candidate{ID: string(memory.NewID()), Kind: "unknown", Text: text, Confidence: 0, Source: workspace.SourceRef{SourceID: string(in.ID), Version: in.Version, Label: "未完成的秘书原话", Excerpt: text, At: kernel.Stamp()}, State: "pending", CreatedAt: kernel.Stamp()})
+	return intakestore.SaveCandidate(ctx, tx, scope, workspace.Candidate{ID: string(memory.NewID()), Kind: "unknown", Text: text, Confidence: 0, Source: workspace.SourceRef{SourceID: string(in.ID), Version: in.Version, Label: secretary.IncompleteOriginal, Excerpt: text, At: kernel.Stamp()}, State: "pending", CreatedAt: kernel.Stamp()})
 }

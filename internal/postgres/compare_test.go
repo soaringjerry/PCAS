@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
@@ -43,7 +43,7 @@ func compareFixture(t *testing.T, s *Store, scope memory.Scope, texts ...string)
 			if _, err = tx.Exec(context.Background(), "INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,1,$3,'topic') ON CONFLICT DO NOTHING", string(scope.OwnerID), string(ref.ID), string(group)); err != nil {
 				return err
 			}
-			if _, err = tx.Exec(context.Background(), "UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(ref.ID), kernel.OrganizeVersion); err != nil {
+			if _, err = tx.Exec(context.Background(), "UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(ref.ID), organize.RuleVersion); err != nil {
 				return err
 			}
 			_, err = tx.Exec(context.Background(), "UPDATE record_versions SET expressed_at=$3 WHERE owner_id=$1 AND record_id=$2", string(scope.OwnerID), string(ref.ID), time.Date(2026, 9, 12, 9, 0, i, 0, time.UTC))
@@ -70,7 +70,7 @@ func compareJob(t *testing.T, s *Store, scope memory.Scope, entity bool, version
 	if entity {
 		// Older confirmation-only fixtures supply a modeled candidate explicitly.
 		// End-to-end scan tests retain their actual model-created candidates.
-		for _, candidateRule := range []int{version, kernel.EntityCompareVersion} {
+		for _, candidateRule := range []int{version, comparison.EntityRuleVersion} {
 			if _, err := s.Pool.Exec(ctx, `INSERT INTO entity_alias_candidates(owner_id,left_id,right_id,name_hash,rule,source_marker)
  SELECT $1,least(a.id,b.id),greatest(a.id,b.id),entity_name_hash($1,a.id,b.id),$2,'fictional model proposal'
  FROM memory_records a JOIN entity_versions av ON(av.owner_id,av.entity_id,av.version)=(a.owner_id,a.id,a.version)
@@ -102,9 +102,9 @@ func compareJob(t *testing.T, s *Store, scope memory.Scope, entity bool, version
 }
 func compareProcess(t *testing.T, s *Store, scope memory.Scope) {
 	t.Helper()
-	j := compareJob(t, s, scope, false, kernel.CompareVersion)
+	j := compareJob(t, s, scope, false, comparison.RuleVersion)
 	for attempt := 0; attempt < 5; attempt++ {
-		err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(context.Background(), j)
+		err := (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: comparison.RuleVersion}).Process(context.Background(), j)
 		if err == nil {
 			return
 		}
@@ -151,7 +151,7 @@ func TestCompareDuplicateEvidenceAndHistoricalDeletion(t *testing.T) {
 	f := b1Model(t, s, `{"duplicates":[{"keep":3,"members":[1,2,3]}],"superseded":[]}`)
 	refs := compareFixture(t, s, scope, "虚构汇报周五提交", "周五提交虚构汇报", "虚构汇报周五提交给主管")
 	compareProcess(t, s, scope)
-	compareState(t, s, scope, refs, []string{"duplicate", "duplicate", ""}, kernel.CompareVersion)
+	compareState(t, s, scope, refs, []string{"duplicate", "duplicate", ""}, comparison.RuleVersion)
 	m := compareDetail(t, s, scope, refs[2])
 	if m.MergedFrom != 2 || len(m.Sources) != 3 || m.Trust != "repeated" {
 		t.Fatal(m)
@@ -227,7 +227,7 @@ func TestCompareProtectConfirmedEditedAndCycles(t *testing.T) {
 	}
 	b1Correct(t, s, scope, refs[3], "本人改过的说法")
 	refs[3].Version++
-	if _, err := s.Pool.Exec(context.Background(), "UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[3].ID), kernel.OrganizeVersion); err != nil {
+	if _, err := s.Pool.Exec(context.Background(), "UPDATE claims SET organized=$3 WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[3].ID), organize.RuleVersion); err != nil {
 		t.Fatal(err)
 	}
 	// Preserve local fixture ordering across the new user revision.
@@ -235,7 +235,7 @@ func TestCompareProtectConfirmedEditedAndCycles(t *testing.T) {
 		t.Fatal(err)
 	}
 	compareProcess(t, s, scope)
-	compareState(t, s, scope, refs, []string{"", "", "", "", ""}, kernel.CompareVersion)
+	compareState(t, s, scope, refs, []string{"", "", "", "", ""}, comparison.RuleVersion)
 }
 func TestCompareRestoreUndoAndVersionBump(t *testing.T) {
 	s := testStore(t)
@@ -255,17 +255,17 @@ func TestCompareRestoreUndoAndVersionBump(t *testing.T) {
 		t.Fatal(err)
 	}
 	compareProcess(t, s, scope)
-	compareState(t, s, scope, refs, []string{"", ""}, kernel.CompareVersion)
+	compareState(t, s, scope, refs, []string{"", ""}, comparison.RuleVersion)
 	b1Undo(t, s, scope, cmd.RequestID)
-	compareState(t, s, scope, refs, []string{"superseded", ""}, kernel.CompareVersion)
+	compareState(t, s, scope, refs, []string{"superseded", ""}, comparison.RuleVersion)
 	f.set(`{"duplicates":[],"superseded":[]}`)
 	compareFixture(t, s, scope, "虚构规则升级后新增的当前记忆")
-	j := compareJob(t, s, scope, false, kernel.CompareVersion+1)
-	if err = (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion + 1}).Process(context.Background(), j); err != nil {
+	j := compareJob(t, s, scope, false, comparison.RuleVersion+1)
+	if err = (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: comparison.RuleVersion + 1}).Process(context.Background(), j); err != nil {
 		t.Fatal(err)
 	}
 	var compared int
-	if err = s.Pool.QueryRow(context.Background(), "SELECT compared FROM claims WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[1].ID)).Scan(&compared); err != nil || compared != kernel.CompareVersion+1 {
+	if err = s.Pool.QueryRow(context.Background(), "SELECT compared FROM claims WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), string(refs[1].ID)).Scan(&compared); err != nil || compared != comparison.RuleVersion+1 {
 		t.Fatal(compared, err)
 	}
 	if m := compareDetail(t, s, scope, refs[0]); m.Retired != "superseded" {
@@ -285,10 +285,10 @@ func TestCompareConcurrentChangesSkipOnlyAffectedEdges(t *testing.T) {
 				<-release
 				secretaryModelReply(w, `{"duplicates":[],"superseded":[{"old":1,"new":2},{"old":3,"new":4}]}`)
 			})
-			j := compareJob(t, s, scope, false, kernel.CompareVersion)
+			j := compareJob(t, s, scope, false, comparison.RuleVersion)
 			done := make(chan error, 1)
 			go func() {
-				done <- (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: kernel.CompareVersion}).Process(context.Background(), j)
+				done <- (comparison.Service{Store: s.CompareStore(), Generator: jobCalls(s), Version: comparison.RuleVersion}).Process(context.Background(), j)
 			}()
 			select {
 			case <-entered:
@@ -364,7 +364,7 @@ func TestCompareWindowAndNoModel(t *testing.T) {
 		}
 	}
 	var n int
-	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM claims WHERE owner_id=$1 AND compared=$2", scope.OwnerID, kernel.CompareVersion).Scan(&n); err != nil || n != 205 {
+	if err := s.Pool.QueryRow(context.Background(), "SELECT count(*) FROM claims WHERE owner_id=$1 AND compared=$2", scope.OwnerID, comparison.RuleVersion).Scan(&n); err != nil || n != 205 {
 		t.Fatal("all memories must participate", n, err)
 	}
 

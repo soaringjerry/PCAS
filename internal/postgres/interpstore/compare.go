@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
@@ -57,8 +58,8 @@ func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.
 	stage := comparison.Stage
 	if entity {
 		stage = comparison.EntityStage
-		if version == kernel.CompareVersion {
-			version = kernel.EntityCompareVersion
+		if version == comparison.RuleVersion {
+			version = comparison.EntityRuleVersion
 		}
 	}
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database()||':'||current_schema()||':queue:'||$1||':'||$2,0))", string(owner), stage); err != nil {
@@ -97,7 +98,7 @@ func enqueueCompareTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.
 }
 
 func (s *Interp) ScheduleCompare(ctx context.Context, now time.Time) (int, error) {
-	return s.ScheduleCompareVersion(ctx, now, kernel.CompareVersion)
+	return s.ScheduleCompareVersion(ctx, now, comparison.RuleVersion)
 }
 func (s *Interp) ScheduleCompareVersion(ctx context.Context, now time.Time, version int) (int, error) {
 	if now.IsZero() || version < 1 {
@@ -107,7 +108,7 @@ func (s *Interp) ScheduleCompareVersion(ctx context.Context, now time.Time, vers
 		return 0, nil
 	}
 	count := 0
-	rows, err := s.Pool.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+compareCurrent, kernel.OrganizeVersion)
+	rows, err := s.Pool.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+compareCurrent, organize.RuleVersion)
 	if err != nil {
 		return count, err
 	}
@@ -129,8 +130,8 @@ func (s *Interp) ScheduleCompareVersion(ctx context.Context, now time.Time, vers
 	for _, owner := range owners {
 		for _, entity := range []bool{false, true} {
 			v := version
-			if entity && version == kernel.CompareVersion {
-				v = kernel.EntityCompareVersion
+			if entity && version == comparison.RuleVersion {
+				v = comparison.EntityRuleVersion
 			}
 			var input *ComparisonBatch
 			if entity {
@@ -320,7 +321,7 @@ func (s *Interp) WriteComparisonTx(ctx context.Context, tx pgx.Tx, owner memory.
 	}
 	rows, err := tx.Query(ctx, `SELECT input.n,c.confirmation='confirmed',EXISTS(SELECT 1 FROM record_versions edited WHERE edited.owner_id=r.owner_id AND edited.record_id=r.id AND edited.version>1 AND edited.actor='user'),`+restoredMemorySQL("$3")+
 		strings.Replace(compareCurrent, " WHERE r.state", ` JOIN jsonb_to_recordset($4::jsonb) input(id uuid,version integer,n integer) ON r.id=input.id AND r.version=input.version WHERE r.state`, 1)+`
- AND cl.owner_id=$2 ORDER BY r.id FOR UPDATE OF r,cl`, kernel.OrganizeVersion, string(owner), version, kernel.JSON(inputs))
+ AND cl.owner_id=$2 ORDER BY r.id FOR UPDATE OF r,cl`, organize.RuleVersion, string(owner), version, kernel.JSON(inputs))
 	if err != nil {
 		return err
 	}

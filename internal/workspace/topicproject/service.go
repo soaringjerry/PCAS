@@ -286,3 +286,46 @@ func apply(u Unit, topic string, input Input, refs []memory.Ref, output Output, 
 	}
 	return finish()
 }
+
+// MemoryCharacters is the text of one memory in the model input of a topic.
+const MemoryCharacters = 1200
+
+// ClipGoal cuts a project goal to its room in the model input and says that
+// it goes on. clipped is the count of characters cut.
+func ClipGoal(goal string) (text string, clipped int) {
+	r := []rune(goal)
+	if len(r) <= GoalCharacters {
+		return goal, 0
+	}
+	return string(r[:GoalCharacters]) + "（目标还有内容）", len(r) - GoalCharacters
+}
+
+// ClipMemory cuts the text of a memory to its room in the model input and
+// tells the model to answer uncertain when the rest might matter.
+func ClipMemory(text string) (string, int) {
+	r := []rune(text)
+	if len(r) <= MemoryCharacters {
+		return text, 0
+	}
+	return string(r[:MemoryCharacters]) + "（原文还有内容，拿不准请用 uncertain）", len(r) - MemoryCharacters
+}
+
+// A group is judged as a project when it has this many current memories, at
+// most EvidenceLimit of them go into the input, and somebody spoke of it
+// within Alive. A trip in June or an exam in spring has memories, a goal and
+// a date, and made a project all the same; Alive keeps them out.
+const (
+	Minimum       = 10
+	EvidenceLimit = 10
+	Alive         = 45 * 24 * time.Hour
+)
+
+// Eligible is true for a group that can be judged as a project: what the
+// owner calls a project needs no date; a mere topic needs a goal and a date.
+// latest is the time of its latest memory, or zero when none has a time.
+func Eligible(count int, kind string, goal, date bool, latest, now time.Time) bool {
+	if count < Minimum || kind == "topic" && (!goal || !date) {
+		return false
+	}
+	return latest.IsZero() || now.Sub(latest) <= Alive
+}

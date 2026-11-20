@@ -2,11 +2,9 @@ package interpstore
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/big"
 	"strings"
 	"time"
 
@@ -15,7 +13,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -130,7 +127,7 @@ func (s *Interp) ScheduleOrganize(ctx context.Context, now time.Time) (int, erro
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(current_database() || ':' || current_schema() || ':organize-schedule',0))"); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+OrganizeEligible, kernel.OrganizeVersion)
+		rows, err := tx.Query(ctx, "SELECT DISTINCT cl.owner_id::text"+OrganizeEligible, organize.RuleVersion)
 		if err != nil {
 			return err
 		}
@@ -156,7 +153,7 @@ func (s *Interp) ScheduleOrganize(ctx context.Context, now time.Time) (int, erro
 			if err := kernel.OwnerLock(ctx, tx, owner); err != nil {
 				return err
 			}
-			queued, err := EnqueueOrganizeTx(ctx, tx, owner, now, kernel.OrganizeVersion)
+			queued, err := EnqueueOrganizeTx(ctx, tx, owner, now, organize.RuleVersion)
 			if err != nil {
 				return err
 			}
@@ -261,7 +258,7 @@ func (a organizeSession) NextBatch(ctx context.Context, j worker.Job, version in
 		}
 		rows, err := tx.Query(ctx, `SELECT r.id::text,r.version,c.value #>> '{}',rv.expressed_at`+OrganizeEligible+`
  AND cl.owner_id=$2 ORDER BY EXISTS(SELECT 1 FROM evidence e JOIN archive_entries ae ON(ae.owner_id,ae.source_id,ae.source_version)=(e.owner_id,e.source_id,e.source_version)
- WHERE (e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version)),r.created_at DESC,r.id LIMIT $3`, version, string(j.OwnerID), kernel.OrganizeBatchLimit)
+ WHERE (e.owner_id,e.target_id,e.target_version)=(c.owner_id,c.claim_id,c.version)),r.created_at DESC,r.id LIMIT $3`, version, string(j.OwnerID), organize.BatchLimit)
 		if err != nil {
 			return err
 		}
@@ -295,8 +292,7 @@ func (a organizeSession) NextBatch(ctx context.Context, j worker.Job, version in
 }
 
 func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organize.Result) (organize.Applied, error) {
-	version, batch, items, timezone := result.Version, result.Memories, result.Items, result.Timezone
-	exhausted := []memory.ID{}
+	var applied organize.Applied
 	err := kernel.BackgroundResultTx(ctx, a.conn, j.OwnerID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := kernel.OwnerLock(ctx, tx, j.OwnerID); err != nil {
 			return err
@@ -304,152 +300,112 @@ func (a organizeSession) Apply(ctx context.Context, j worker.Job, result organiz
 		if err := kernel.LockJob(ctx, tx, j); err != nil {
 			return err
 		}
-		// Lock every still-current row before creating groups or updating labels.
-		eligible := map[int]bool{}
-		for _, m := range batch {
-			var id memory.ID
-			err := tx.QueryRow(ctx, `SELECT r.id::text`+OrganizeEligible+` AND cl.owner_id=$2 AND cl.id=$3 AND r.version=$4 FOR UPDATE OF r,cl`, version, string(j.OwnerID), string(m.Ref.ID), m.Ref.Version).Scan(&id)
-			if errors.Is(err, pgx.ErrNoRows) {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			eligible[m.N] = true
-		}
-		groups, err := resolveOrganizeGroupsTx(ctx, tx, j.OwnerID, items, organize.UsedDeclarations(result.Declared, items, eligible), eligible)
-		if err != nil {
-			return err
-		}
-		for _, m := range batch {
-			if !eligible[m.N] {
-				continue
-			}
-			item, valid := items[m.N]
-			if !valid {
-				var attempts int
-				if err := tx.QueryRow(ctx, "UPDATE claims SET organize_attempts=organize_attempts+1 WHERE owner_id=$1 AND id=$2 RETURNING organize_attempts", string(j.OwnerID), string(m.Ref.ID)).Scan(&attempts); err != nil {
-					return err
-				}
-				if _, err := tx.Exec(ctx, "UPDATE claims SET organize_after=clock_timestamp()+$3*interval '1 second' WHERE owner_id=$1 AND id=$2", string(j.OwnerID), string(m.Ref.ID), kernel.RetryDelay(attempts).Seconds()); err != nil {
-					return err
-				}
-				exhausted = append(exhausted, m.Ref.ID)
-				if err := kernel.StageEvent(ctx, tx, j.OwnerID, organize.Stage, "failure", "organize_invalid_output", 1); err != nil {
-					return err
-				}
-				continue
-			}
-			if _, err := tx.Exec(ctx, "UPDATE claim_revisions SET category=$4,durable=$5 WHERE owner_id=$1 AND claim_id=$2 AND version=$3", string(j.OwnerID), string(m.Ref.ID), m.Ref.Version, item.Category, item.Durable); err != nil {
-				return err
-			}
-			if _, err := tx.Exec(ctx, "DELETE FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 AND claim_version=$3 AND role IN('project','topic','area')", string(j.OwnerID), string(m.Ref.ID), m.Ref.Version); err != nil {
-				return err
-			}
-			for _, g := range groups[m.N] {
-				if _, err := tx.Exec(ctx, "INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", string(j.OwnerID), string(m.Ref.ID), m.Ref.Version, string(g.ID), g.Type); err != nil {
-					return err
-				}
-			}
-			cm := kernel.CardMemory{N: 1, Text: m.Text, Ref: m.Ref}
-			if m.ExpressedAt != nil {
-				cm.ExpressedAt = m.ExpressedAt.Format(time.RFC3339Nano)
-			}
-			deadlines := append([]organize.Deadline{}, item.Deadlines...)
-			for i := range deadlines {
-				deadlines[i].N = 1
-			}
-			var previousDates []string
-			if err := tx.QueryRow(ctx, "SELECT coalesce(array_agg(id::text),'{}') FROM deadlines WHERE owner_id=$1 AND claim_id=$2", string(j.OwnerID), string(m.Ref.ID)).Scan(&previousDates); err != nil {
-				return err
-			}
-			if err := statestore.WriteOrganizedDeadlinesTx(ctx, tx, j.OwnerID, cm, deadlines, timezone); err != nil {
-				return err
-			}
-			var withdrawnDates int
-			if err := tx.QueryRow(ctx, `SELECT count(*) FROM unnest($2::uuid[]) old(id) WHERE NOT EXISTS(SELECT 1 FROM deadlines d WHERE d.owner_id=$1 AND d.id=old.id)`, string(j.OwnerID), previousDates).Scan(&withdrawnDates); err != nil {
-				return err
-			}
-			if withdrawnDates > 0 {
-				if err := kernel.StageEvent(ctx, tx, j.OwnerID, organize.Stage, "success", "reorganize_deadlines_withdrawn", withdrawnDates); err != nil {
-					return err
-				}
-			}
-			removedRequirements, err := tx.Exec(ctx, "DELETE FROM assistant_requirements WHERE owner_id=$1 AND claim_id=$2", string(j.OwnerID), string(m.Ref.ID))
-			if err != nil {
-				return err
-			}
-			if item.Category != "rule" && removedRequirements.RowsAffected() > 0 {
-				if err := kernel.StageEvent(ctx, tx, j.OwnerID, organize.Stage, "success", "reorganize_requirements_withdrawn", int(removedRequirements.RowsAffected())); err != nil {
-					return err
-				}
-			}
-			if item.Category == "rule" {
-				if _, err := tx.Exec(ctx, "INSERT INTO assistant_requirements(owner_id,claim_id,claim_version,unrestricted,scope) VALUES($1,$2,$3,$4,$5)", string(j.OwnerID), string(m.Ref.ID), m.Ref.Version, item.Unrestricted, item.Scope); err != nil {
-					return err
-				}
-			}
-			if _, err := tx.Exec(ctx, "UPDATE claims SET organized=$3,organize_attempts=0,organize_after='-infinity' WHERE owner_id=$1 AND id=$2", string(j.OwnerID), string(m.Ref.ID), version); err != nil {
-				return err
-			}
-		}
-		if err := kernel.Acknowledge(ctx, tx, j); err != nil {
-			return err
-		}
-		if err := kernel.DiscardPaidResult(ctx, tx, j); err != nil {
-			return err
-		}
-		_, err = EnqueueOrganizeTx(ctx, tx, j.OwnerID, time.Now(), kernel.OrganizeVersion)
+		var err error
+		applied, err = organize.Apply(ctx, organizeUnit{tx: tx, job: j}, result)
 		return err
 	})
 	if err != nil {
 		return organize.Applied{}, err
 	}
-	return organize.Applied{Deferred: exhausted}, nil
+	return applied, nil
 }
 
-// Organizing retries are automatic, including transaction recovery. Reserve a
-// fresh invocation through the shared budget policy, then bind it to the fenced
-// job. Each call's reservation ID also deduplicates its usage log.
-func (s *Interp) reserveOrganizeCost(ctx context.Context, j worker.Job, cost float64) (string, error) {
-	reserveCtx, cancel := context.WithTimeout(ctx, kernel.BackgroundWriteTimeout)
-	id, err := s.ReserveModelCostID(reserveCtx, j.OwnerID, cost, &j)
-	cancel()
-	if errors.Is(err, memory.ErrUnavailable) {
-		var timezone string
-		if err := s.Pool.QueryRow(ctx, "SELECT settings->>'timezone' FROM workspace_owners WHERE owner_id=$1", string(j.OwnerID)).Scan(&timezone); err != nil {
-			return "", err
-		}
-		loc, err := time.LoadLocation(timezone)
-		if err != nil {
-			return "", err
-		}
-		jitter, err := rand.Int(rand.Reader, big.NewInt(int64(budgetstore.BudgetJitter)+1))
-		if err != nil {
-			return "", err
-		}
-		return "", &worker.JobError{Code: "budget_deferred", Until: budgetstore.NextBudgetDay(time.Now(), loc).Add(time.Duration(jitter.Int64())), NoAttempt: true}
+// organizeUnit is the storage of the result of one organize batch.
+type organizeUnit struct {
+	tx  pgx.Tx
+	job worker.Job
+}
+
+func (u organizeUnit) owner() string { return string(u.job.OwnerID) }
+
+// Current locks every still-current row before groups are made or labels change.
+func (u organizeUnit) Current(ctx context.Context, ref memory.Ref, version int) (bool, error) {
+	var id memory.ID
+	err := u.tx.QueryRow(ctx, `SELECT r.id::text`+OrganizeEligible+` AND cl.owner_id=$2 AND cl.id=$3 AND r.version=$4 FOR UPDATE OF r,cl`, version, u.owner(), string(ref.ID), ref.Version).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
 	}
-	if err != nil {
-		return "", kernel.BackgroundWriteError(ctx, err)
+	return err == nil, err
+}
+
+func (u organizeUnit) Groups(ctx context.Context, items map[int]organize.Item, declared []organize.Group, current map[int]bool) (map[int][]organize.Group, error) {
+	return resolveOrganizeGroupsTx(ctx, u.tx, u.job.OwnerID, items, declared, current)
+}
+
+func (u organizeUnit) Defer(ctx context.Context, id memory.ID) error {
+	var attempts int
+	if err := u.tx.QueryRow(ctx, "UPDATE claims SET organize_attempts=organize_attempts+1 WHERE owner_id=$1 AND id=$2 RETURNING organize_attempts", u.owner(), string(id)).Scan(&attempts); err != nil {
+		return err
 	}
-	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := kernel.LockJob(ctx, tx, j); err != nil {
+	_, err := u.tx.Exec(ctx, "UPDATE claims SET organize_after=clock_timestamp()+$3*interval '1 second' WHERE owner_id=$1 AND id=$2", u.owner(), string(id), kernel.RetryDelay(attempts).Seconds())
+	return err
+}
+
+func (u organizeUnit) Count(ctx context.Context, outcome, reason string, n int) error {
+	return kernel.StageEvent(ctx, u.tx, u.job.OwnerID, organize.Stage, outcome, reason, n)
+}
+
+func (u organizeUnit) Label(ctx context.Context, ref memory.Ref, category string, durable *bool) error {
+	_, err := u.tx.Exec(ctx, "UPDATE claim_revisions SET category=$4,durable=$5 WHERE owner_id=$1 AND claim_id=$2 AND version=$3", u.owner(), string(ref.ID), ref.Version, category, durable)
+	return err
+}
+
+func (u organizeUnit) SetGroups(ctx context.Context, ref memory.Ref, groups []organize.Group) error {
+	if _, err := u.tx.Exec(ctx, "DELETE FROM claim_mentions WHERE owner_id=$1 AND claim_id=$2 AND claim_version=$3 AND role IN('project','topic','area')", u.owner(), string(ref.ID), ref.Version); err != nil {
+		return err
+	}
+	for _, g := range groups {
+		if _, err := u.tx.Exec(ctx, "INSERT INTO claim_mentions(owner_id,claim_id,claim_version,entity_id,role) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", u.owner(), string(ref.ID), ref.Version, string(g.ID), g.Type); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, "UPDATE background_usage SET job_id=$3 WHERE owner_id=$1 AND id=$2", string(j.OwnerID), id, string(j.ID))
-		return err
-	})
-	if err != nil {
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		_, cleanupErr := s.Pool.Exec(cleanupCtx, "DELETE FROM background_usage WHERE owner_id=$1 AND id=$2", string(j.OwnerID), id)
-		if cleanupErr != nil {
-			return "", cleanupErr
-		}
-		return "", err
 	}
-	return id, nil
+	return nil
+}
+
+func (u organizeUnit) Dates(ctx context.Context, m organize.Memory, deadlines []organize.Deadline, timezone string) (int, error) {
+	cm := kernel.CardMemory{N: 1, Text: m.Text, Ref: m.Ref}
+	if m.ExpressedAt != nil {
+		cm.ExpressedAt = m.ExpressedAt.Format(time.RFC3339Nano)
+	}
+	var previous []string
+	if err := u.tx.QueryRow(ctx, "SELECT coalesce(array_agg(id::text),'{}') FROM deadlines WHERE owner_id=$1 AND claim_id=$2", u.owner(), string(m.Ref.ID)).Scan(&previous); err != nil {
+		return 0, err
+	}
+	if err := statestore.WriteOrganizedDeadlinesTx(ctx, u.tx, u.job.OwnerID, cm, deadlines, timezone); err != nil {
+		return 0, err
+	}
+	var withdrawn int
+	err := u.tx.QueryRow(ctx, `SELECT count(*) FROM unnest($2::uuid[]) old(id) WHERE NOT EXISTS(SELECT 1 FROM deadlines d WHERE d.owner_id=$1 AND d.id=old.id)`, u.owner(), previous).Scan(&withdrawn)
+	return withdrawn, err
+}
+
+func (u organizeUnit) Requirement(ctx context.Context, ref memory.Ref, rule, unrestricted bool, scope string) (int, error) {
+	removed, err := u.tx.Exec(ctx, "DELETE FROM assistant_requirements WHERE owner_id=$1 AND claim_id=$2", u.owner(), string(ref.ID))
+	if err != nil {
+		return 0, err
+	}
+	if rule {
+		if _, err := u.tx.Exec(ctx, "INSERT INTO assistant_requirements(owner_id,claim_id,claim_version,unrestricted,scope) VALUES($1,$2,$3,$4,$5)", u.owner(), string(ref.ID), ref.Version, unrestricted, scope); err != nil {
+			return 0, err
+		}
+	}
+	return int(removed.RowsAffected()), nil
+}
+
+func (u organizeUnit) Organized(ctx context.Context, id memory.ID, version int) error {
+	_, err := u.tx.Exec(ctx, "UPDATE claims SET organized=$3,organize_attempts=0,organize_after='-infinity' WHERE owner_id=$1 AND id=$2", u.owner(), string(id), version)
+	return err
+}
+
+func (u organizeUnit) Finish(ctx context.Context) error {
+	if err := kernel.Acknowledge(ctx, u.tx, u.job); err != nil {
+		return err
+	}
+	if err := kernel.DiscardPaidResult(ctx, u.tx, u.job); err != nil {
+		return err
+	}
+	_, err := EnqueueOrganizeTx(ctx, u.tx, u.job.OwnerID, time.Now(), organize.RuleVersion)
+	return err
 }
 
 func FindOrganizeGroupTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string) (memory.ID, error) {

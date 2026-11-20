@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
@@ -123,9 +122,9 @@ func (f *phase25B234Fixture) compareJob(t *testing.T) string {
 		t.Errorf("compare priority=%d, want 8", priority)
 	}
 	if strings.HasPrefix(j.Stage, "memory.compare:") {
-		err = (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: kernel.CompareVersion}).Process(f.ctx, *j)
+		err = (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: comparison.RuleVersion}).Process(f.ctx, *j)
 	} else if strings.HasPrefix(j.Stage, "memory.entity_compare:") {
-		err = (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: jobCalls(f.store), Version: kernel.EntityCompareVersion}).Process(f.ctx, *j)
+		err = (comparison.EntityService{Store: f.store.EntityCompareStore(), Generator: jobCalls(f.store), Version: comparison.EntityRuleVersion}).Process(f.ctx, *j)
 	} else {
 		t.Fatalf("unexpected claimed stage=%s", j.Stage)
 	}
@@ -191,7 +190,7 @@ func TestPhase25B2_X2_1_ActualDuplicateEvidenceAndHistory(t *testing.T) {
 	if sources != 3 {
 		t.Errorf("survivor independent sources=%d want 3", sources)
 	}
-	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND compared=$3`, f.scope.OwnerID, []string{string(refs[0].ID), string(refs[1].ID), string(refs[2].ID)}, kernel.CompareVersion).Scan(&compared); err != nil {
+	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM claims WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND compared=$3`, f.scope.OwnerID, []string{string(refs[0].ID), string(refs[1].ID), string(refs[2].ID)}, comparison.RuleVersion).Scan(&compared); err != nil {
 		t.Fatal(err)
 	}
 	if compared != 3 {
@@ -313,7 +312,7 @@ func TestPhase25B2_X2_7_ConcurrentChangeDiscardsOnlyRelatedResult(t *testing.T) 
 			}
 			done := make(chan error, 1)
 			go func() {
-				done <- (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: kernel.CompareVersion}).Process(f.ctx, *j)
+				done <- (comparison.Service{Store: f.store.CompareStore(), Generator: jobCalls(f.store), Version: comparison.RuleVersion}).Process(f.ctx, *j)
 			}()
 			select {
 			case <-entered:
@@ -360,7 +359,7 @@ func TestPhase25B2_X2_13_VersionUpgradeCurrentOnly(t *testing.T) {
 	})
 	f.runCompare(t)
 	first := len(model.calls())
-	old := kernel.CompareVersion
+	old := comparison.RuleVersion
 	// CompareVersion is a public constant. Seed the previous generation marker
 	// to reproduce the persisted state seen by a binary whose rule increased.
 	f.exec(t, `UPDATE claims SET compared=$2 WHERE owner_id=$1 AND retired=''`, f.scope.OwnerID, old-1)

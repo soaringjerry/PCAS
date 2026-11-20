@@ -303,3 +303,9 @@ func (b *boundedOutput) Write(data []byte) (int, error) {
 	}
 	return b.Builder.Write(data)
 }
+
+// Placeholder is the text of an original that is not read yet, with the
+// mark of its content.
+func Placeholder(hash string) string {
+	return "[附件原件；正文尚未解析。校验标识：" + hash + "]"
+}

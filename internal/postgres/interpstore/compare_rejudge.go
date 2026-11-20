@@ -31,7 +31,7 @@ func (s *Interp) QueueSupersededRejudge(ctx context.Context, scope memory.Scope)
  WHERE cl.owner_id=$1 AND cl.retired='superseded' AND r.state='active' AND n.state='active'
  AND NOT EXISTS(SELECT 1 FROM background_markers m WHERE (m.owner_id,m.record_id,m.record_version)=(r.owner_id,r.id,r.version)
  AND m.stage='memory.compare:'||$2::int::text||':rejudge:'||r.id::text||':'||r.version::text||':'||n.id::text||':'||n.version::text)
- ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`, string(scope.OwnerID), kernel.CompareVersion, kernel.ComparePriority)
+ ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`, string(scope.OwnerID), comparison.RuleVersion, kernel.ComparePriority)
 		count = int(tag.RowsAffected())
 		return err
 	})
@@ -54,7 +54,7 @@ func readRejudgePair(ctx context.Context, tx pgx.Tx, j worker.Job, refs []memory
 	if err != nil || !current {
 		return nil, err
 	}
-	input := &rejudgeInput{Refs: refs, Rule: kernel.CompareVersion}
+	input := &rejudgeInput{Refs: refs, Rule: comparison.RuleVersion}
 	for i, ref := range refs {
 		m := CompareMemory{OrganizeMemory: OrganizeMemory{N: i + 1, Ref: ref}}
 		err = tx.QueryRow(ctx, `SELECT c.value #>> '{}',rv.expressed_at,
@@ -148,12 +148,12 @@ func (a compareSession) ApplyRejudge(ctx context.Context, j worker.Job, refs []m
 		keep := !current.Memories[0].Protected && len(edges) == 1 && edges[0].Kind == "superseded"
 		outcome := "kept_superseded"
 		if !keep {
-			if _, err := tx.Exec(ctx, `UPDATE claims SET retired='',retired_by=NULL,retired_at=NULL,compared=$3 WHERE owner_id=$1 AND id=$2`, string(j.OwnerID), string(refs[0].ID), kernel.CompareVersion); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE claims SET retired='',retired_by=NULL,retired_at=NULL,compared=$3 WHERE owner_id=$1 AND id=$2`, string(j.OwnerID), string(refs[0].ID), comparison.RuleVersion); err != nil {
 				return err
 			}
 			outcome = "restored"
 		} else {
-			if _, err := tx.Exec(ctx, "UPDATE claims SET compared=$3 WHERE owner_id=$1 AND id=$2", string(j.OwnerID), string(refs[0].ID), kernel.CompareVersion); err != nil {
+			if _, err := tx.Exec(ctx, "UPDATE claims SET compared=$3 WHERE owner_id=$1 AND id=$2", string(j.OwnerID), string(refs[0].ID), comparison.RuleVersion); err != nil {
 				return err
 			}
 		}

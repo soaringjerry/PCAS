@@ -13,6 +13,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/command"
 )
 
 // withUndoOf marks the pending action-log entry as the undo of another action;
@@ -25,42 +26,25 @@ func WithUndoOf(ctx context.Context, undone string) context.Context {
 	log.UndoOf = undone
 	return context.WithValue(ctx, actionlog.ActionLogKey{}, log)
 }
-func UndoableCommand(t string) bool {
-	if kernel.OneOf(t, "restoreMemory", "completeDeadline") {
-		return true
-	}
-	return kernel.OneOf(t, "addTask", "addIdea", "addProject", "updateTask", "updateProject", "setTaskStatus", "renameThing", "setNotes", "moveThing", "deferTask", "addCheck", "toggleCheck", "removeCheck", "ideaPromote", "ideaSnooze", "ideaShelve", "ideaDrop", "ideaContinue", "addCondition", "removeCondition", "adoptRun", "discardRun", "createDoc", "updateDoc", "deleteDoc", "bulkStatus", "bulkDefer", "bulkMove")
-}
+
+// CommandSummary is the line of the owner's log for a command; command.Summary
+// writes it with the title that storage reads.
 func CommandSummary(ctx context.Context, tx pgx.Tx, scope memory.Scope, c workspace.Command) string {
+	var title string
 	if c.Type == "completeDeadline" {
-		var title string
 		_ = tx.QueryRow(ctx, "SELECT title FROM deadlines WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.ID).Scan(&title)
-		return map[string]string{"dropped": "不再显示：", "task": "转成待办：", "done": "完成期限：", "": "完成期限："}[c.Reason] + title
+		return command.Summary(c, title)
 	}
-	title := c.Title
+	title = c.Title
 	if title == "" {
 		title = c.Name
 	}
-	id := c.ID
-	if c.TaskID != "" {
-		id = c.TaskID
-	}
-	if c.IdeaID != "" {
-		id = c.IdeaID
-	}
-	if title == "" && memory.ID(id).Valid() {
+	if id := command.Target(c); title == "" && memory.ID(id).Valid() {
 		if item, err := itemstore.GetItem(ctx, tx, scope, id); err == nil {
 			title = item.Title
 		}
 	}
-	prefix := "修改："
-	if kernel.OneOf(c.Type, "addTask", "addIdea", "addProject") {
-		prefix = "新建："
-	}
-	if c.Type == "setTaskStatus" && c.Status == "done" {
-		prefix = "完成："
-	}
-	return prefix + title
+	return command.Summary(c, title)
 }
 
 // A project adoption (phase 3 H7) remembers the deputy's text through a source

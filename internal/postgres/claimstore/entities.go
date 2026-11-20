@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/soaringjerry/PCAS/internal/interpretation/claim"
 	"github.com/soaringjerry/PCAS/internal/interpretation/extraction"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -56,7 +57,7 @@ func EntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID, kind, name string
 }
 
 func SelfEntityTx(ctx context.Context, tx pgx.Tx, owner memory.ID) (memory.ID, error) {
-	return EntityTx(ctx, tx, owner, "self", "我")
+	return EntityTx(ctx, tx, owner, "self", claim.SelfName)
 }
 
 func mentionsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, ref memory.Ref, mentions []claimMention) error {

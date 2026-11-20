@@ -5,6 +5,7 @@ package comparison
 
 import (
 	"encoding/json"
+
 	"github.com/soaringjerry/PCAS/internal/modelcall"
 )
 
@@ -157,3 +158,9 @@ func ResolveEdges(edges []Edge, eligible, protected map[int]bool) []Edge {
 	}
 	return resolved
 }
+
+// The lines of the owner's log for the comparison's own actions.
+const (
+	RestoreSummary = "恢复退出的记忆"
+	MergeSummary   = "合并同一实体的叫法"
+)

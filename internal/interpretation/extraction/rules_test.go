@@ -136,3 +136,17 @@ func TestOnlyADirectConfidentCurrentStatementIsAdopted(t *testing.T) {
 		t.Fatal("an import is reviewed")
 	}
 }
+
+func TestTrustFollowsOneOrder(t *testing.T) {
+	for want, got := range map[string]string{
+		"inferred":  Trust("用户喜欢茶", "direct", true, 3),
+		"reported":  Trust("同事要调岗", "reported", false, 3),
+		"tentative": Trust("可能下周搬家", "direct", false, 3),
+		"repeated":  Trust("喜欢茶", "direct", false, 2),
+		"stated":    Trust("喜欢茶", "direct", false, 1),
+	} {
+		if got != want {
+			t.Errorf("%s: %s", want, got)
+		}
+	}
+}

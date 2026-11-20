@@ -127,10 +127,12 @@ func TestDoingTiersPrivateProductPipeline(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	s := doing.Suite{Version: 1, Synthetic: false, Persona: "虚构纸艺检查", Timezone: "UTC", AsOf: "2026-10-04T00:00:00Z", Memories: []doing.Memory{
-		{ID: "f1", Text: "虚构的窄边纸只用于折纸", Group: "虚构纸艺", ExpressedAt: "2026-10-03T10:00:00Z"},
-		{ID: "f2", Text: "虚构的栀岑偏好方形折纸", Group: "虚构纸艺", ExpressedAt: "2026-10-03T10:01:00Z"},
-		{ID: "f3", Text: "虚构的雾棘偏好折纸信封", Group: "虚构纸艺", ExpressedAt: "2026-10-03T10:02:00Z"},
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	said := today.Add(-14 * time.Hour)
+	s := doing.Suite{Version: 1, Synthetic: false, Persona: "虚构纸艺检查", Timezone: "UTC", AsOf: today.Format(time.RFC3339), Memories: []doing.Memory{
+		{ID: "f1", Text: "虚构的窄边纸只用于折纸", Group: "虚构纸艺", ExpressedAt: said.Format(time.RFC3339)},
+		{ID: "f2", Text: "虚构的栀岑偏好方形折纸", Group: "虚构纸艺", ExpressedAt: said.Add(time.Minute).Format(time.RFC3339)},
+		{ID: "f3", Text: "虚构的雾棘偏好折纸信封", Group: "虚构纸艺", ExpressedAt: said.Add(2 * time.Minute).Format(time.RFC3339)},
 	}, Tasks: []doing.Task{
 		{ID: "fictional-cross", Reviewed: true, Category: "cross_group", Request: "虚构纸艺检查", Must: []doing.Check{{ID: "M1", Text: "提到折纸", Evidence: []string{"f1"}}}, Handling: "给虚构答复", CanComplete: true},
 		{ID: "fictional-recall", Reviewed: true, Category: "direct_recall", Request: "回忆虚构的窄边纸用途", Must: []doing.Check{{ID: "M1", Text: "用于折纸", Evidence: []string{"f1"}}}, Handling: "给虚构答复", CanComplete: true},

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/soaringjerry/PCAS/cmd/pcas-eval/doing"
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
@@ -22,8 +23,9 @@ func TestTierPreparationAndRestoreValidateLibraryState(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cleanup()
-	suite := doing.Suite{Synthetic: true, Timezone: "UTC", AsOf: "2026-10-07T00:00:00Z", Memories: []doing.Memory{
-		{ID: "f1", Group: "虚构折纸", Text: "虚构松泉喜欢方形折纸", ExpressedAt: "2026-10-06T12:00:00Z"},
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	suite := doing.Suite{Synthetic: true, Timezone: "UTC", AsOf: today.Format(time.RFC3339), Memories: []doing.Memory{
+		{ID: "f1", Group: "虚构折纸", Text: "虚构松泉喜欢方形折纸", ExpressedAt: today.Add(-12 * time.Hour).Format(time.RFC3339)},
 	}}
 	bridge := newTierBridge(doing.FakeModel{}, true)
 	defer bridge.server.Close()

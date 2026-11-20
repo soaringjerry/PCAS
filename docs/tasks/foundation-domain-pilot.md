@@ -184,6 +184,32 @@ The schedule view is built by `internal/currentstate/schedule` (`schedule.Build`
 
 The sentences of a recall's coverage and the label of an original are `retrieval` constants and `retrieval.ContextLabel`; the clipping of a topic's model input is `topicproject.ClipGoal` and `topicproject.ClipMemory`; the title of an item that must be authorized again is `workspace.ReauthorizeTitle`. One model-input label stays in storage with a reason: the label of the best fragment of a source (`[片段 …；字符 …]`) is made in the recall SQL that chooses the fragment, and moves when that query moves.
 
+What one erasure removes is decided by `erasure.Erase` (`internal/workspace/erasure`): the records with their sources when asked, what was derived from them, an organized episode left with no other member, an entity left with nothing said of it, and, unless an undo keeps them, the answers that used them. `erasure.Forget` takes the erased sources out of an item and puts an idea that only they woke back on the shelf. Storage follows the links in SQL and removes the rows; the receipt of an emptied turn is `secretary.DeletedReply`.
+
+What a run may still use is decided by `access.Verify` (`internal/workspace/access`): its agent is enabled, and every memory and source it used is still the same version, still readable by that agent, neither excluded from the item nor of another project. A rechecked old answer keeps its access to a memory merged or superseded since (`access.Usable` is the rule for a new answer). `access.Withhold` takes what a withheld answer wrote out of an item. Storage resolves grants, applicable versions and source visibility in SQL.
+
+A statement is written once by `claim.Remember`: what the owner erased is not written again, a merged key gives the memory it went into, a structured statement at a quotation that already gave a memory gives that memory (and fills the assistant's unconfirmed draft), a later source version saying the same is new evidence for the same memory, and only then is a new memory made, about the owner, a named entity, or an entity the source introduced. The owner's own memory keeps their words as its source.
+
+Which remembered dates a review judges, and in which class, is `datereview.Class` and `datereview.Pick`: a date never pinned down, a fixed arrangement without an hour, a dated row over for a day; one per memory, once per memory version and class. Storage lists the open dates of the current memories with the classes already judged.
+
+When a handover is written again is `handover.Schedule` and `projecthandover.Due`: when its input changed, not while one is being written, the owner's first only when some memory belongs in it, a project's only while the project is open, and an hour after the last at the earliest.
+
+Which topics are judged as projects, and in which order, is `topicproject.Schedule`: each eligible topic not yet answered for its evidence, what was spoken of last first, each queued check counting what its input leaves out. Storage reads the groups once through an index-friendly prefilter of `topicproject.Eligible`, which is checked again on each topic's input.
+
+The order in which proposed pairs of names are judged is `aliasscan.MergeOrder`: the strongest representative of each type first.
+
+What stays in storage on purpose, each with its reason:
+
+| What | Why it stays |
+|---|---|
+| The claim of a queue job (`jobs.go`): windows, cursors, pause and hold of an import, the fair turn between cards and comparisons | `FOR UPDATE SKIP LOCKED` over indexed pages; the order is machinery, and the priorities are set at enqueue |
+| The order of secretary turns | Admission and replay under the owner lock |
+| The recovery of an interrupted deputy run, and the budget reservation | Both read and write the model-call journals and the spending; moving them waits for the journals to be one |
+| Which memories still need an organize or comparison pass | A set query over every current memory, through the indexes; the rule versions are `organize.RuleVersion` and `comparison.RuleVersion` |
+| The SQL that reads a model input | Reads only; what goes in and how much is the domain's (`datereview`, `topicproject`, `secretary`, `contextbuilder` limits) |
+| The tasks an effort estimate needs | The rule is the `effort.Store` contract; the job acknowledges itself in the same read |
+| The label of a source's best fragment | Made in the recall SQL that chooses the fragment |
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.

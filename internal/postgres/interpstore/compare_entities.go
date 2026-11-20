@@ -85,29 +85,8 @@ func nextEntityPairTx(ctx context.Context, tx pgx.Tx, owner memory.ID, version i
 	if err != nil {
 		return nil, err
 	}
-	// Preserve the established strongest-representative-first merge order.
 	// Eligibility comes exclusively from model-created candidates, not names.
-	ranked := append([]aliasscan.Name(nil), names...)
-	sort.SliceStable(ranked, func(i, j int) bool {
-		a, b := ranked[i], ranked[j]
-		if a.Type != b.Type {
-			return a.Type < b.Type
-		}
-		if a.MemoryCount != b.MemoryCount {
-			return a.MemoryCount > b.MemoryCount
-		}
-		if chineseEntityName(a.Name) != chineseEntityName(b.Name) {
-			return chineseEntityName(a.Name)
-		}
-		if a.Name != b.Name {
-			return a.Name < b.Name
-		}
-		return a.Ref.ID < b.Ref.ID
-	})
-	order := make([]string, len(ranked))
-	for i, e := range ranked {
-		order[i] = string(e.Ref.ID)
-	}
+	order := aliasscan.MergeOrder(names)
 	var left, right string
 	err = tx.QueryRow(ctx, aliasPendingSQL, string(owner), version, order).Scan(&left, &right)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -361,8 +340,6 @@ func entityPairKeepIndex(pair *ComparisonEntityPair, fallback int) int {
 	a, b := pair.Entities[0], pair.Entities[1]
 	return comparison.KeepIndex(comparison.NamedEntity{Type: a.Type, Name: a.Name, MemoryCount: a.MemoryCount}, comparison.NamedEntity{Type: b.Type, Name: b.Name, MemoryCount: b.MemoryCount}, fallback)
 }
-
-func chineseEntityName(s string) bool { return comparison.HasChinese(s) }
 
 type entitySubjectChange struct {
 	ID      string `json:"id"`

@@ -47,48 +47,38 @@ func (s *Workspace) ReadProjectHandover(ctx context.Context, scope memory.Scope,
 	})
 	return out, err
 }
+
+// EnqueueProjectHandoversTx queues the handovers of the projects whose input
+// changed; projecthandover.Due decides.
 func EnqueueProjectHandoversTx(ctx context.Context, tx pgx.Tx, owner memory.ID, anchor memory.Ref, now time.Time) (int, error) {
 	installed, err := StudioInstalledTx(ctx, tx)
 	if err != nil || !installed {
 		return 0, err
 	}
-	type candidate struct {
-		id      string
-		written *time.Time
-	}
-	candidates := []candidate{}
-	rows, err := tx.Query(ctx, `SELECT w.id::text,h.written_at FROM work_items w
- LEFT JOIN project_handovers h ON(h.owner_id,h.project_id)=(w.owner_id,w.id)
- WHERE w.owner_id=$1 AND w.kind='project' AND w.status<>'done'
- AND coalesce(h.input_events,-1)<>(SELECT count(*) FROM project_input_events e WHERE (e.owner_id,e.project_id)=(w.owner_id,w.id))
- AND NOT EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=w.owner_id AND j.stage LIKE $2||':'||w.id::text||':%' AND j.state IN('queued','leased'))
+	rows, err := tx.Query(ctx, `SELECT w.id::text,w.status='done',
+ (SELECT count(*) FROM project_input_events e WHERE (e.owner_id,e.project_id)=(w.owner_id,w.id)),coalesce(h.input_events,-1),h.written_at,
+ EXISTS(SELECT 1 FROM memory_jobs j WHERE j.owner_id=w.owner_id AND j.stage LIKE $2||':'||w.id::text||':%' AND j.state IN('queued','leased'))
+ FROM work_items w LEFT JOIN project_handovers h ON(h.owner_id,h.project_id)=(w.owner_id,w.id)
+ WHERE w.owner_id=$1 AND w.kind='project'
  ORDER BY coalesce(h.written_at,w.created_at),w.id`, string(owner), ProjectHandoverStage)
 	if err != nil {
 		return 0, err
 	}
-	for rows.Next() {
-		var c candidate
-		if err = rows.Scan(&c.id, &c.written); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		candidates = append(candidates, c)
-	}
-	err = rows.Err()
-	rows.Close()
+	projects, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (projecthandover.Project, error) {
+		var p projecthandover.Project
+		err := row.Scan(&p.ID, &p.Done, &p.Events, &p.WrittenEvents, &p.WrittenAt, &p.Pending)
+		return p, err
+	})
 	if err != nil {
 		return 0, err
 	}
-	for _, c := range candidates {
-		due := now
-		if c.written != nil {
-			due = kernel.MaxTime(due, c.written.Add(projecthandover.MinimumInterval))
-		}
-		if _, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, ProjectHandoverStage+":"+c.id+":"+string(memory.NewID()), kernel.HandoverPriority, due); err != nil {
+	queued := projecthandover.Due(projects, now)
+	for _, q := range queued {
+		if _, err = tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, string(memory.NewID()), string(owner), string(anchor.ID), anchor.Version, ProjectHandoverStage+":"+q.Project+":"+string(memory.NewID()), kernel.HandoverPriority, q.Due); err != nil {
 			return 0, err
 		}
 	}
-	return len(candidates), nil
+	return len(queued), nil
 }
 func (s *Workspace) projectHandoverInputTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, id string) (projectHandoverInput, []memory.Ref, error) {
 	out := projectHandoverInput{Parts: []projectInputPart{}, Deadlines: []workspace.LibraryDeadline{}}

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"time"
 
@@ -176,70 +175,61 @@ func topicProjectInputSharedTx(ctx context.Context, tx pgx.Tx, owner memory.ID, 
 	out.Latest = latest
 	return out, refs, nil
 }
+
+// EnqueueTopicProjectsTx queues the topic project checks of the owner.
+// topicproject.Schedule decides; topicScheduleUnit reads and queues.
 func EnqueueTopicProjectsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, now time.Time) (int, error) {
-	topics, err := kernel.QueryDocuments[string](ctx, tx, `WITH eligible AS MATERIALIZED(SELECT m.key FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version) WHERE m.owner_id=$1 AND m.kind IN('topic','project') GROUP BY m.key HAVING count(*)>=$2 AND (bool_or(m.kind='project') OR bool_or(c.category='goal') AND bool_or(EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)))))
- SELECT to_jsonb(r.id::text) FROM eligible g JOIN memory_records r ON r.owner_id=$1 AND 'entity:'||r.id::text=g.key JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version) WHERE r.state='active' AND ev.entity_type IN('topic','project') AND coalesce(ev.disambiguation->>'work_item_id','')='' ORDER BY r.id`, string(owner), topicproject.Minimum)
-	if err != nil {
-		return 0, err
-	}
-	count := 0
-	var shared *topicProjectShared
-	type due struct {
-		topic string
-		input topicProjectInput
-	}
-	var dues []due
-	for _, topic := range topics {
-		if shared == nil {
-			if shared, err = topicProjectSharedTx(ctx, tx, owner); err != nil {
-				return count, err
-			}
-		}
-		input, _, err := topicProjectInputSharedTx(ctx, tx, owner, topic, shared)
-		if errors.Is(err, pgx.ErrNoRows) {
-			continue
-		}
+	return topicproject.Schedule(ctx, &topicScheduleUnit{tx: tx, owner: owner, now: now})
+}
+
+// topicScheduleUnit is the storage of one pass of the topic project schedule.
+type topicScheduleUnit struct {
+	tx     pgx.Tx
+	owner  memory.ID
+	now    time.Time
+	shared *topicProjectShared
+}
+
+// Topics reads the groups through status_current_members once; the rule of
+// topicproject.Eligible is checked again on each topic's own input.
+func (u *topicScheduleUnit) Topics(ctx context.Context) ([]string, error) {
+	return kernel.QueryDocuments[string](ctx, u.tx, `WITH eligible AS MATERIALIZED(SELECT m.key FROM status_current_members m JOIN claim_revisions c ON(c.owner_id,c.claim_id,c.version)=(m.owner_id,m.claim_id,m.claim_version) WHERE m.owner_id=$1 AND m.kind IN('topic','project') GROUP BY m.key HAVING count(*)>=$2 AND (bool_or(m.kind='project') OR bool_or(c.category='goal') AND bool_or(EXISTS(SELECT 1 FROM deadlines d WHERE(d.owner_id,d.claim_id,d.claim_version)=(m.owner_id,m.claim_id,m.claim_version) AND NOT(coalesce(c.scope->>'deadline_completed','false')='true' AND coalesce(c.scope->>'deadline_completed_version','')=c.version::text)))))
+ SELECT to_jsonb(r.id::text) FROM eligible g JOIN memory_records r ON r.owner_id=$1 AND 'entity:'||r.id::text=g.key JOIN entity_versions ev ON(ev.owner_id,ev.entity_id,ev.version)=(r.owner_id,r.id,r.version) WHERE r.state='active' AND ev.entity_type IN('topic','project') AND coalesce(ev.disambiguation->>'work_item_id','')='' ORDER BY r.id`, string(u.owner), topicproject.Minimum)
+}
+
+func (u *topicScheduleUnit) Input(ctx context.Context, topic string) (topicproject.Input, bool, error) {
+	if u.shared == nil {
+		shared, err := topicProjectSharedTx(ctx, u.tx, u.owner)
 		if err != nil {
-			return count, err
+			return topicproject.Input{}, false, err
 		}
-		// Answered for this evidence already: linked to a project, or judged not to be one.
-		var done bool
-		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM topic_project_links WHERE owner_id=$1 AND topic_id=$2 AND evidence_hash=$3)
- OR EXISTS(SELECT 1 FROM topic_project_checks WHERE owner_id=$1 AND topic_id=$2 AND evidence_hash=$3 AND output->>'decision'='skip')`, string(owner), topic, input.EvidenceHash).Scan(&done); err != nil {
-			return count, err
-		}
-		if done {
-			continue
-		}
-		dues = append(dues, due{topic, input})
+		u.shared = shared
 	}
-	// Only a few projects are made a day and two groups are judged an hour, so
-	// what was spoken of last goes first. Jobs due at the same instant are taken
-	// in the order they were made, which is why each is made a moment after the
-	// one before; being put off for the hour's budget does not shuffle them.
-	sort.SliceStable(dues, func(i, j int) bool { return dues[i].input.Latest.After(dues[j].input.Latest) })
-	for i, d := range dues {
-		topic, input := d.topic, d.input
-		stage := TopicProjectStage + ":" + topic + ":" + input.Hash + ":0"
-		tag, err := tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at,created_at) VALUES($1,$2,$3,$4,$5,9,$6,clock_timestamp()+$7*interval '1 millisecond') ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`, string(memory.NewID()), string(owner), topic, input.Version, stage, now, i)
-		if err != nil {
-			return count, err
-		}
-		if tag.RowsAffected() > 0 {
-			if input.Count > topicproject.EvidenceLimit {
-				if err = kernel.StageEvent(ctx, tx, owner, TopicProjectStage, "overflow", "topic_project_evidence_left_in_group", input.Count-topicproject.EvidenceLimit); err != nil {
-					return count, err
-				}
-			}
-			if input.ClippedCharacters > 0 {
-				if err = kernel.StageEvent(ctx, tx, owner, TopicProjectStage, "overflow", "topic_project_characters_left_in_group", input.ClippedCharacters); err != nil {
-					return count, err
-				}
-			}
-		}
-		count += int(tag.RowsAffected())
+	input, _, err := topicProjectInputSharedTx(ctx, u.tx, u.owner, topic, u.shared)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return input, false, nil
 	}
-	return count, nil
+	return input, err == nil, err
+}
+
+func (u *topicScheduleUnit) Answered(ctx context.Context, topic, evidence string) (bool, error) {
+	var done bool
+	err := u.tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM topic_project_links WHERE owner_id=$1 AND topic_id=$2 AND evidence_hash=$3)
+ OR EXISTS(SELECT 1 FROM topic_project_checks WHERE owner_id=$1 AND topic_id=$2 AND evidence_hash=$3 AND output->>'decision'='skip')`, string(u.owner), topic, evidence).Scan(&done)
+	return done, err
+}
+
+// Queue makes each job a moment after the one before: jobs due at the same
+// instant are taken in the order they were made, so being put off for the
+// hour's budget does not shuffle them.
+func (u *topicScheduleUnit) Queue(ctx context.Context, topic string, input topicproject.Input, order int) (bool, error) {
+	stage := TopicProjectStage + ":" + topic + ":" + input.Hash + ":0"
+	tag, err := u.tx.Exec(ctx, `INSERT INTO memory_jobs(id,owner_id,record_id,record_version,stage,priority,available_at,created_at) VALUES($1,$2,$3,$4,$5,9,$6,clock_timestamp()+$7*interval '1 millisecond') ON CONFLICT(owner_id,record_id,record_version,stage) DO NOTHING`, string(memory.NewID()), string(u.owner), topic, input.Version, stage, u.now, order)
+	return tag.RowsAffected() > 0, err
+}
+
+func (u *topicScheduleUnit) Overflow(ctx context.Context, reason string, count int) error {
+	return kernel.StageEvent(ctx, u.tx, u.owner, TopicProjectStage, "overflow", reason, count)
 }
 
 // TopicProjectStore gives the topic project service its reads and writes.

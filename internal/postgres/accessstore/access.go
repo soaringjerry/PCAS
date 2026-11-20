@@ -10,11 +10,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/modelcall"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/access"
 )
 
 // Promoting an idea copies its body into the task's notes. Keep the same run
@@ -108,39 +108,7 @@ func SanitizeItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, principa
 			}
 			continue
 		}
-		switch kind {
-		case "notes":
-			used = item.Notes != ""
-			if !allowed {
-				item.Notes = ""
-			}
-		case "body":
-			used = item.Body != ""
-			if !allowed {
-				item.Body = ""
-			}
-		case "progress":
-			used = item.Progress != ""
-			if !allowed {
-				item.Progress = ""
-			}
-		case "check":
-			checks := []workspace.Check{}
-			for _, check := range item.Checklist {
-				if check.ID == id {
-					used = true
-				}
-				if check.ID != id || allowed {
-					checks = append(checks, check)
-				}
-			}
-			item.Checklist = checks
-		case "task":
-			used = true
-			if !allowed {
-				item.Title = workspace.ReauthorizeTitle
-			}
-		}
+		used = access.Withhold(&item, kind, id, allowed)
 		if used && allowed {
 			dependencies = append(dependencies, refs...)
 		}
@@ -178,6 +146,10 @@ func TeamSourceVisibleSQL(ownerID, sourceID, principalID, thingID string) string
 }
 
 func VerifyRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
+	return verify(ctx, tx, scope, run, false)
+}
+
+func verify(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run, recheck bool) error {
 	var item *workspace.Item
 	if run.ThingID != "" {
 		current, err := itemstore.GetItem(ctx, tx, scope, run.ThingID)
@@ -186,43 +158,33 @@ func VerifyRunTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspa
 		}
 		item = &current
 	}
-	return VerifyRunForItemTx(ctx, tx, scope, run, item)
+	return access.Verify(ctx, accessUnit{tx: tx, scope: scope}, run, item, recheck)
 }
 
-// Derived answers obey the destination item's current context policy too.
-// Checking only the agent grant would let a previous output reintroduce an
-// excluded memory, or a memory from the item's former project.
+// VerifyRunForItemTx checks a run against the item it serves. access.Verify
+// decides; accessUnit reads.
 func VerifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run, item *workspace.Item) error {
-	agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), run.AgentID)
+	return access.Verify(ctx, accessUnit{tx: tx, scope: scope}, run, item, false)
+}
+
+// accessUnit is the storage of one access check.
+type accessUnit struct {
+	tx    pgx.Tx
+	scope memory.Scope
+}
+
+func (u accessUnit) Agent(ctx context.Context, id string) (workspace.Agent, error) {
+	return kernel.QueryDocument[workspace.Agent](ctx, u.tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(u.scope.OwnerID), id)
+}
+
+func (u accessUnit) Excluded(ctx context.Context, item string) ([]string, error) {
+	return kernel.QueryDocuments[string](ctx, u.tx, "SELECT to_jsonb(memory_id::text) FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2", string(u.scope.OwnerID), item)
+}
+
+func (u accessUnit) Claims(ctx context.Context, agent string, ids []string) (map[string]access.Claim, error) {
+	statuses, err := memoryread.ClaimStatusesTx(ctx, u.tx, u.scope.OwnerID, ids)
 	if err != nil {
-		return err
-	}
-	if !agent.Enabled {
-		return memory.ErrForbidden
-	}
-	var projectID string
-	var excluded []string
-	if item != nil {
-		projectID = item.ProjectID
-		if item.Kind == "project" {
-			projectID = item.ID
-		}
-		excluded, err = kernel.QueryDocuments[string](ctx, tx, "SELECT to_jsonb(memory_id::text) FROM context_exclusions WHERE owner_id=$1 AND thing_id=$2", string(scope.OwnerID), item.ID)
-		if err != nil {
-			return err
-		}
-	}
-	claimIDs, sourceIDs := []string{}, []string{}
-	for _, ref := range kernel.UniqueRefs(run.ContextVersions) {
-		if ref.Kind == memory.SourceKind {
-			sourceIDs = append(sourceIDs, string(ref.ID))
-		} else {
-			claimIDs = append(claimIDs, string(ref.ID))
-		}
-	}
-	statuses, err := memoryread.ClaimStatusesTx(ctx, tx, scope.OwnerID, claimIDs)
-	if err != nil {
-		return err
+		return nil, err
 	}
 	type dependency struct {
 		ID                  string
@@ -230,73 +192,47 @@ func VerifyRunForItemTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run 
 		Nature, Acquisition string
 		Scope               map[string]json.RawMessage
 	}
-	claims := map[string]dependency{}
-	if len(claimIDs) > 0 {
-		// Resolve applicable versions once. Preserve the original readClaim grant,
-		// revision, nature, inference, and project checks for every supplied identity.
-		rows, err := kernel.QueryDocuments[dependency](ctx, tx, `WITH applicable AS MATERIALIZED (
+	// Resolve applicable versions once, with the grant, revision, nature,
+	// inference, and project of every supplied identity.
+	rows, err := kernel.QueryDocuments[dependency](ctx, u.tx, `WITH applicable AS MATERIALIZED (
  SELECT claim_id,version FROM applicable_claim_versions($1,now(),now()) WHERE claim_id=ANY($2::uuid[])
 ) SELECT jsonb_build_object('id',r.id,'version',c.version,'nature',c.nature,'acquisition',c.acquisition,'scope',c.scope)
  FROM applicable a JOIN memory_records r ON r.owner_id=$1 AND r.id=a.claim_id
  JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,a.version)
  JOIN record_versions rv ON (rv.owner_id,rv.record_id,rv.version)=(c.owner_id,c.claim_id,c.version)
- WHERE r.state='active' AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$3)`, string(scope.OwnerID), claimIDs, run.AgentID)
-		if err != nil {
-			return err
-		}
-		for _, claim := range rows {
-			claims[claim.ID] = claim
-		}
+ WHERE r.state='active' AND EXISTS(SELECT 1 FROM record_grants g WHERE g.owner_id=r.owner_id AND g.record_id=r.id AND g.principal_id=$3)`, string(u.scope.OwnerID), ids, agent)
+	if err != nil {
+		return nil, err
+	}
+	claims := map[string]access.Claim{}
+	for _, d := range rows {
+		status := statuses[d.ID]
+		claims[d.ID] = access.Claim{Version: d.Version, Nature: d.Nature, Acquisition: d.Acquisition, Scope: d.Scope, AI: status.AI, Retired: status.Retired, KeeperCurrent: status.KeeperCurrent}
+	}
+	return claims, nil
+}
+
+func (u accessUnit) Sources(ctx context.Context, agent string, item *string, ids []string) (map[string]int, error) {
+	rows, err := kernel.QueryDocuments[struct {
+		ID      string
+		Version int
+	}](ctx, u.tx, `SELECT jsonb_build_object('id',r.id,'version',r.version)
+ FROM memory_records r JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version)
+ WHERE r.owner_id=$1 AND r.id=ANY($2::uuid[]) AND r.kind='source' AND r.state='active' AND v.state='active' AND `+TeamSourceVisibleSQL("$1", "r.id", "$3", "$4"), string(u.scope.OwnerID), ids, agent, item)
+	if err != nil {
+		return nil, err
 	}
 	sources := map[string]int{}
-	if len(sourceIDs) > 0 {
-		var thingID *string
-		if item != nil && item.ID != "" {
-			thingID = &item.ID
-		}
-		rows, err := kernel.QueryDocuments[dependency](ctx, tx, `SELECT jsonb_build_object('id',r.id,'version',r.version)
- FROM memory_records r JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version)
- WHERE r.owner_id=$1 AND r.id=ANY($2::uuid[]) AND r.kind='source' AND r.state='active' AND v.state='active' AND `+TeamSourceVisibleSQL("$1", "r.id", "$3", "$4"), string(scope.OwnerID), sourceIDs, run.AgentID, thingID)
-		if err != nil {
-			return err
-		}
-		for _, source := range rows {
-			sources[source.ID] = source.Version
-		}
+	for _, source := range rows {
+		sources[source.ID] = source.Version
 	}
-	for _, ref := range kernel.UniqueRefs(run.ContextVersions) {
-		if ref.Kind == memory.SourceKind {
-			version, ok := sources[string(ref.ID)]
-			if !ok || version != ref.Version {
-				return memory.ErrConflict
-			}
-			continue
-		}
-		if !memoryread.RetirementDependencyAllowed(ctx, statuses[string(ref.ID)]) {
-			return memory.ErrConflict
-		}
-		claim, ok := claims[string(ref.ID)]
-		if !ok || claim.Version != ref.Version || !kernel.OneOf(claim.Nature, agent.MemoryKinds...) || !agent.IncludeInferred && (claim.Acquisition == "inferred" || statuses[string(ref.ID)].AI) {
-			return memory.ErrConflict
-		}
-		if item != nil {
-			var claimProject string
-			if raw, ok := claim.Scope["project_id"]; ok && modelcall.DecodeStrict(raw, &claimProject) != nil {
-				return memory.ErrConflict
-			}
-			if kernel.OneOf(string(ref.ID), excluded...) || claimProject != "" && claimProject != projectID {
-				return memory.ErrConflict
-			}
-		}
-	}
-	return nil
+	return sources, nil
 }
 
 // A version change alone makes an answer outdated. Recheck every dependency
 // against its current version before deciding whether old content is safe to
 // retain; a removed grant or deleted dependency must dominate any correction.
 func VerifyRunAccessTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run workspace.Run) error {
-	ctx = context.WithValue(ctx, memoryread.RetirementAccessKey{}, true)
 	run.ContextVersions = append([]memory.Ref(nil), run.ContextVersions...)
 	ids := make([]string, len(run.ContextVersions))
 	for i, ref := range run.ContextVersions {
@@ -320,5 +256,5 @@ func VerifyRunAccessTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run w
 		}
 		run.ContextVersions[i].Version = version
 	}
-	return VerifyRunTx(ctx, tx, scope, run)
+	return verify(ctx, tx, scope, run, true)
 }

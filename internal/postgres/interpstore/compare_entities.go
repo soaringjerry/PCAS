@@ -15,11 +15,8 @@ import (
 	"github.com/soaringjerry/PCAS/internal/interpretation/comparison"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
-
-var entityCompareInstructions = prompts.Must("entity-compare").Text()
 
 type comparisonEntity struct {
 	N           int              `json:"n"`

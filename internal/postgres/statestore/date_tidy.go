@@ -14,7 +14,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/workstore"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
@@ -47,8 +46,6 @@ const dateTidySameCharacters = 300
 // A dated row is left alone until its day has been over for this long, so
 // something due last night is still the user's to tick on the home page.
 const dateTidyPastAfter = 24 * time.Hour
-
-var dateTidyInstructions = prompts.Must("date-tidy").Text()
 
 // The input assembly below is the context builder of the date review service.
 type dateTidyEntry = datereview.Entry

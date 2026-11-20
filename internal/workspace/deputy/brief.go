@@ -8,6 +8,7 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/contextbuilder"
 	"github.com/soaringjerry/PCAS/internal/memory"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
 
@@ -197,10 +198,12 @@ func (b *Brief) Derived(refs []memory.Ref) {
 
 // Request writes the request of the run and the format of its answer.
 // recallDates is the instruction for an answer about a past time, or empty.
-func (b *Brief) Request(prompt, kind, recallDates string) {
+// Request ends the brief with the owner's request. recallDates adds the
+// sentence on how to read the dates of recalled memories.
+func (b *Brief) Request(prompt, kind string, recallDates bool) {
 	fmt.Fprintf(b, "\n本次请求：%s", prompt)
-	if recallDates != "" {
-		fmt.Fprintln(b, "\n"+recallDates)
+	if recallDates {
+		fmt.Fprintln(b, "\n"+prompts.Must("recall-date").Text())
 	}
 	b.WriteString(OutputFormat(kind))
 }

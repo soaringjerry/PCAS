@@ -27,11 +27,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
-	"github.com/soaringjerry/PCAS/internal/prompts"
 	"github.com/soaringjerry/PCAS/internal/workspace"
 )
-
-var SecretaryInstructions = prompts.Must("secretary").Text()
 
 // Persist only the exchange. Workspace state is always read at response time.
 type StoredSecretaryResponse struct {

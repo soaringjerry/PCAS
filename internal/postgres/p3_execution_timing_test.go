@@ -12,7 +12,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
-	"github.com/soaringjerry/PCAS/internal/postgres/deskstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/usagelog"
 	"github.com/soaringjerry/PCAS/internal/prompts"
@@ -247,8 +246,8 @@ func TestP3LiveExecutionTiming(t *testing.T) {
 			result, err = real.GenerateSchema(r.Context(), "chatgpt", system, prompt, prompts.MustSchema("secretary-check").Bytes())
 		} else if strings.Contains(system, "这是自查") {
 			result, err = real.Generate(r.Context(), "chatgpt", system, prompt)
-		} else if system == deskstore.SecretaryInstructions {
-			result, err = real.GenerateWithSearchSchema(r.Context(), "chatgpt", system, prompt, deskstore.SecretaryOutputSchema)
+		} else if system == prompts.Must("secretary").Text() {
+			result, err = real.GenerateWithSearchSchema(r.Context(), "chatgpt", system, prompt, prompts.MustSchema("secretary-output").Bytes())
 		} else {
 			result, err = real.GenerateWithSearch(r.Context(), "chatgpt", system, prompt)
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/postgres/interpstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
+	"github.com/soaringjerry/PCAS/internal/prompts"
 )
 
 type supersessionCase struct {
@@ -66,8 +67,8 @@ func TestP3ComparePromptLive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	at := time.Now()
-	result, err := r.Generate(ctx, "live", interpstore.CompareInstructions, input)
-	raw, _ := json.MarshalIndent(map[string]any{"instructions": interpstore.CompareInstructions, "input": json.RawMessage(input), "output": result.Text, "elapsed_ms": time.Since(at).Milliseconds()}, "", "  ")
+	result, err := r.Generate(ctx, "live", prompts.Must("compare").Text(), input)
+	raw, _ := json.MarshalIndent(map[string]any{"instructions": prompts.Must("compare").Text(), "input": json.RawMessage(input), "output": result.Text, "elapsed_ms": time.Since(at).Milliseconds()}, "", "  ")
 	if e := os.WriteFile(path, raw, 0600); e != nil {
 		t.Fatal(e)
 	}

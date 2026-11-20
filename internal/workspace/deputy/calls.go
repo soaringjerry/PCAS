@@ -29,17 +29,28 @@ type groups struct {
 	Groups []string `json:"groups"`
 }
 
+// Instructions are the instructions and the output schema of the answer
+// call of a run of the kind. A revision has its own.
+func Instructions(kind string) (prompts.Definition, prompts.Schema) {
+	if kind == "revise" {
+		return prompts.Must("document-revise"), prompts.MustSchema("document-revise-output")
+	}
+	return prompts.Must("deputy"), prompts.Schema{}
+}
+
+// CostInput is the input whose cost a run of the kind reserves when it is
+// requested: its instructions and its brief.
+func CostInput(kind, brief string) string {
+	instruction, _ := Instructions(kind)
+	return instruction.Text() + brief
+}
+
 // AnswerRequest is the request of the answer call of a run. token is the
 // token of the run's lease. A revision has its own instructions and output
 // schema.
 func AnswerRequest(owner memory.ID, token string, snapshot Snapshot) modelcall.Request {
 	run := snapshot.Run
-	instruction := prompts.Must("deputy")
-	var schema prompts.Schema
-	if run.Kind == "revise" {
-		instruction = prompts.Must("document-revise")
-		schema = prompts.MustSchema("document-revise-output")
-	}
+	instruction, schema := Instructions(run.Kind)
 	return modelcall.Request{
 		OwnerID: owner, ExecutionID: memory.ID(run.ID), RootExecutionID: memory.ID(run.ID), Function: "deputy", Stage: "answer",
 		ProviderID: run.AgentID, Instructions: instruction, Schema: schema, Search: true, ModeFallback: true, ContextBuilderVersion: "deputy-answer-v1",

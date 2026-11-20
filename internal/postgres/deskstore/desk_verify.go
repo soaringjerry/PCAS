@@ -17,7 +17,7 @@ import (
 
 // Input content may change during generation. Access revocation and deletion
 // remain fences; use current versions so unrelated edits do not abort a reply.
-func (s *Desk) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c SecretaryContext) error {
+func (s *Desk) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c secretary.Context) error {
 	agent, err := kernel.QueryDocument[workspace.Agent](ctx, tx, "SELECT document FROM workspace_agents WHERE owner_id=$1 AND id=$2", string(scope.OwnerID), c.Agent.ID)
 	if err != nil {
 		return err
@@ -35,7 +35,7 @@ func (s *Desk) checkSecretaryUseContextTx(ctx context.Context, tx pgx.Tx, scope 
 	return nil
 }
 
-func (s *Desk) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c SecretaryContext, out SecretaryOutput) error {
+func (s *Desk) checkSecretaryActionTargetsTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, c secretary.Context, out SecretaryOutput) error {
 	if err := s.checkSecretaryUseContextTx(ctx, tx, scope, c); err != nil {
 		return err
 	}

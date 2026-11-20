@@ -820,8 +820,8 @@ func (s *Store) p2LegacyDeskContextTx(ctx context.Context, tx pgx.Tx, scope memo
 	return memories, tasks, settings, dependencies, err
 }
 
-func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, conversationID string) (deskstore.SecretaryContext, error) {
-	out := deskstore.SecretaryContext{ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
+func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, conversationID string) (secretary.Context, error) {
+	out := secretary.Context{ConversationID: conversationID, Aliases: map[string]workspace.Item{}, Memories: map[string]workspace.Memory{}, Counts: map[string]int{}}
 	agentID := req.AgentID
 	if agentID == "" {
 		agentID = s.Models.ExtractionID()
@@ -923,7 +923,7 @@ func (s *Store) p2LegacySecretaryContextTx(ctx context.Context, tx pgx.Tx, scope
 	return out, nil
 }
 
-func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *deskstore.SecretaryContext) (string, map[string]workspace.Memory, error) {
+func (s *Store) p2LegacySecretaryPrompt(ctx context.Context, tx pgx.Tx, scope memory.Scope, req workspace.DeskTurnRequest, c *secretary.Context) (string, map[string]workspace.Memory, error) {
 	var prompt strings.Builder
 	loc := c.Settings.Location()
 	c.Plan = memory.PlanQuery(req.Text, time.Now(), loc)

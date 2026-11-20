@@ -154,6 +154,8 @@ Two run commands are decided in the deputy domain and executed by a unit of stor
 | A run request (`requestRun`) | `deputy.Request`: the checks of the request, the brief in its order, each count of what did not fit, the memory tier, and the cost reservation against the owner's day. | `deputystore.requestUnit`: the reads of the item, the agent, the documents, the history, the memory and the recall, the overflow events, and the insert of the run with its dependencies. |
 | An adoption (`adoptRun` and the automatic adoption of a finished run) | `deputy.Adopt`: where the text goes for each item kind, the subtasks, the version of the item, the sample, and the record of the memories used. `deputy.AutoAdoptable`, `deputy.AdoptionSummary`, and `deputy.RevisionRejection` hold the rules around it. | `deputystore.adoptUnit`: the access check, the writes of the document, the item, the artifacts, and the project's progress. The action log and the savepoint of an automatic adoption stay in storage. |
 
+The context and the model input of a secretary turn are built in the secretary domain: `secretary.Gather` reads the agent, the items by alias, the history, and counts what the context leaves out; `secretary.Compose` writes the document catalog, the workspace, the memories, the sources, the evidence, the evidence behind the project handover, and the request. `deskstore.inputUnit` gives both their reads.
+
 The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.
@@ -189,7 +191,7 @@ What the kernel needs from a domain comes through the composition:
 | `usestore` | The memory that a turn or a run is given, and its checks. |
 | `deputystore` | The reads and writes of a run request and of an adoption, the lease and the recovery of a run, the journal reads of its calls, the last write of a run, and the revision of a document. `deputy.Request`, `deputy.Adopt`, and `deputy.Conduct` decide; this package gives them units and one leased run as a `deputy.Session`. |
 | `commandstore` | The dispatch of a workspace command, the undo of an action, and the entry that executes a command. |
-| `deskstore` | The secretary: admission and order of a turn, the turn in its transaction, attachments of a request, and the cleanup of a check-only turn. |
+| `deskstore` | The secretary: admission and order of a turn, the turn in its transaction, the reads of its context and its model input, attachments of a request, and the cleanup of a check-only turn. |
 | `internal/postgres` | The composition of the store, the migrations, the queue, the schedulers, the notification channels, and five small adapters (about 2,000 lines). |
 
 The items table has one owner. `itemstore.SaveItem` is the one write of an item; `DeleteItem`, `RemoveItemDependency`, and `DeleteUnusedCreatedItem` are the three removals. The test `TestOnlyTheItemOwnerWritesTheItemsTable` forbids a statement that writes `work_items` in each other storage package.

@@ -3,7 +3,6 @@ package usestore
 import (
 	"context"
 	"time"
-	"unicode/utf8"
 
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -15,17 +14,6 @@ import (
 )
 
 // tail keeps the last n bytes of s without splitting a character.
-func Tail(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	i := len(s) - n
-	for i < len(s) && !utf8.RuneStart(s[i]) {
-		i++
-	}
-	return s[i:]
-}
-
 // deskContextTx keeps the legacy answer and secretary on the same visibility
 // and derived-artifact rules. Stable ordering is used by the secretary cache.
 func (s *Use) deskContextTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, agent workspace.Agent, stable bool) ([]workspace.Memory, []workspace.Item, workspace.Settings, []memory.Ref, error) {

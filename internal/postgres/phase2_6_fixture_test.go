@@ -57,8 +57,10 @@ type phase26Corpus struct {
 	Handover  map[string][]int
 }
 
+var phase26AnchorNow = time.Now().UTC().Truncate(24 * time.Hour)
+
 func phase26CorpusSeed() phase26Corpus {
-	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	now := phase26AnchorNow
 	c := phase26Corpus{Now: now, Handover: map[string][]int{}}
 	languages := []string{"zh", "en"}
 	for i := 0; i < 1000; i++ {
@@ -236,20 +238,20 @@ func phase26CorpusSeed() phase26Corpus {
 		case 0:
 			gold.Kind = "deadline"
 			gold.State = "future"
-			at := time.Date(2026, 11, 5, 17, 0, 0, 0, time.UTC)
+			at := now.AddDate(0, 0, 30).Add(17 * time.Hour)
 			gold.At = &at
 			gold.Original = "虚构展览提案下个月五号下午五点前交。"
 			if !zh {
-				gold.Original = "Submit the fictitious exhibition proposal by November 5, 2026 at 5 pm UTC."
+				gold.Original = fmt.Sprintf("Submit the fictitious exhibition proposal by %s at 5 pm UTC.", at.Format("January 2, 2006"))
 			}
 		case 1:
 			gold.Kind = "appointment"
 			gold.State = "expired"
-			at := time.Date(2026, 9, 30, 14, 0, 0, 0, time.UTC)
+			at := now.AddDate(0, 0, -6).Add(14 * time.Hour)
 			gold.At = &at
 			gold.Original = "虚构展览碰头会九月底下午两点开始，还不知是否完成。"
 			if !zh {
-				gold.Original = "The fictitious exhibition meeting is September 30, 2026 at 2 pm UTC; completion is unknown."
+				gold.Original = fmt.Sprintf("The fictitious exhibition meeting is %s at 2 pm UTC; completion is unknown.", at.Format("January 2, 2006"))
 			}
 		case 2:
 			gold.Kind = "recurring"

@@ -56,26 +56,25 @@ If you do not run a check, write that in the PR. Give the reason.
 | Location | Contents |
 |---|---|
 | `cmd/pcas` | Service entry point. |
-| `cmd/pcas-eval` | Evaluation tools. Production does not use them. |
-| `internal/postgres` | Storage. It also contains many business operations, prompts, and model calls. |
+| `cmd/pcas-eval` | Evaluation and production-copy replay tools. Production does not use them. |
+| `internal/postgres` | PostgreSQL adapter composed from 25 focused storage packages over `internal/postgres/kernel` (`callstore`, `budgetstore`, `itemstore`, `deputystore`, `deskstore`, `commandstore`, `workspacestore`, `intakestore`, `interpstore`, `statestore`, `usestore`, `activitystore`, and others), plus migrations, queue machinery, and schedulers. Storage makes no model calls and holds no prompt instructions. |
 | `internal/postgres/migrations` | Database migrations. |
 | `internal/memory`, `internal/workspace` | Memory and workspace types. |
-| `internal/workspace/effort`, `internal/workspace/topicproject`, `internal/workspace/projecthandover`, `internal/workspace/secretary`, `internal/workspace/deputy`, `internal/workspace/itemcommand`, `internal/workspace/settings` | Workspace domain packages outside storage: effort estimation, topic projects, project handovers, the secretary's rules and actions, the deputy's output rules, the commands that change one item, and the rules of a settings change. |
-| `internal/currentstate/datereview`, `internal/currentstate/handover` | Current-state domain packages outside storage: the review of remembered dates and the global handover. |
-| `internal/interpretation/aliasscan`, `internal/interpretation/comparison`, `internal/interpretation/organize`, `internal/interpretation/extraction`, `internal/interpretation/claim` | Memory interpretation domain packages outside storage: the scan for names of one entity, statement and entity comparison, the organizing of statements with the schedule rule of a date, the reading of statements, tasks, and ideas from a source, and the rules of a statement before it is written. |
-| `internal/input/attachment` | Input domain package outside storage: the parsing of an original file into text. |
-| `internal/contextbuilder` | Serialization of memory and current state for the model input of an agent turn. The secretary and the deputy share it. |
-| `internal/retrieval` | Memory retrieval rules outside storage: the budget of a recall and the excerpt of a source. |
-| `internal/app` | Application setup: service construction and the worker handler table. |
-| `internal/modelcall`, `internal/prompts` | Model gateway and prompt registry. |
+| `internal/workspace/effort`, `internal/workspace/topicproject`, `internal/workspace/projecthandover`, `internal/workspace/secretary`, `internal/workspace/deputy`, `internal/workspace/itemcommand`, `internal/workspace/command`, `internal/workspace/settings`, `internal/workspace/reminder`, `internal/workspace/activity`, `internal/workspace/erasure`, `internal/workspace/access` | Workspace domain packages outside storage: effort estimation and scheduling, topic projects, project handovers, secretary turns and actions, deputy runs and adoption, single-item and workspace commands with undo, settings rules, reminders, activity wording, erasure rules, and run access rules. |
+| `internal/currentstate/datereview`, `internal/currentstate/handover`, `internal/currentstate/schedule` | Current-state domain packages outside storage: remembered date review, global handover, and schedule view assembly. |
+| `internal/interpretation/aliasscan`, `internal/interpretation/comparison`, `internal/interpretation/organize`, `internal/interpretation/extraction`, `internal/interpretation/claim` | Memory interpretation domain packages outside storage: alias scanning, statement and entity comparison, organizing and date schedule rules, extraction from sources and imported conversations, and statement normalization and deduplication. |
+| `internal/input/attachment`, `internal/input/voice`, `internal/input/projectfile` | Input domain packages outside storage: attachment parsing, voice transcription, and project file rules. |
+| `internal/contextbuilder`, `internal/contextbuilder/reader` | Serialization of memory and current state for agent model input, plus heavy memory readers shared by the secretary and the deputy. |
+| `internal/retrieval` | Memory retrieval rules, recall orchestration, query and background vector indexing, and source excerpts outside storage. |
+| `internal/app` | Application setup: gateway and service composition, stage limits, the central event-response table, and architecture boundary tests. |
+| `internal/modelcall`, `internal/modelcall/jobcall`, `internal/modelcall/stagecall`, `internal/prompts` | Unified model gateway, background and stage call helpers, and embedded prompt and output-schema registry. |
 | `internal/ai` | Model provider adapters. |
 | `internal/httpapi` | HTTP interfaces. |
-| `internal/telegram`, `internal/notify`, `internal/connectors` | Telegram, notifications, and connectors. |
+| `internal/telegram`, `internal/notify`, `internal/connectors` | Telegram channel, notification delivery, and input connectors. |
 | `internal/worker` | Background job coordination. |
 | `web/` | Frontend. |
 
-The business operations in `internal/postgres` are a known structural defect.
-Section 10 gives the target structure.
+Architecture boundary tests in `internal/app/boundaries_test.go` and `internal/modelcall/provider_boundary_test.go` enforce package dependencies, model-call boundaries, prompt ownership, item-table ownership, and call-journal ownership on every commit.
 
 ## 5 Before You Write Code
 
@@ -92,21 +91,19 @@ Do not use column names to guess constraints or meaning.
 If the business meaning is not in a current document, ask the coordinator.
 Do not invent the meaning.
 
-## 6 Freeze Until the Foundation Phase
+## 6 Architecture Guardrails
 
-The foundation phase builds the structure in section 10.
-Until the coordinator closes that phase, do not increase the items below.
-If a task needs one of them, stop and ask the coordinator.
+The Phase 3.9 foundation structure in section 10 is in place.
+Keep these boundaries intact. If a task needs an exception, stop and ask the coordinator.
 
-1. Model call paths. Call models only through an existing wrapper, such as `useModelCall`.
-   Do not add a wrapper. Do not call `s.models` directly.
-2. Prompt forms. Write a new prompt as one top-level constant named `xxxInstructions`.
-   Do not assemble prompt instructions with `WriteString` or `Fprintln` inside a workflow.
-   Do not join one prompt constant to another prompt constant.
-3. Activity, log, and usage tables. Use `action_log`, `activity`, or `model_usage` when possible.
-   Do not create a new table for this purpose.
-4. New domains in `internal/postgres`. You can change files in an existing domain.
-   Do not start a new group of files for a new business concept.
+1. Model call paths. Submit production model calls only through `internal/modelcall` (`Gateway`, `jobcall`, or `stagecall`).
+   Do not call `internal/ai` providers directly from domains, channels, or storage.
+2. Prompt forms. Store production instructions and output schemas in `internal/prompts` using `go:embed`.
+   Do not keep prompt instructions in `internal/postgres` or assemble instruction prose inside workflows.
+3. Activity, log, and usage tables. Use `model_calls`, `action_log`, `activity`, `model_usage`, `background_stage_events`, and `recorded_events` when possible.
+   Do not create a new table for this purpose without an approved migration scope.
+4. Business logic in `internal/postgres`. Put new business rules and workflow decisions in the responsible domain package outside storage.
+   Keep SQL, locks, leases, and transactions in the corresponding storage package under `internal/postgres/`.
 
 ## 7 Tests
 
@@ -133,7 +130,7 @@ A task scope can request a temporary copy. Then write its removal condition at t
 ## 8 Pull Requests
 
 Write Git commit messages in English.
-Start each message with `feat:`, `fix:`, `docs:`, or `test:`.
+Start each message with `feat:`, `fix:`, `docs:`, `refactor:`, or `test:`.
 Describe the behavior that changed, not the function name.
 Example: `fix: a check-only turn skips close_date instead of failing the whole turn`.
 
@@ -165,7 +162,7 @@ If you change behavior that the user can see, update the current document in the
 Stop and ask the coordinator in these conditions:
 
 - The task scope conflicts with this page or a current specification.
-- The task needs an item that section 6 freezes.
+- The task needs an exception to section 6.
 - The task changes model input or an output schema. Workflow section 3 requires a real-model check first.
 - The task needs a database migration.
 - The task deletes or overwrites data, and undo cannot restore it.
@@ -173,16 +170,16 @@ Stop and ask the coordinator in these conditions:
 
 In other conditions, complete the task scope. Do not stop for routine choices.
 
-## 10 Target Structure
+## 10 Foundation Structure and Follow-up
 
-This structure does not exist yet.
-Do not make these packages before the coordinator assigns the skeleton task.
+Phase 3.9 built the foundation structure below. Remaining Phase 4 and follow-up items stay tracked in [Project Status](docs/status.md) and [System Architecture](docs/architecture.md).
 
-| Part | Target |
+| Part | Delivered state |
 |---|---|
-| `internal/prompts` | All prompts, one file each, embedded with `go:embed`, each with a content hash. Shared rules have one copy. |
-| Model gateway | One call path. It records the function, prompt name and hash, memory and sources used, model, model tokens, cost, and duration. |
-| Activity stream | One query answers what PCAS did, its cost, and its reason. |
-| Domain packages | Business operations move out of `internal/postgres`. Storage only reads and writes data. |
+| `internal/prompts` | Production prompts and output schemas live in `internal/prompts` with `go:embed` and content hashes. Storage packages cannot import the prompt registry. |
+| Model gateway | All production generation, embedding, vision, and transcription calls enter `internal/modelcall`. `internal/postgres/callstore` provides one unified `Journal` for background and interactive calls plus `DirectCalls` for direct calls. |
+| Activity stream | The owner-scoped day activity query (`internal/postgres/activitystore`) answers one local day's calls, actions, reversals, runs, stage outcomes, decisions, costs, and explicit link gaps. Visual presentation and controls stay for Phase 4. |
+| Domain and storage split | Business rules and orchestration live in domain packages outside `internal/postgres`. Storage is split into 25 focused packages over `internal/postgres/kernel`, with `itemstore` owning `work_items` writes and `callstore` owning `model_calls` and paid results. |
+| Events and evaluation | `internal/app/responses.go` is the single event-response table, queue jobs carry causal identities in `recorded_events` with a 200-depth chain limit, and nightly real-model evaluation runs on the Codex channel. Committed-change events beyond `work.queued` and per-event response limits remain follow-up work. |
 
-The [System Architecture](docs/architecture.md) gives the boundaries and completion criteria.
+The [System Architecture](docs/architecture.md) gives the boundaries and acceptance criteria.

@@ -1,15 +1,13 @@
 # PCAS System Architecture
 
-Current architecture direction. Updated 2026-10-08.
+Current architecture specification. Updated for Phase 3.9 wrap-up.
 
-Phase 3.9 makes business responsibilities explicit and business paths traceable before further repairs.
+Phase 3.9 makes business responsibilities explicit and business paths traceable before Phase 4 and post-foundation repairs.
 The [Whitepaper](whitepaper.md#phase-39-foundation) gives its product purpose and sequence.
-The target below is not an implemented structure.
+The Phase 3.9 foundation implementation is in place and enforced by architecture tests; items deferred to Phase 4 or follow-up work remain explicitly marked in [Section 10](#10-foundation-acceptance) and [Project Status](status.md#completed-in-phase-39-vs-deferred-to-phase-4--follow-up).
 Execution scopes must follow [Executor Rules](../AGENTS.md) and the [Development Workflow](tasks/process.md).
 
-The [shared skeleton scope](tasks/foundation-shared-skeleton.md) starts implementation with existing background calls.
-Its [acceptance record](evaluations/2026-10-08-foundation-shared-skeleton.md) lists actual coverage, checks, and remaining paths.
-The complete target below is not the delivery claim for that batch.
+The [shared skeleton scope](tasks/foundation-shared-skeleton.md) started implementation with existing background calls, and the [domain pilot record](tasks/foundation-domain-pilot.md) records the complete domain extraction and storage split.
 
 ## 1 Foundation Scope
 
@@ -34,19 +32,19 @@ The [Memory Architecture](memory-architecture.md) remains authoritative for memo
 
 ## 2 Code Findings
 
-These findings come from repository revision `6b62f27`. They are code observations, not live quality measurements.
+These findings started from repository revision `6b62f27`. They are code observations, not live quality measurements.
 
-| Finding | Evidence | Required architecture result |
+| Finding | Evidence and resolution | Required architecture result |
 |---|---|---|
-| Storage also owns business orchestration and providers. | [Store](../internal/postgres/database.go), [application setup](../cmd/pcas/main.go). | Domains own workflows. Storage owns persistence. Application setup connects their interfaces. |
-| Model calls use different accounting and recovery paths. | Found in the storage package. Since 2026-10-12 the calls are outside it: [background calls](../internal/modelcall/jobcall/generator.go), [stage calls](../internal/modelcall/stagecall/stagecall.go), [secretary answer and retries](../internal/workspace/secretary/asker.go). | One gateway covers calls while keeping applicable recovery and retry policies. |
-| Deputy generation, saved results, revision, and review share a large workflow. | [Deputy](../internal/postgres/runs.go), [revision recovery](../internal/postgres/document_revise.go). | A deputy execution links its stages, calls, results, and final writes. |
+| Storage also owns business orchestration and providers. | Originally [Store](../internal/postgres/database.go) and [application setup](../cmd/pcas/main.go). Resolved in Phase 3.9: business domains sit outside storage, storage is split into 25 focused packages over `kernel`, and `internal/app` connects their interfaces. | Domains own workflows. Storage owns persistence. Application setup connects their interfaces. |
+| Model calls use different accounting and recovery paths. | Moved outside storage: [gateway](../internal/modelcall/gateway.go), [background calls](../internal/modelcall/jobcall/generator.go), [stage calls](../internal/modelcall/stagecall/stagecall.go), [secretary answer and retries](../internal/workspace/secretary/asker.go). Unified in storage through `callstore.Journal` ([model_calls.go](../internal/postgres/callstore/model_calls.go)). | One gateway covers calls while keeping applicable recovery and retry policies. |
+| Deputy generation, saved results, revision, and review share a large workflow. | Moved to [deputy domain](../internal/workspace/deputy/conduct.go) with storage adapters in [deputystore](../internal/postgres/deputystore/runs.go) and [revision storage](../internal/postgres/deputystore/document_revise.go), accessing call records through `callstore`. | A deputy execution links its stages, calls, results, and final writes. |
 | Telegram transcription bypassed application accounting. | Corrected on 2026-10-11: the gateway entry `CallTranscription`, which `voice.Transcriber` uses. | Channel adapters use the gateway. Every attempted call has an outcome and accounting status. |
 | Legacy routing and legacy answer handling stayed callable without a client. | Removed on 2026-10-10: the Jev adapter, `/v1/desk/route`, `/v1/desk/answer`, their settings form, and their prompt. | Retired. No current client called them. |
-| Removed cards leave unused generation code. | `statusGenerate` and `cardInstructions` in [status code](../internal/postgres/status_build.go). | Remove unused generation. Keep necessary current-state scheduling and upgrade handling. |
-| Non-Codex schema calls return to ordinary generation. | [Provider adapter](../internal/ai/provider.go). | Give capability information and record the selected output mode. Necessary capabilities cannot silently disappear. |
-| Use records already contain memory identities and versions. | [Usage records](../internal/postgres/usage_log.go). | Complete coverage and link calls to inputs and actions. Do not replace existing evidence with assumptions. |
-| Reference previews show current text beside recorded version identities. | [Usage query](../internal/postgres/usage_log.go). | Distinguish current previews from the input supplied at call time. |
+| Removed cards leave unused generation code. | Removed: `statusGenerate`, `cardInstructions`, and unused card-generation types in [status code](../internal/postgres/status_build.go). `ProcessCard` remains only to acknowledge pre-upgrade queue slots. | Remove unused generation. Keep necessary current-state scheduling and upgrade handling. |
+| Non-Codex schema calls return to ordinary generation. | [Provider adapter](../internal/ai/provider.go) and [gateway fallback mode](../internal/modelcall/gateway.go): capability gaps fail before submission unless `ModeFallback` is declared and the actual mode is recorded. | Give capability information and record the selected output mode. Necessary capabilities cannot silently disappear. |
+| Use records already contain memory identities and versions. | [Usage records](../internal/postgres/usagelog/usage_log.go), linked to `model_calls` and exposed by [day activity](../internal/postgres/activitystore/activity_day.go). | Complete coverage and link calls to inputs and actions. Do not replace existing evidence with assumptions. |
+| Reference previews show current text beside recorded version identities. | [Usage query](../internal/postgres/usagelog/usage_log.go). | Distinguish current previews from the input supplied at call time. |
 
 Refresh entry points and callers before each migration scope.
 Do not select a domain from reference counts alone.
@@ -432,7 +430,7 @@ Retries and recovery keep the relevant causal identities. They cannot silently s
 The gateway enforces the applicable call budget supplied by the responsible service.
 Index progress and interactive work keep their declared capacity while other event processing waits.
 
-The existing [queue schema](../internal/postgres/migrations/001_memory.sql), [enqueue helper](../internal/postgres/sources.go), and [worker](../internal/worker/worker.go) supply the starting mechanism.
+The existing [queue schema](../internal/postgres/migrations/001_memory.sql), [enqueue helper](../internal/postgres/sourcestore/sources.go), and [worker](../internal/worker/worker.go) supply the starting mechanism.
 The [handler map](../cmd/pcas/main.go) already names stage responses.
 Causal identities of queued work exist since migration `063_recorded_events.sql`.
 
@@ -562,37 +560,36 @@ Evaluation failures remain visible. They cannot overwrite good baseline results.
 
 ## 10 Foundation Acceptance
 
-The coordinator closes Phase 3.9 only after these conditions have evidence.
+The coordinator closes Phase 3.9 only after reviewing these conditions and their evidence.
 Passing CI alone does not close the phase.
 
-| Condition | Required proof |
-|---|---|
-| Whole-system coverage | Every existing production workflow has a responsible domain, an entry point, and declared dependencies. Include calls outside `internal/postgres`. |
-| Storage boundary | Production business orchestration and prompts have left `internal/postgres`. Storage implements persistence and transactions without provider calls. A test forbids a model call from a storage package since 2026-10-12; see [Model Calls Outside the Storage Package](tasks/foundation-domain-pilot.md#model-calls-outside-the-storage-package). |
-| Data ownership | Each business object has one owner. Cross-domain changes use owner commands and receipts. Home and timeline reads cannot mutate their underlying business data. |
-| Gateway coverage | All production application model invocations use the gateway. Explicit checks cover adapters, connection tests, and permitted evaluation paths. |
-| Prompt identity | Calls resolve registered instructions and templates with hashes. Schema identity and context builder version are available. |
-| Traceable work | One owner-scoped SQL query answers yesterday's work, costs, and recorded reasons. It handles duplicates, reversals, retries, and missing history. |
-| Visible outcomes | Skips, deferrals, rejected proposals, and authorized fallbacks have recorded reasons and visible returned states. Capability loss cannot silently become success. |
-| Event boundaries | Events record occurrences and trigger declared specialists. A central response table uses the existing queue. Event handling does not perform semantic routing. |
-| Atomic event delivery | Committed changes, their events, and durable delivery state share a transaction. Rollback leaves no runnable change event. Duplicate delivery reuses operation identities. Recovery keeps pending work. |
-| Bounded causal work | Every event type has measured limits, overflow counts, and recovery. Recursive changes and retries cannot bypass root-chain call and cost limits. |
-| Reliable state | Affected transaction, version, lease, access, cancellation, deletion, replay, recovery, and undo checks show no migration regression. Existing defects stay separately recorded. |
-| Five test layers | Architecture, owner contracts, recorded replay, concurrency and ordering, and nightly real-model evaluation all have evidence under [Five Test Layers](#five-test-layers). |
-| Resource evidence | Calls, context, costs, duration, and progress have comparable baselines and results. Regressions have resolved causes or an explicit scope decision. |
-| Local repair | Investigations locate both an incorrect action and a missing expected action. Trace inputs, candidates, scheduling, decisions, validation, and actual writes. Identify the responsible boundary and its affected checks. |
-| Completed replacement | Replaced paths are removed. Necessary compatibility has supported callers and a removal condition. No unexplained parallel implementation remains. |
-| Honest quality status | Known business defects remain open with evidence. Architecture acceptance does not claim that those defects are repaired. |
-| Current documents | The whitepaper, architecture, service reference, status, and executor rules agree. Every document is indexed. |
+| Condition | Required proof | Phase 3.9 delivery and remaining follow-up |
+|---|---|---|
+| Whole-system coverage | Every existing production workflow has a responsible domain, an entry point, and declared dependencies. Include calls outside `internal/postgres`. | Delivered. All production workflows decide in domain packages under `internal/` wired in `internal/app`; see [pilot record](tasks/foundation-domain-pilot.md). |
+| Storage boundary | Production business orchestration and prompts have left `internal/postgres`. Storage implements persistence and transactions without provider calls. | Delivered and enforced on every commit by `internal/app/boundaries_test.go` (dynamic storage discovery, no model calls, no prompt imports, vocabulary-only `kernel`, no direct `workspace.ContentHash`). |
+| Data ownership | Each business object has one owner. Cross-domain changes use owner commands and receipts. Home and timeline reads cannot mutate their underlying business data. | Delivered for Phase 3.9. `itemstore` owns `work_items` writes (`TestOnlyTheItemOwnerWritesTheItemsTable`), `callstore` owns `model_calls` and paid results (`TestOnlyCallStoreOwnsModelCallsAndResults`), `budgetstore.SpentSinceTx` owns daily reserved spend, and commands/undo/erasure/access decide in domain packages. |
+| Gateway coverage | All production application model invocations use the gateway. Explicit checks cover adapters, connection tests, and permitted evaluation paths. | Delivered with zero migration exceptions in `internal/modelcall/provider_boundary_test.go`. Background and interactive call journals are unified in `callstore.Journal`. |
+| Prompt identity | Calls resolve registered instructions and templates with hashes. Schema identity and context builder version are available. | Delivered. All production prompts and schemas live in `internal/prompts` via `go:embed`; temporary `prompts.FromText` is removed. |
+| Traceable work | One owner-scoped SQL query answers yesterday's work, costs, and recorded reasons. It handles duplicates, reversals, retries, and missing history. | Delivered in `internal/postgres/activitystore/activity_day.go` ([Service Reference](memory-service.md#day-activity)). Visual observation UI and management controls move to Phase 4. |
+| Visible outcomes | Skips, deferrals, rejected proposals, and authorized fallbacks have recorded reasons and visible returned states. Capability loss cannot silently become success. | Delivered. Deferrals stay out of `model_calls`, unsupported capabilities fail unless `ModeFallback` records `unsupportedFallback`, and self-check fallbacks stay visible. |
+| Event boundaries | Events record occurrences and trigger declared specialists. A central response table uses the existing queue. Event handling does not perform semantic routing. | Delivered. `internal/app/responses.go` drives worker handlers and is checked against this page by `TestArchitecturePageShowsTheRegisteredResponseTable`. |
+| Atomic event delivery | Committed changes, their events, and durable delivery state share a transaction. Rollback leaves no runnable change event. Duplicate delivery reuses operation identities. Recovery keeps pending work. | Delivered for queue events (`063_recorded_events.sql`, `work.queued` trigger inside the queue-write transaction). Dedicated committed-change events beyond `work.queued` stay deferred to follow-up work. |
+| Bounded causal work | Every event type has measured limits, overflow counts, and recovery. Recursive changes and retries cannot bypass root-chain call and cost limits. | Delivered for job chains (`064_event_limits.sql`, 200-depth limit measured from live history, 90-day retention) plus per-stage hourly limits in `internal/app/stagelimits`. Per-event response limits beyond queue stages stay deferred to follow-up work. |
+| Reliable state | Affected transaction, version, lease, access, cancellation, deletion, replay, recovery, and undo checks show no migration regression. Existing defects stay separately recorded. | Delivered and verified across 12-slice PostgreSQL integration CI and browser regression tests. |
+| Five test layers | Architecture, owner contracts, recorded replay, concurrency and ordering, and nightly real-model evaluation all have evidence under [Five Test Layers](#five-test-layers). | Delivered. Architecture tests, owner contracts, replay diagnostics (exact + identity mapping + runtime-versus-business classification), concurrency/undo tests, and nightly Codex evaluation (`scripts/nightly-eval.sh`) are in place; multi-night trend analysis continues operationally. |
+| Resource evidence | Calls, context, costs, duration, and progress have comparable baselines and results. Regressions have resolved causes or an explicit scope decision. | Baseline recorded in [foundation inventory](evaluations/2026-10-08-foundation-inventory.md) and [first live readings](evaluations/2026-10-11-activity-baseline.md); ongoing comparisons continue during post-foundation repairs. |
+| Local repair | Investigations locate both an incorrect action and a missing expected action. Trace inputs, candidates, scheduling, decisions, validation, and actual writes. Identify the responsible boundary and its affected checks. | Delivered through domain-separated schedulers, receipts, `model_calls`, `recorded_events`, `background_stage_events`, and `DayActivity`. |
+| Completed replacement | Replaced paths are removed. Necessary compatibility has supported callers and a removal condition. No unexplained parallel implementation remains. | Delivered. Legacy routing/answer, unused card generation, duplicate call journals, and all pilot Temporary Parts are removed. Only `ProcessCard` remains for pre-upgrade queue compatibility. |
+| Honest quality status | Known business defects remain open with evidence. Architecture acceptance does not claim that those defects are repaired. | Maintained in [Project Status](status.md#known-boundaries) and [Open Issues](tasks/backlog.md). |
+| Current documents | The whitepaper, architecture, service reference, status, and executor rules agree. Every document is indexed. | Aligned in the Phase 3.9 wrap-up batch. |
 
-Test the complete relevant paths through the real default model channel on an isolated data copy.
+Test the complete relevant paths through the real default model channel on an isolated data copy when changing model inputs or behavior.
 Follow the workflow's release and live-check rules for each authorized code release.
-After foundation completion, use the captured cases to assign business repairs within these boundaries.
+After coordinator closure of Phase 3.9, use the captured cases to assign post-foundation business repairs and Phase 4 observation work within these boundaries.
 
 ## 11 Assignment Boundaries
 
-This specification gives the target and acceptance. It does not assign the skeleton task or authorize a database migration.
-The coordinator supplies concrete scopes after this direction is recorded.
-Each scope identifies its permitted changes, interfaces, recovery guarantees, checks, and obsolete paths to remove.
-Only an assigned foundation scope can replace a frozen mechanism under [Executor Rules](../AGENTS.md#6-freeze-until-the-foundation-phase).
-The [stop conditions](../AGENTS.md#9-stop-and-ask) still apply to unassigned changes.
+This specification gives the architecture boundaries and acceptance criteria. It does not authorize a database migration.
+Each follow-up or Phase 4 scope identifies its permitted changes, interfaces, recovery guarantees, checks, and obsolete paths to remove.
+Only an assigned scope can change an architecture guardrail under [Executor Rules](../AGENTS.md#6-architecture-guardrails).
+The [stop conditions](../AGENTS.md#9-stop-and-ask) apply to all unassigned changes.

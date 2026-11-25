@@ -204,13 +204,13 @@ What stays in storage on purpose, each with its reason:
 |---|---|
 | The claim of a queue job (`jobs.go`): windows, cursors, pause and hold of an import, the fair turn between cards and comparisons | `FOR UPDATE SKIP LOCKED` over indexed pages; the order is machinery, and the priorities are set at enqueue |
 | The order of secretary turns | Admission and replay under the owner lock |
-| The recovery of an interrupted deputy run, and the budget reservation | Both read and write the model-call journals and the spending; moving them waits for the journals to be one |
+| Lease reconciliation of interrupted deputy runs (`deputystore/runs.go`) and `agent_runs.reserved_cost` admission holds | The call journals are now unified in `callstore.Journal`, and `deputystore` accesses pending results, recovery predicates, and self-check records only through `callstore` and daily spend through `budgetstore.SpentSinceTx`. Requeuing or failing expired `agent_runs` leases is queue/lease machinery, and keeping the admission hold on `agent_runs` preserves migration compatibility without changing schema |
 | Which memories still need an organize or comparison pass | A set query over every current memory, through the indexes; the rule versions are `organize.RuleVersion` and `comparison.RuleVersion` |
 | The SQL that reads a model input | Reads only; what goes in and how much is the domain's (`datereview`, `topicproject`, `secretary`, `contextbuilder` limits) |
-| The tasks an effort estimate needs | The rule is the `effort.Store` contract; the job acknowledges itself in the same read |
+| The tasks an effort estimate needs | The rule is the `effort.Store` contract; the job acknowledges itself in the same read; project scheduling uses `effort.Due` in `workspacestore.EnqueueEffortTx` |
 | The label of a source's best fragment | Made in the recall SQL that chooses the fragment |
 
-The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry.
+The retrieval query before the owner lock is `deputy.PreparedQuery`. The storage packages hold no instruction: the test `TestStoragePackagesHoldNoInstructions` forbids a storage package to import the prompt registry. The test `TestOnlyCallStoreOwnsModelCallsAndResults` forbids direct `model_calls` and `background_model_results` SQL outside their declared owners, and `TestStoragePackagesDoNotHashItemContentDirectly` forbids direct `workspace.ContentHash` calls in storage.
 
 `internal/app.Application` is the store with these services. The HTTP server, the Telegram channel, and the evaluation tools use it for the secretary, the deputy, a recall, and a workspace command. `app.Compose` gives the store its models and returns the `app.Store` that `app.New` composes.
 Tests in the storage package compose the same services in `internal/postgres/compose_test.go`, at each call.
@@ -235,26 +235,26 @@ What the kernel needs from a domain comes through the composition:
 | `kernel` | `DB`: the connection pool, the model catalog, the file store, the business clock, the connection slots, and the hourly limits. The encoding of a document, the checks of a request, the reads of document rows, the lease and the queueing of a job, the owner lock, the check of a stage's hourly limit, the rule versions, the record of a stage outcome, the transaction of a derived write, and the connection of a serialized call. No business rule and no table of one domain. Since 2026-10-15 the kernel imports only `memory` and `worker`; the test `TestTheKernelDependsOnTheVocabularyOnly` enforces this. |
 | `memoryread`, `memorystore`, `usagelog`, `schedulestore`, `activitystore`, `ownerstore`, `itemstore`, `actionlog`, `sourcestore`, `accessstore`, `evidencestore` | Leaves: the reads of memories, derived memory material, usage records, the schedule view, the day activity, the first rows of an owner, the items table, the record of an action, sources, access checks, and evidence text. |
 | `claimstore` | The write of a memory with its evidence and its entities. |
-| `budgetstore` | The reservation of a call's cost, the health of the background stages, the timing record. |
+| `budgetstore` | The reservation of a call's cost, the single daily reserved-spend query (`SpentSinceTx`), the health of the background stages, and the timing record. |
 | `workstore` | Workspace storage that needs no command: deadline completion, item signals, project timeline, the deputy's text in an item. |
 | `statestore` | The current state: handover, deadlines, the library reads, the review of a remembered date. |
-| `callstore` | The records of model calls: reservations, paid results, the three call journals, and the recovery of their accounting. |
+| `callstore` | The records of model calls: reservations, paid results, the unified `Journal` covering background and interactive calls, `DirectCalls` for direct embedding/vision/transcription calls, deputy pending-run and recovery helpers, and accounting recovery. |
 | `intakestore` | What comes in and its upkeep: attachments, connectors, archive imports, the processing jobs of a source, the edits and deletions of memory, and the recall. |
-| `workspacestore` | The snapshot, the action log's undo helpers, documents and versions, reminders, topic projects, the project handover. |
+| `workspacestore` | The snapshot, the action log's undo helpers, documents and versions, reminders, topic projects, the effort scheduler (`EnqueueEffortTx`), and the project handover. |
 | `interpstore` | Organizing, the alias scan, and the comparison of statements and entities. |
-| `usestore` | The memory that a turn or a run is given, and its checks. |
-| `deputystore` | The reads and writes of a run request and of an adoption, the lease and the recovery of a run, the journal reads of its calls, the last write of a run, and the revision of a document. `deputy.Request`, `deputy.Adopt`, and `deputy.Conduct` decide; this package gives them units and one leased run as a `deputy.Session`. |
+| `usestore` | The memory that a turn or a run is given, and its checks (`CheckUseRunPromptTx` delegates to `deputy.CheckPromptCurrent`). |
+| `deputystore` | The reads and writes of a run request and of an adoption, the lease and lease reconciliation of a run, and the revision of a document. `deputy.Request`, `deputy.Adopt`, and `deputy.Conduct` decide; this package gives them units and one leased run as a `deputy.Session` and reaches call records only through `callstore` and daily spend through `budgetstore.SpentSinceTx`. |
 | `commandstore` | The reads and writes of a workspace command, the undo of an action, and the entry that executes a command. `command.Apply` decides. |
 | `deskstore` | The secretary: admission and order of a turn, the turn in its transaction, the reads of its context and its model input, attachments of a request, and the cleanup of a check-only turn. |
 | `internal/postgres` | The composition of the store, the migrations, the queue, the schedulers, the notification channels, and five small adapters (about 2,000 lines). |
 
 The items table has one owner. `itemstore.SaveItem` is the one write of an item; `DeleteItem`, `RemoveItemDependency`, and `DeleteUnusedCreatedItem` are the three removals. The test `TestOnlyTheItemOwnerWritesTheItemsTable` forbids a statement that writes `work_items` in each other storage package.
 
-Known limits of this split:
+Known limits of this split (deferred to follow-up work when a package changes):
 
 - The split followed the dependencies of the code. Some names came from the tool that made the move, for example `intakestore.Intake` for a package that also holds editing and recall. A later change can divide such a package.
 - The tests of the storage packages are still in `internal/postgres`. They run each package through the composed store.
-- A type of a storage package is exported when another storage package uses it. The domain boundary test keeps each domain package away from every storage package.
+- A type of a storage package is exported when another storage package uses it. The domain boundary test keeps each domain and adapter package away from every storage package.
 
 ## Pattern for the Next Paths
 
@@ -265,7 +265,7 @@ Known limits of this split:
 5. Construct the service in `internal/app`. Remove the handler method from the storage type.
 6. Write owner contract tests against an in-memory implementation of the interfaces.
 7. Keep the existing database tests. Call the service where they called the storage method.
-8. Add the package to the domain boundary test in `internal/app/boundaries_test.go`.
+8. Add the package to the domain boundary test in `internal/app/boundaries_test.go` (storage packages are discovered dynamically).
 
 ## Behavior
 
@@ -276,23 +276,32 @@ The saved input record keeps its form, so a result that was paid before the rele
 |---|---|
 | A start date counts back whole workdays from the due day. | `effort.StartDate` |
 | A task with a start date has one start reminder at the owner's review time. | `effort.PlanTask` |
+| A project with unestimated due tasks and no pending job is queued for estimation. | `effort.Due` |
 | A proposal changes only a task that is unchanged since the snapshot and has no estimate. | `effort.Service.Process` |
 | A user estimate is never replaced. | `effort.Service.Process` |
 | An unreadable output or a task without a proposal returns the job to the queue with a visible reason. | `effort.Service.Process` |
 
 ## Temporary Parts
 
-| Part | Callers | Removal condition |
-|---|---|---|
-| `maintainTaskPlanTx` and the scheduler query `enqueueEffortTx` in `internal/postgres/effort.go` | Item saves and the status scheduler. | The workspace item commands and the scheduler leave the storage package. |
-| `workspace.ContentHash` used by storage code | Deputy and secretary input checks. | Those paths leave the storage package. |
+All temporary migration parts listed during the pilot have been resolved:
+
+| Former part | Resolution |
+|---|---|
+| `maintainTaskPlanTx` and `enqueueEffortTx` in `internal/postgres/effort.go` | Task plan maintenance lives in `itemstore.MaintainTaskPlanTx` calling `effort.PlanTask`. Effort scheduling uses `effort.Due` from `workspacestore.EnqueueEffortTx`. |
+| `workspace.ContentHash` used by storage code | Removed from storage. `usestore.CheckUseRunPromptTx` delegates to `deputy.CheckPromptCurrent`, enforced by `TestStoragePackagesDoNotHashItemContentDirectly`. |
+| `prompts.FromText` temporary background adapter helper | Removed from `internal/prompts/registry.go` after all callers moved to `prompts.Must`. |
+| Separate `BackgroundCalls`, `InteractiveCalls`, and `ModelCallStorage` dispatcher | Replaced by one unified `callstore.Journal`. |
+
+Compatibility paths kept on purpose (not temporary migration glue):
+
+- `Store.ProcessCard`: acknowledges pre-upgrade `memory.card` queue slots so upgrades do not stall. Unused card-generation types (`cardGroup`, `cardRule`, `cardOutput`) are removed from production `status_build.go`.
 
 ## Checks
 
 | Check | Result |
 |---|---|
 | Owner contracts in `internal/workspace/effort` | Pass without a database, in less than one second. |
-| Domain boundary test in `internal/app` | Pass. |
+| Architecture boundary tests in `internal/app` and `internal/modelcall` | Pass with dynamic storage-package discovery, call-journal table guards, and `ContentHash` guard. |
 | Phase 3 planning acceptance tests | Pass: user estimate, start dates, start reminder, timeline, paid-result recovery, and stage budgets. |
 
 These acceptance tests ran only with a switch when the pilot was written. The switch is removed, and they run in every complete run.

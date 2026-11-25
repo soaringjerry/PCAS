@@ -2,6 +2,7 @@
 package commandstore
 
 import (
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/deputystore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
@@ -14,6 +15,7 @@ import (
 // Commands works on the store's core.
 type Commands struct {
 	*kernel.DB
+	*callstore.Calls
 	*claimstore.Claims
 	*ownerstore.Owners
 	*deputystore.Deputy

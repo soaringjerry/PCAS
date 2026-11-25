@@ -11,7 +11,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/ai"
 	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
-	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/prompts"
 )
@@ -66,7 +65,7 @@ func TestSelectedCodexCallRecordsRegisteredModeAndExactUsageLink(t *testing.T) {
 	}
 	// Search evidence must survive restart as part of the original result.
 	paid.Searches = []string{"Fictitious public query."}
-	if err := (callstore.BackgroundCalls{Store: s.Calls}).Save(ctx, request, paid); err != nil {
+	if err := s.Journal().Save(ctx, request, paid); err != nil {
 		t.Fatal(err)
 	}
 	peer, err := Open(ctx, s.Pool.Config().ConnConfig.ConnString(), stagelimits.Hourly())

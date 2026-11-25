@@ -84,8 +84,8 @@ func (s *Budgets) ReserveModelCostID(ctx context.Context, owner memory.ID, cost 
 		}
 		now := time.Now().In(loc)
 		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-		var spent float64
-		if err := tx.QueryRow(ctx, "SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1 AND created_at>=$2),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1 AND created_at>=$2),0)", string(owner), start).Scan(&spent); err != nil {
+		spent, err := SpentSinceTx(ctx, tx, owner, start)
+		if err != nil {
 			return err
 		}
 		if spent+cost > settings.DailyBudget {
@@ -120,6 +120,14 @@ func (s *Budgets) ReserveModelCostID(ctx context.Context, owner memory.ID, cost 
 		return nil
 	})
 	return id, err
+}
+
+// SpentSinceTx returns the owner's reserved spending since start across
+// admitted deputy runs and background or interactive reservations.
+func SpentSinceTx(ctx context.Context, tx pgx.Tx, owner memory.ID, start time.Time) (float64, error) {
+	var spent float64
+	err := tx.QueryRow(ctx, "SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1 AND created_at>=$2),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1 AND created_at>=$2),0)", string(owner), start).Scan(&spent)
+	return spent, err
 }
 
 // A disconnected caller or failed result transaction must not leave a completed

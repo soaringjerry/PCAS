@@ -1,4 +1,4 @@
-// Package callstore is the storage of the records of model calls: the reservations, the paid results, the call journals of background, interactive, and direct calls, and the recovery of their accounting.
+// Package callstore is the storage of the records of model calls: the reservations, the paid results, the unified call journal for background and interactive calls, the direct call journal, and the recovery of their accounting.
 package callstore
 
 import (

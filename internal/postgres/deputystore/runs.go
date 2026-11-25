@@ -120,34 +120,23 @@ func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr er
 	ctx, timing := budgetstore.NewExecutionTimer(ctx, "deputy", started)
 	ctx, persistCancel := context.WithDeadline(ctx, started.Add(secretary.TurnTimeout))
 	defer persistCancel()
-	s.PendingPaid.Range(func(key, value any) bool {
-		var snap deputy.Snapshot
-		paid, ok := value.(*callstore.PaidModelResult)
-		if !ok || json.Unmarshal(paid.Prompt, &snap) != nil || snap.Run.Kind != "revise" {
-			return true
-		}
-		_, _ = s.Pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE id=$1 AND document->>'createdAt'=$2 AND agent_id=$3 AND thing_id=$4 AND status='running' AND lease_until<clock_timestamp()`, string(key.(memory.ID)), snap.Run.CreatedAt, snap.Run.AgentID, snap.Run.ThingID)
-		return true
-	})
 	// A durable returned result, or a recorded pre-submission failure, can resume.
 	// Input-only started calls cannot authorize another paid submission.
-	s.PendingInteractive.Range(func(_, value any) bool {
-		entry := value.(*callstore.PendingInteractiveResult)
-		policy := entry.Request.Policy.(callstore.InteractiveCallPolicy)
-		if policy.BudgetOwner == "deputy_run" {
-			_, _ = s.Pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND status='running' AND lease_until<clock_timestamp()`, string(entry.Request.OwnerID), string(entry.Request.ExecutionID), policy.Origin)
+	for _, pending := range s.PendingDeputyRuns() {
+		if pending.Revise {
+			_, _ = s.Pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE id=$1 AND document->>'createdAt'=$2 AND agent_id=$3 AND thing_id=$4 AND status='running' AND lease_until<clock_timestamp()`, pending.RunID, pending.Origin, pending.AgentID, pending.ThingID)
+		} else {
+			_, _ = s.Pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_token=NULL,lease_until=NULL WHERE owner_id=$1 AND id=$2 AND document->>'createdAt'=$3 AND status='running' AND lease_until<clock_timestamp()`, string(pending.OwnerID), pending.RunID, pending.Origin)
 		}
-		return true
-	})
-	recoverableSQL := `EXISTS(SELECT 1 FROM background_model_results b WHERE b.owner_id=agent_runs.owner_id AND b.job_id=agent_runs.id AND b.purpose='revise') OR EXISTS(SELECT 1 FROM model_calls c WHERE c.owner_id=agent_runs.owner_id AND c.execution_id=agent_runs.id AND c.stage='answer' AND c.input_manifest->>'budgetOwner'='deputy_run' AND c.input_manifest->>'origin'=agent_runs.document->>'createdAt' AND ((c.result_receipt->'billing' IS NOT NULL AND c.result_receipt->'billing'<>'null'::jsonb) OR (c.outcome='failed' AND c.accounting_state IN ('not_reserved','settled'))))`
-	_, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET status='failed',lease_until=NULL,lease_token=NULL,document=document||jsonb_build_object('status','failed','error',$1::text,'finishedAt',now()) WHERE status='running' AND lease_until<now() AND NOT (`+recoverableSQL+`)`, deputy.Interrupted)
+	}
+	_, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET status='failed',lease_until=NULL,lease_token=NULL,document=document||jsonb_build_object('status','failed','error',$1::text,'finishedAt',now()) WHERE status='running' AND lease_until<now() AND NOT (`+callstore.DeputyRecoverableSQL+`)`, deputy.Interrupted)
 	if err != nil {
 		return err
 	}
-	if err := (callstore.InteractiveCalls{Store: s.Calls}).RecordInterruptedDeputyApplications(ctx); err != nil {
+	if err := s.Journal().RecordInterruptedDeputyApplications(ctx); err != nil {
 		return err
 	}
-	if _, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_until=NULL,lease_token=NULL WHERE status='running' AND lease_until<now() AND (`+recoverableSQL+`)`); err != nil {
+	if _, err := s.Pool.Exec(ctx, `UPDATE agent_runs SET status='queued',lease_until=NULL,lease_token=NULL WHERE status='running' AND lease_until<now() AND (`+callstore.DeputyRecoverableSQL+`)`); err != nil {
 		return err
 	}
 	var cached *callstore.PaidModelResult
@@ -159,7 +148,7 @@ func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr er
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var ownerID, id string
 		var data []byte
-		err := tx.QueryRow(ctx, `SELECT owner_id::text,id::text,document FROM agent_runs WHERE status='queued' AND ($1::boolean OR (`+recoverableSQL+`)) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1`, s.Models != nil).Scan(&ownerID, &id, &data)
+		err := tx.QueryRow(ctx, `SELECT owner_id::text,id::text,document FROM agent_runs WHERE status='queued' AND ($1::boolean OR (`+callstore.DeputyRecoverableSQL+`)) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1`, s.Models != nil).Scan(&ownerID, &id, &data)
 		if err != nil {
 			return err
 		}
@@ -180,7 +169,7 @@ func (s *Deputy) RunAgent(ctx context.Context, steps deputy.Steps) (resultErr er
 				}
 			}
 		}
-		savedRow, savedInput, err = (callstore.InteractiveCalls{Store: s.Calls}).DeputyInput(ctx, tx, scope.OwnerID, run)
+		savedRow, savedInput, err = s.Journal().DeputyInput(ctx, tx, scope.OwnerID, run)
 		if err != nil {
 			return err
 		}
@@ -289,7 +278,7 @@ func (r *runSession) VerifyPrompt(ctx context.Context) error {
 }
 
 func (r *runSession) Call(ctx context.Context, request modelcall.Request) (*deputy.CallRecord, error) {
-	row, err := callstore.LatestInteractiveCall(ctx, r.store.Pool, request)
+	row, err := r.store.Journal().LatestCall(ctx, request)
 	return callRecord(row), err
 }
 
@@ -302,16 +291,11 @@ func (r *runSession) SettleCost(ctx context.Context, cost float64) error {
 }
 
 func (r *runSession) Selection(ctx context.Context, answer memory.ID) (*deputy.Selection, string, error) {
-	return (callstore.InteractiveCalls{Store: r.store.Calls}).DeputySelection(ctx, r.scope.OwnerID, *r.run, answer)
+	return r.store.Journal().DeputySelection(ctx, r.scope.OwnerID, *r.run, answer)
 }
 
 func (r *runSession) ReviewAttempted(ctx context.Context) (memory.ID, bool, error) {
-	var review memory.ID
-	err := r.store.Pool.QueryRow(ctx, `SELECT id::text FROM model_calls WHERE owner_id=$1 AND execution_id=$2 AND stage='selfcheck' AND input_manifest->>'origin'=$3 ORDER BY created_at DESC,id DESC LIMIT 1`, string(r.scope.OwnerID), r.run.ID, r.run.CreatedAt).Scan(&review)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", false, nil
-	}
-	return review, err == nil, err
+	return r.store.Journal().LatestDeputySelfcheck(ctx, r.scope.OwnerID, *r.run)
 }
 
 func (r *runSession) VerifySelfcheck(ctx context.Context) error {
@@ -319,7 +303,7 @@ func (r *runSession) VerifySelfcheck(ctx context.Context) error {
 }
 
 func (r *runSession) SaveSelection(ctx context.Context, request modelcall.Request, selection deputy.Selection) error {
-	return (callstore.InteractiveCalls{Store: r.store.Calls}).SaveDeputySelection(ctx, request, selection)
+	return r.store.Journal().SaveDeputySelection(ctx, request, selection)
 }
 
 // Finish writes the end of the run in one transaction under the owner lock.
@@ -351,7 +335,7 @@ func (r *runSession) Finish(ctx context.Context, end deputy.End) error {
 		if err := s.AutoAdoptRunTx(ctx, tx, scope, &current); err != nil {
 			return err
 		}
-		calls := callstore.InteractiveCalls{Store: s.Calls}
+		calls := s.Journal()
 		if err := calls.RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, current, end.Answer, ending.Answer.Outcome, ending.Answer.Reason); err != nil {
 			return err
 		}

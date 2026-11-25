@@ -3,6 +3,7 @@ package deskstore
 
 import (
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/commandstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
@@ -15,6 +16,7 @@ import (
 // Desk works on the store's core.
 type Desk struct {
 	*budgetstore.Budgets
+	*callstore.Calls
 	*kernel.DB
 	*commandstore.Commands
 	*intakestore.Intake

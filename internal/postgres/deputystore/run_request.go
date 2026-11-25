@@ -10,6 +10,7 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
+	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/evidencestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
@@ -114,9 +115,7 @@ func (u *requestUnit) Estimate(agent, input string) float64 {
 }
 
 func (u *requestUnit) SpentSince(ctx context.Context, start time.Time) (float64, error) {
-	var spent float64
-	err := u.tx.QueryRow(ctx, "SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1 AND created_at >= $2),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1 AND created_at >= $2),0)", string(u.scope.OwnerID), start).Scan(&spent)
-	return spent, err
+	return budgetstore.SpentSinceTx(ctx, u.tx, u.scope.OwnerID, start)
 }
 
 func (u *requestUnit) Insert(ctx context.Context, run workspace.Run, status string, reviseTarget int) error {

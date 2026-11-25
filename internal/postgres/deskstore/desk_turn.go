@@ -320,7 +320,7 @@ func (t *secretarySession) CheckFailed(ctx context.Context, reason string) error
 
 func (t *secretarySession) RecordApplication(ctx context.Context, stage, application, reason string) error {
 	s := t.secretaryAsk
-	return (callstore.InteractiveCalls{Store: s.store.Calls}).RecordApplicationTx(ctx, s.tx, s.scope.OwnerID, memory.ID(s.req.RequestID), stage, application, reason)
+	return s.store.Journal().RecordApplicationTx(ctx, s.tx, s.scope.OwnerID, memory.ID(s.req.RequestID), stage, application, reason)
 }
 
 // A check-only turn and a turn without text keep nothing.

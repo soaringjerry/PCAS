@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
+	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/postgres/memorystore"
@@ -156,7 +157,7 @@ func (s *Workspace) SnapshotTx(ctx context.Context, tx pgx.Tx, scope memory.Scop
 	}
 	now := time.Now().In(loc)
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	if err := tx.QueryRow(ctx, "SELECT coalesce((SELECT sum(reserved_cost) FROM agent_runs WHERE owner_id=$1 AND created_at>=$2),0)+coalesce((SELECT sum(reserved_cost) FROM background_usage WHERE owner_id=$1 AND created_at>=$2),0)", string(scope.OwnerID), start).Scan(&out.BudgetUsage); err != nil {
+	if out.BudgetUsage, err = budgetstore.SpentSinceTx(ctx, tx, scope.OwnerID, start); err != nil {
 		return out, err
 	}
 	if out.Candidates, err = kernel.QueryDocuments[workspace.Candidate](ctx, tx, "SELECT document FROM capture_candidates WHERE owner_id=$1 ORDER BY document->>'createdAt' DESC,id", string(scope.OwnerID)); err != nil {

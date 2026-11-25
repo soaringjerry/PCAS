@@ -102,7 +102,7 @@ func TestInteractiveWorkerRejectsResponseFromReplacedDeputyLease(t *testing.T) {
 	policy.Usage.RunID = run.ID
 	request.Policy = policy
 	request.ExecutionID, request.RootExecutionID = memory.ID(run.ID), memory.ID(run.ID)
-	adapter := callstore.InteractiveCalls{Store: s.Calls}
+	adapter := s.Journal()
 	provider, _ := registryOf(s).Get("model")
 	invocation, err := adapter.Prepare(ctx, request, provider)
 	if err != nil {
@@ -161,15 +161,11 @@ func TestInteractiveWorkerSavesResponseWithoutRepeatingCanceledRequest(t *testin
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { _, err := s.Gateway().Call(work, request); done <- err }()
-	pending := false
-	for !pending {
-		s.PendingInteractive.Range(func(_, _ any) bool { pending = true; return false })
-		if !pending {
-			select {
-			case <-work.Done():
-				t.Fatal(work.Err())
-			case <-time.After(10 * time.Millisecond):
-			}
+	for !s.HasPendingInteractive() {
+		select {
+		case <-work.Done():
+			t.Fatal(work.Err())
+		case <-time.After(10 * time.Millisecond):
 		}
 	}
 	cancel()
@@ -201,7 +197,7 @@ func TestInteractiveWorkerClassifiesInterruptedCallsWithoutResubmission(t *testi
 			secretaryModel(t, s, func(w http.ResponseWriter, r *http.Request) { calls.Add(1) })
 			request := admittedInteractiveRequest(t, s, scope, "model")
 			ctx := context.Background()
-			adapter := callstore.InteractiveCalls{Store: s.Calls}
+			adapter := s.Journal()
 			provider, _ := registryOf(s).Get("model")
 			invocation, err := adapter.Prepare(ctx, request, provider)
 			if err != nil {

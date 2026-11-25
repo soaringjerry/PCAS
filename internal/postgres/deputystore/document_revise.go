@@ -118,7 +118,7 @@ func (s *Deputy) finishPaidRevise(ctx context.Context, scope memory.Scope, curre
 			return err
 		}
 		if paid.InvocationID != "" {
-			return (callstore.InteractiveCalls{Store: s.Calls}).RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, run, paid.InvocationID, ending.Answer.Outcome, ending.Answer.Reason)
+			return s.Journal().RecordDeputyApplicationTx(ctx, tx, scope.OwnerID, run, paid.InvocationID, ending.Answer.Outcome, ending.Answer.Reason)
 		}
 		return kernel.DiscardPaidResult(ctx, tx, worker.Job{OwnerID: scope.OwnerID, ID: memory.ID(run.ID)})
 	})

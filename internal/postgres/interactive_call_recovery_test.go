@@ -199,7 +199,7 @@ func TestInteractiveDeletedInputCannotRestorePaidBody(t *testing.T) {
 	if err := s.Delete(ctx, scope, memory.DeleteRequest{Targets: []memory.Ref{ref}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := (callstore.InteractiveCalls{Store: s.Calls}).Save(ctx, request, paid); err != nil {
+	if err := s.Journal().Save(ctx, request, paid); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Gateway().Call(ctx, request); !errors.Is(err, modelcall.ErrNotApplicable) {
@@ -278,15 +278,11 @@ func TestInteractiveResultWriteFailureReusesPendingResponse(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { _, err := s.Gateway().Call(limited, request); done <- err }()
-	pending := false
-	for !pending {
-		s.PendingInteractive.Range(func(_, value any) bool { pending = true; return false })
-		if !pending {
-			select {
-			case <-limited.Done():
-				t.Fatal("provider did not reach result persistence", limited.Err())
-			case <-time.After(10 * time.Millisecond):
-			}
+	for !s.HasPendingInteractive() {
+		select {
+		case <-limited.Done():
+			t.Fatal("provider did not reach result persistence", limited.Err())
+		case <-time.After(10 * time.Millisecond):
 		}
 	}
 	cancel()

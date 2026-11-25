@@ -3,6 +3,7 @@ package deputystore
 
 import (
 	"github.com/soaringjerry/PCAS/internal/postgres/budgetstore"
+	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
@@ -15,6 +16,7 @@ import (
 type Deputy struct {
 	*kernel.DB
 	*budgetstore.Budgets
+	*callstore.Calls
 	*intakestore.Intake
 	*memoryread.Reader
 	*usagelog.Usage

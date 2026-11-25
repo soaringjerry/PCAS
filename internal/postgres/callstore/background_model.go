@@ -48,7 +48,7 @@ func (a jobCallStore) SavedResult(ctx context.Context, j worker.Job) (*modelcall
 }
 
 func (a jobCallStore) UnknownRecovery(ctx context.Context, j worker.Job) error {
-	return BackgroundCalls{Store: a.store}.UnknownRecovery(ctx, j)
+	return a.store.Journal().UnknownRecovery(ctx, j)
 }
 
 func (a jobCallStore) ReleaseUnavailable(ctx context.Context, j worker.Job, reservation string) error {

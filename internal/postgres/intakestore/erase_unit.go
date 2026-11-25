@@ -8,7 +8,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
-	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/postgres/sourcestore"
@@ -156,7 +155,7 @@ func (u eraseUnit) Block(ctx context.Context, ids []string) error {
 }
 
 func (u eraseUnit) ScrubCalls(ctx context.Context, ids []string) error {
-	return (callstore.InteractiveCalls{Store: u.store.Calls}).ScrubInputsTx(ctx, u.tx, u.scope.OwnerID, ids)
+	return u.store.Journal().ScrubInputsTx(ctx, u.tx, u.scope.OwnerID, ids)
 }
 
 func (u eraseUnit) exec(ctx context.Context, ids []string, statements ...string) error {

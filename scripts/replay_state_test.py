@@ -255,4 +255,47 @@ class SignedDeltaTests(unittest.TestCase):
   self.assertIn('owners',{row['table'] for row in full['delta_differences']})
   self.assertEqual(full['comparison'],'identity_mapped_owner_data')
   self.assertEqual(full['snapshots'],exact['snapshots'])
+ def test_difference_classification_marks_runtime_only_differences(self):
+  left={'table':'items','row':dict(self.item['row'],version=2,updated_at='2030-01-01T10:00:00Z')}
+  right={'table':'items','row':dict(self.item['row'],version=2,updated_at='2030-01-01T10:00:05Z')}
+  _,_,_,phases=self.evidence([left],[right])
+  columns=[*self.columns,{'table':'items','column':'updated_at','type':'timestamptz','primary_key':False}]
+  report=identity.field_comparison(phases,columns,{})
+  cls=report['difference_classification']
+  self.assertTrue(cls['runtime_only'])
+  self.assertEqual(cls['business_state_differences'],[])
+  self.assertEqual([d['path'] for d in cls['runtime_metadata_differences']],[['updated_at']])
+  self.assertEqual(report['excluded_fields'],[])
+ def test_difference_classification_keeps_business_fields_distinct_from_runtime(self):
+  left={'table':'items','row':dict(self.item['row'],version=2,updated_at='2030-01-01T10:00:00Z')}
+  changed={'table':'items','row':dict(self.item['row'],version=2,deadline='2030-01-02',updated_at='2030-01-01T10:00:05Z')}
+  _,_,_,phases=self.evidence([left],[changed])
+  columns=[*self.columns,{'table':'items','column':'updated_at','type':'timestamptz','primary_key':False}]
+  report=identity.field_comparison(phases,columns,{})
+  cls=report['difference_classification']
+  self.assertFalse(cls['runtime_only'])
+  self.assertEqual([d['path'] for d in cls['business_state_differences']],[['deadline']])
+  self.assertEqual([d['path'] for d in cls['runtime_metadata_differences']],[['updated_at']])
+ def test_recorded_events_and_nested_model_call_references_map_cleanly(self):
+  sides={
+   side:{
+    'memory_jobs':[{'id':f'job-{side}','owner_id':'owner','record_id':'rec','record_version':1,'stage':'memory.organize'}],
+    'recorded_events':[{'id':f'ev-{side}','owner_id':'owner','type':'work.queued','stage':'memory.organize','object_id':'rec','object_version':1,'trigger_source':'schedule_or_request','job_id':f'job-{side}','root_id':f'job-{side}','cause_id':None,'chain_depth':0,'occurred_at':f'at-{side}'}],
+   } for side in ('record','replay')
+  }
+  schema={'memory_jobs':{'id','owner_id','record_id'},'recorded_events':{'id','owner_id','object_id','job_id','root_id','cause_id'}}
+  res=identity.establish(sides,schema,{'owner','rec'})
+  mapping={item['left']:item['right'] for item in res['mapping']}
+  self.assertEqual(mapping.get('job-record'),'job-replay')
+  self.assertEqual(mapping.get('ev-record'),'ev-replay')
+  self.assertEqual(res['unresolved'],[])
+  self.assertEqual(res['unmapped_identities'],[])
+  call_row={'result_receipt':{'invocationId':'c1','billing':{'invocationId':'c1','Reservation':'r1','Refs':[{'id':'m1','version':1}]}},
+            'actual_mode':{'deputySelection':{'main':'c1','output':'c2','review':'c2'},'originalUsage':{'ID':'u1','TurnID':'t1'}}}
+  mapped=identity.transform('model_calls',call_row,{'c1':'C1','c2':'C2','r1':'R1','m1':'M1','u1':'U1','t1':'T1'},{})
+  self.assertEqual(mapped['result_receipt']['invocationId'],'C1')
+  self.assertEqual(mapped['result_receipt']['billing']['Reservation'],'R1')
+  self.assertEqual(mapped['result_receipt']['billing']['Refs'][0]['id'],'M1')
+  self.assertEqual(mapped['actual_mode']['deputySelection'],{'main':'C1','output':'C2','review':'C2'})
+  self.assertEqual(mapped['actual_mode']['originalUsage'],{'ID':'U1','TurnID':'T1'})
 if __name__=='__main__':unittest.main()

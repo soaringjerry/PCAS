@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/workspace"
+	"github.com/soaringjerry/PCAS/internal/workspace/deputy"
 )
 
 // PostgreSQL now() is frozen at transaction start. The ordered turn keeps its
@@ -77,10 +78,7 @@ func CheckUseRunPromptTx(ctx context.Context, tx pgx.Tx, scope memory.Scope, run
 	if err != nil {
 		return err
 	}
-	if run.TargetHash != "" && workspace.ContentHash(item) != run.TargetHash {
-		return memory.ErrConflict
-	}
-	return nil
+	return deputy.CheckPromptCurrent(agent, item, run)
 }
 
 // A changed destination or lost worker lease prevents further model work.

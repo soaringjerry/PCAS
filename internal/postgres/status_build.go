@@ -5,31 +5,11 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
-	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
-	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
-
 	"github.com/jackc/pgx/v5"
+	"github.com/soaringjerry/PCAS/internal/currentstate/handover"
+	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
-
-type cardRule struct {
-	N         int    `json:"n"`
-	AppliesTo string `json:"appliesTo"`
-}
-type cardOutput struct {
-	Fields    map[string][]int    `json:"fields"`
-	Rules     []cardRule          `json:"rules"`
-	Deadlines []organize.Deadline `json:"deadlines"`
-}
-type cardGroup struct {
-	Key, Kind, Name string
-	Entity          *string
-	Count           int
-	Built           *time.Time
-	Rule            int
-	Stale           bool
-}
 
 func (s *Store) RunStatus(ctx context.Context, logger *slog.Logger) {
 	timer := time.NewTicker(kernel.StatusInterval)

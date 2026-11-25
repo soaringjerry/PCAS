@@ -69,14 +69,3 @@ func Must(name string) Definition {
 	}
 	return d
 }
-
-// FromText supports the temporary background adapter. Remove it when that
-// adapter's named callers pass Definition values directly.
-func FromText(text string) (Definition, bool) {
-	for _, d := range registry {
-		if d.text == text {
-			return d, true
-		}
-	}
-	return Definition{}, false
-}

@@ -66,3 +66,25 @@ func TestARunTakesAResultByHandOnlyWhileItWaits(t *testing.T) {
 		t.Fatal("request")
 	}
 }
+
+func TestCheckPromptCurrentRequiresEnabledAgentAndUnchangedTarget(t *testing.T) {
+	item := workspace.Item{ID: "item-1", Kind: "task", Title: "Draft outline"}
+	hash := workspace.ContentHash(item)
+	enabled := workspace.Agent{ID: "a1", Enabled: true}
+	disabled := workspace.Agent{ID: "a1", Enabled: false}
+
+	if err := CheckPromptCurrent(enabled, item, workspace.Run{TargetHash: hash}); err != nil {
+		t.Fatalf("expected matching target hash to pass, got %v", err)
+	}
+	if err := CheckPromptCurrent(enabled, item, workspace.Run{}); err != nil {
+		t.Fatalf("expected empty target hash to pass, got %v", err)
+	}
+	if err := CheckPromptCurrent(disabled, item, workspace.Run{TargetHash: hash}); err != memory.ErrForbidden {
+		t.Fatalf("expected disabled agent to return ErrForbidden, got %v", err)
+	}
+	changed := item
+	changed.Title = "Updated outline"
+	if err := CheckPromptCurrent(enabled, changed, workspace.Run{TargetHash: hash}); err != memory.ErrConflict {
+		t.Fatalf("expected changed item content to return ErrConflict, got %v", err)
+	}
+}

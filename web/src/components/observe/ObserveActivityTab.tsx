@@ -31,10 +31,12 @@ export function ObserveActivityTab({
   date,
   onDateChange,
   onInspectCall,
+  onOpenTrace,
 }: {
   date: string
   onDateChange: (nextDate: string) => void
   onInspectCall: (usageId: string) => void
+  onOpenTrace: (anchorId: string) => void
 }) {
   const { state, undo } = useStore()
   const toast = useToast()
@@ -269,6 +271,7 @@ export function ObserveActivityTab({
                       return found ? thingTitle(found) : undefined
                     }}
                     onTrace={(execId) => setTraceExecution(execId)}
+                    onOpenTrace={onOpenTrace}
                     onInspectCall={onInspectCall}
                     onUndo={(id) => void handleUndo(id)}
                   />
@@ -312,6 +315,7 @@ function ActivityRow({
   undoing,
   resolveThingTitle,
   onTrace,
+  onOpenTrace,
   onInspectCall,
   onUndo,
 }: {
@@ -320,6 +324,7 @@ function ActivityRow({
   undoing: boolean
   resolveThingTitle: (id: string) => string | undefined
   onTrace: (execId: string) => void
+  onOpenTrace: (anchorId: string) => void
   onInspectCall: (usageId: string) => void
   onUndo: (actionId: string) => void
 }) {
@@ -329,6 +334,9 @@ function ActivityRow({
   const items = Array.isArray(ev.items) ? ev.items : []
   const thingIds = [...new Set([...items, ...(ev.thing ? [ev.thing] : []), ...(ev.item ? [ev.item] : [])])]
   const showUndo = canOfferUndo(event)
+  const traceAnchor =
+    event.executionId ||
+    (event.kind === 'action' || event.kind === 'call' || event.kind === 'run' ? event.eventId : event.kind === 'undo' && ev.undoOf ? ev.undoOf : '')
 
   const headline =
     event.kind === 'action' || event.kind === 'undo' || event.kind === 'decision'
@@ -392,6 +400,12 @@ function ActivityRow({
             <button type="button" className="obs-link-pill" onClick={() => onTrace(event.executionId!)}>
               <GitBranch size={12} />
               追踪同次执行
+            </button>
+          )}
+          {traceAnchor && (
+            <button type="button" className="obs-link-pill" onClick={() => onOpenTrace(traceAnchor)}>
+              详细溯源
+              <ArrowUpRight size={12} />
             </button>
           )}
           {ev.usageId && (

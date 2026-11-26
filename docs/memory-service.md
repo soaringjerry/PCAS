@@ -109,8 +109,20 @@ Cost is summed once for each invocation and is never joined to actions.
 A call that reserved nothing costs zero. Another call without recorded usage has an unknown cost, and its held reservation is shown separately.
 The response reports the events that a page leaves out, and its totals always cover the whole day.
 The response also lists the links that the records do not contain. The query does not derive a link from similar times.
-The web observation panel at `/observe` renders this read model alongside `/v1/workspace/usage`, `/v1/workspace/usage/calls`, and `/v1/workspace/background`.
+The web observation panel at `/observe` renders this read model alongside `/v1/workspace/usage`, `/v1/workspace/usage/calls`, `/v1/workspace/background`, `/v1/workspace/activity/trace/{id}`, and `/v1/workspace/activity/explanations`.
 The [first live readings](evaluations/2026-10-11-activity-baseline.md) give measured counts for two days.
+
+### Execution Trace and Activity Explanations
+
+`GET /v1/workspace/activity/trace/{id}` reads `model_calls`, `recorded_events`, `action_log`, `agent_runs`, and `background_stage_events` for one anchor UUID.
+Only the owner can read this endpoint.
+`activitystore.ExecutionTrace` in [the trace query](../internal/postgres/activitystore/activity_trace.go) writes nothing and never derives links from similar times.
+`input_manifest` returns reference identities and coverage counts only. Private prompt text stays outside `model_calls`.
+
+`GET /v1/workspace/activity/explanations` reads failed or blocked background jobs, recent `topic_project_checks`, and recent `date_tidy_checks`.
+Paused jobs with `exhausted`, `budget_exhausted`, or `chain_limit` states require explicit owner `retryJob` authorization.
+Only the owner can read this endpoint.
+`activitystore.ActivityExplanations` in [the explanations query](../internal/postgres/activitystore/activity_explanations.go) writes nothing.
 
 ### Background Call Evidence
 

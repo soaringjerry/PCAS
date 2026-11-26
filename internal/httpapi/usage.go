@@ -18,6 +18,14 @@ type dayActivityReader interface {
 	DayActivity(context.Context, memory.Scope, string, int, int) (json.RawMessage, error)
 }
 
+type executionTraceReader interface {
+	ExecutionTrace(context.Context, memory.Scope, string) (json.RawMessage, error)
+}
+
+type activityExplanationsReader interface {
+	ActivityExplanations(context.Context, memory.Scope) (json.RawMessage, error)
+}
+
 func (s *Server) usageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/workspace/usage", s.authorize(s.usageSummary))
 	mux.HandleFunc("GET /v1/workspace/usage/calls", s.authorize(s.usageCalls))
@@ -47,6 +55,42 @@ func (s *Server) usageRoutes(mux *http.ServeMux) {
 		// number that it leaves out, and offset reads them.
 		limit = min(limit, 2000)
 		out, err := reader.DayActivity(r.Context(), scope, r.URL.Query().Get("date"), limit, offset)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, out)
+	}))
+	// Linked calls, causal job events, actions, runs, and stage outcomes for one anchor ID.
+	mux.HandleFunc("GET /v1/workspace/activity/trace/{id}", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+		reader, ok := s.options.Workspace.(executionTraceReader)
+		if !scope.IsOwner {
+			s.fail(w, memory.ErrForbidden)
+			return
+		}
+		if !ok {
+			s.fail(w, memory.ErrUnavailable)
+			return
+		}
+		out, err := reader.ExecutionTrace(r.Context(), scope, r.PathValue("id"))
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, out)
+	}))
+	// Paused/failed jobs requiring attention and recent non-action / decision explanations.
+	mux.HandleFunc("GET /v1/workspace/activity/explanations", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+		reader, ok := s.options.Workspace.(activityExplanationsReader)
+		if !scope.IsOwner {
+			s.fail(w, memory.ErrForbidden)
+			return
+		}
+		if !ok {
+			s.fail(w, memory.ErrUnavailable)
+			return
+		}
+		out, err := reader.ActivityExplanations(r.Context(), scope)
 		if err != nil {
 			s.fail(w, err)
 			return

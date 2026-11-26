@@ -413,6 +413,142 @@ async function setupObserveMock(page: Page, state = baseState()) {
     }),
   )
 
+  await on('/v1/workspace/activity/explanations', (route) =>
+    route.fulfill({
+      json: {
+        pausedJobs: [
+          {
+            jobId: 'job-paused-1',
+            stage: 'source.extract',
+            baseStage: 'source.extract',
+            recordId: 'src-failed',
+            recordVersion: 1,
+            state: 'failed',
+            errorCode: 'chain_limit',
+            attempts: 5,
+            chainDepth: 201,
+            rootJobId: 'job-root-1',
+            createdAt: at,
+            updatedAt: at,
+            recoveryState: 'exhausted',
+            recoveryReason: 'provider_recovery_exhausted',
+            attempt: 5,
+            attemptLimit: 5,
+            requiresOwnerRecovery: true,
+          },
+        ],
+        topicDecisions: [
+          {
+            topicId: 'topic-chengdu',
+            topicName: '成都旅行',
+            topicKind: 'topic',
+            page: 0,
+            decision: 'skip',
+            reason: '去年的行程已经结束，不是当前在做的项目',
+            createdProject: false,
+          },
+        ],
+        dateDecisions: [
+          {
+            claimId: 'mem-recent',
+            claimVersion: 2,
+            class: 'past',
+            decision: 'drop',
+            reason: '日期已经过去且无需继续提醒',
+            entryTitle: '成都航班',
+            createdAt: at,
+          },
+        ],
+      },
+    }),
+  )
+
+  await page.route((url) => url.pathname.startsWith('/v1/workspace/activity/trace/'), (route) => {
+    const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '')
+    return route.fulfill({
+      json: {
+        anchorId: id,
+        calls: [
+          {
+            id: 'call-sec',
+            executionId: 'exec-sec-1',
+            rootExecutionId: 'exec-sec-1',
+            attempt: 1,
+            attemptLimit: 1,
+            recoveryState: 'active',
+            function: 'secretary',
+            stage: 'answer',
+            provider: 'openai',
+            model: 'gpt-fake',
+            promptName: 'secretary-system',
+            instructionHash: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+            schemaName: 'secretary-answer',
+            schemaHash: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+            contextBuilderVersion: 'ctx-v2',
+            inputManifest: { memoryCount: 4, omitted: 0, version: 'interactive-input-v1' },
+            outcome: 'returned',
+            accountingState: 'settled',
+            usageId: 'usage-sec-1',
+            cost: 0.015,
+            costKnown: true,
+            inputTokens: 1200,
+            outputTokens: 240,
+            durationMs: 1450,
+            createdAt: '2026-11-26T01:10:00Z',
+          },
+        ],
+        events: [
+          {
+            id: 'ev-root',
+            type: 'work.queued',
+            stage: 'source.chunk',
+            objectId: 'src-failed',
+            objectVersion: 1,
+            triggerSource: 'schedule_or_request',
+            jobId: 'job-root-1',
+            rootId: 'job-root-1',
+            chainDepth: 0,
+            occurredAt: '2026-11-26T01:09:00Z',
+            jobState: 'done',
+            jobAttempts: 1,
+          },
+          {
+            id: 'ev-child',
+            type: 'work.queued',
+            stage: 'source.extract',
+            objectId: 'src-failed',
+            objectVersion: 1,
+            triggerSource: 'job',
+            jobId: 'job-paused-1',
+            rootId: 'job-root-1',
+            causeId: 'job-root-1',
+            chainDepth: 1,
+            occurredAt: '2026-11-26T01:09:05Z',
+            jobState: 'failed',
+            jobErrorCode: 'chain_limit',
+            jobAttempts: 5,
+          },
+        ],
+        actions: [
+          {
+            id: 'act-create-1',
+            source: 'desk',
+            summary: '新增待办「准备周五周报」',
+            outcome: actionUndone ? 'undone' : 'executed',
+            createdAt: '2026-11-26T01:10:01Z',
+            changes: 1,
+            items: ['task-1'],
+          },
+        ],
+        runs: [],
+        stages: [
+          { id: 'st-1', at: '2026-11-26T01:09:06Z', stage: 'source.extract', outcome: 'failure', reason: 'chain_limit', count: 1, jobId: 'job-paused-1' },
+        ],
+        gaps: ['input_manifest stores reference identities and coverage counts only; private prompt text stays outside the call journal'],
+      },
+    })
+  })
+
   await on('/v1/workspace/memories', (route) => {
     const url = new URL(route.request().url())
     const q = url.searchParams.get('q') ?? ''
@@ -582,5 +718,94 @@ test('memory and access tab searches across all server memories with pagination 
   // Responsive check on mobile width: no horizontal overflow.
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  expect(m.errors).toEqual([])
+})
+
+test('execution trace drawer opens from daily activity or deep-link and shows prompt hashes, input manifest, causal chain, and gaps', async ({ page }) => {
+  const m = await setupObserveMock(page)
+  await page.goto('/observe?date=' + dayOne)
+
+  // Open trace drawer directly from an activity row.
+  await page.getByRole('button', { name: '详细溯源' }).first().click()
+  await expect(page).toHaveURL(/trace=exec-sec-1/)
+  const drawer = page.getByRole('dialog')
+  await expect(drawer).toContainText('执行与因果溯源')
+  await expect(drawer).toContainText('secretary-system')
+  await expect(drawer).toContainText('#abcdef1234')
+  await expect(drawer).toContainText('secretary-answer')
+  await expect(drawer).toContainText('L0')
+  await expect(drawer).toContainText('L1')
+  await expect(drawer).toContainText('上游任务触发')
+  await expect(drawer).toContainText('输入清单仅记录引用 ID 与覆盖/省略统计')
+
+  // Expand input_manifest metadata fold inside the drawer.
+  await drawer.getByRole('button', { name: /输入清单元数据/ }).click()
+  await expect(drawer).toContainText('interactive-input-v1')
+
+  // Jump from the trace drawer straight to Usage tab highlighting cited sources/memories.
+  await drawer.getByRole('button', { name: '查看引用原文与记忆' }).click()
+  await expect(page).toHaveURL(/tab=usage&call=usage-sec-1/)
+  await expect(page.getByText('周五前把周报发给组长')).toBeVisible()
+  expect(m.errors).toEqual([])
+})
+
+test('background tab authorizes terminal recovery retries explicitly and explains skipped topic projects and date review decisions', async ({ page }) => {
+  const m = await setupObserveMock(page)
+  await page.goto('/observe?tab=background')
+
+  // Terminal paused job requires explicit owner confirmation before dispatching retryJob.
+  await expect(page.getByText('需你授权恢复')).toBeVisible()
+  await expect(page.getByText('链深 L201')).toBeVisible()
+  await page.getByRole('button', { name: '授权新一轮恢复重试' }).click()
+  const modal = page.getByRole('dialog', { name: '授权新一轮恢复重试？' })
+  await expect(modal).toContainText('保留原有历史调用与计费记录')
+  await modal.getByRole('button', { name: '确认授权并重排' }).click()
+  await expect.poll(() => m.commands.at(-1)).toMatchObject({ type: 'retryJob', id: 'job-paused-1' })
+
+  // Non-action explanations show skipped topic project reason and date review decision reason.
+  await expect(page.getByText('成都旅行')).toBeVisible()
+  await expect(page.getByText('跳过未建项目')).toBeVisible()
+  await expect(page.getByText('去年的行程已经结束，不是当前在做的项目')).toBeVisible()
+  await expect(page.getByRole('link', { name: '看主题记忆' })).toHaveAttribute('href', '/library?group=topic-chengdu')
+
+  await page.getByRole('radio', { name: /日期复查/ }).click()
+  await expect(page.getByText('成都航班')).toBeVisible()
+  await expect(page.getByText('已关闭日期')).toBeVisible()
+  await expect(page.getByText('日期已经过去且无需继续提醒')).toBeVisible()
+  expect(m.errors).toEqual([])
+})
+
+test('reverse trace links from ThingPage deputy runs and HallPage feed open the Observation Panel trace drawer', async ({ page }) => {
+  const state = baseState({
+    runs: [
+      {
+        id: 'run-trace-1',
+        thingId: 'task-1',
+        agentId: 'api',
+        kind: 'breakdown',
+        prompt: '拆成三步',
+        brief: '',
+        contextMemoryIds: [],
+        status: 'done',
+        output: '1. 写大纲',
+        adopted: { as: 'subtasks', at, edited: false, actionId: 'act-adopt-1' },
+        staleContext: false,
+        cost: 0.01,
+        createdAt: at,
+        finishedAt: at,
+      },
+    ],
+  })
+  const m = await setupObserveMock(page, state)
+  await page.route((url) => url.pathname === '/v1/desk/turns', (route) => route.fulfill({ json: { turns: [] } }))
+  await page.route((url) => url.pathname === '/v1/workspace/schedule', (route) => route.fulfill({ json: { items: [] } }))
+  await page.route((url) => url.pathname === '/v1/workspace/in-progress', (route) => route.fulfill({ json: { items: [] } }))
+
+  await page.goto('/t/task-1')
+  const traceLink = page.getByRole('link', { name: '溯源', exact: true }).first()
+  await expect(traceLink).toHaveAttribute('href', '/observe?trace=run-trace-1')
+  await traceLink.click()
+  await expect(page).toHaveURL(/\/observe\?trace=run-trace-1/)
+  await expect(page.getByRole('dialog')).toContainText('执行与因果溯源')
   expect(m.errors).toEqual([])
 })

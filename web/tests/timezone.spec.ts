@@ -275,6 +275,7 @@ test('source records, background jobs and settings timestamps follow workspace c
   await page.route('**/v1/chatgpt/account', route => route.fulfill({ json: { account: { type: 'chatgpt', email: 'synthetic@example.test' } } }))
   await page.route('**/v1/chatgpt/limits', route => route.fulfill({ json: { rateLimits: { primary: { usedPercent: 10, resetsAt: Date.parse(due) / 1000 } } } }))
   await page.route('**/v1/workspace/background', route => route.fulfill({ json: { stages: [], overflow: [] } }))
+  await page.route('**/v1/workspace/activity/explanations', route => route.fulfill({ json: { pausedJobs: [], topicDecisions: [], dateDecisions: [] } }))
   for (const [zone, day, clock, oldDate] of [
     ['Asia/Shanghai', '10/3/2026', '11:00:00 PM', '8月31日'],
     ['Australia/Melbourne', '10/4/2026', '1:00:00 AM', '9月1日'],

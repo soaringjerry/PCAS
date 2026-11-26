@@ -274,15 +274,17 @@ test('source records, background jobs and settings timestamps follow workspace c
   await page.route('**/v1/models', route => route.fulfill({ json: { chatgptEnabled: true, chatgptDirectEnabled: false } }))
   await page.route('**/v1/chatgpt/account', route => route.fulfill({ json: { account: { type: 'chatgpt', email: 'synthetic@example.test' } } }))
   await page.route('**/v1/chatgpt/limits', route => route.fulfill({ json: { rateLimits: { primary: { usedPercent: 10, resetsAt: Date.parse(due) / 1000 } } } }))
+  await page.route('**/v1/workspace/background', route => route.fulfill({ json: { stages: [], overflow: [] } }))
   for (const [zone, day, clock, oldDate] of [
     ['Asia/Shanghai', '10/3/2026', '11:00:00 PM', '8月31日'],
     ['Australia/Melbourne', '10/4/2026', '1:00:00 AM', '9月1日'],
   ]) {
     await page.goto('/library?tab=sources')
     await expect(page.locator('.source-card-foot')).toContainText(`${oldDate}更新`)
-    await expect(page.locator('.list')).toContainText(`下次：今天 ${zone === 'Asia/Shanghai' ? '23:00' : '01:00'}`)
     await page.getByRole('button', { name: '查看原文：跨日来源' }).click()
     await expect(page.getByText('记录于', { exact: false })).toContainText(`${day}, ${clock}`)
+    await page.goto('/observe?tab=background')
+    await expect(page.locator('.list').first()).toContainText(`下次：今天 ${zone === 'Asia/Shanghai' ? '23:00' : '01:00'}`)
     await page.goto('/settings')
     await expect(page.getByText('最近同步', { exact: false })).toContainText(`${day}, ${clock}`)
     await page.getByRole('button', { name: /^ChatGPT 订阅（Codex 登录）/ }).click()

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router'
-import { BookOpen, Search, Settings } from 'lucide-react'
+import { Activity, BookOpen, Search, Settings } from 'lucide-react'
 import { findThing, thingTitle } from '../domain/things'
 import { useStore } from '../store/context'
 import { ShellContext, type ShellApi } from '../store/shell'
@@ -24,7 +24,7 @@ function load(): Persisted {
   return { drafts: {}, agents: {} }
 }
 
-const titles: Record<string, string> = { '/library': '资料库', '/settings': '设置' }
+const titles: Record<string, string> = { '/library': '资料库', '/observe': '观察', '/settings': '设置' }
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
 
 export function Shell() {
@@ -106,6 +106,10 @@ export function Shell() {
             <NavLink to="/library" className={tab} aria-label="资料库">
               <BookOpen size={16} />
               <span className="label">资料库</span>
+            </NavLink>
+            <NavLink to="/observe" className={tab} aria-label="观察">
+              <Activity size={16} />
+              <span className="label">观察</span>
             </NavLink>
             <NavLink to="/settings" className={tab} aria-label="设置">
               <Settings size={16} />

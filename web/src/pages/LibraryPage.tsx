@@ -3,16 +3,16 @@ import { SourceSheet } from '../components/SourceSheet'
 import { ImportSheet } from '../components/ImportSheet'
 import { api, downloadExport } from '../store/api'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Navigate, useSearchParams } from 'react-router'
+import { Link, Navigate, useSearchParams } from 'react-router'
 import { ChevronRight, CircleAlert, Download, History, Info, RotateCw, Search, Trash2, Upload } from 'lucide-react'
 import { Checkbox, Chip } from '../components/controls'
 import { EventTime, Fade, FromLine, Groups, Mentions, ProjectLink, SaidAt, TrustMark, TrustTag } from '../components/Marks'
 import { ConfirmModal, SideSheet } from '../components/Overlay'
 import { NowPanel } from '../components/NowPanel'
 import { UnsureSheet } from '../components/UnsureSheet'
-import { Button, Empty, Progress, Seg, Sheet, Spinner, Switch, Tag } from '../components/ui'
-import { jobStatusLabel, memoryCategoryLabel, memoryKindLabel, memoryTrustLabel, trustOf, sampleStateLabel, sourceStatusLabel, triggerLabel } from '../domain/labels'
-import { formatAgo, formatShortWhen, formatWhen } from '../domain/time'
+import { Button, Empty, Seg, Sheet, Spinner, Switch, Tag } from '../components/ui'
+import { memoryCategoryLabel, memoryKindLabel, memoryTrustLabel, trustOf, sampleStateLabel, sourceStatusLabel } from '../domain/labels'
+import { formatAgo, formatShortWhen } from '../domain/time'
 import type { Memory, MemoryFacet, MemoryGroup, MemoryGroupEntry, MemoryKind, MemoryMention, MemoryTrust, Source, TrainingSample } from '../domain/types'
 import { useStore } from '../store/context'
 import { type MemoryList, useMemory, useMemoryFacets, useMemoryGroups, useMemoryList, useMergedInto, useRequirements, useWholeGroups } from '../store/memories'
@@ -784,12 +784,9 @@ function SourcesTab() {
   const [importing, setImporting] = useState(false)
   const [sourceId, setSourceId] = useState<string | null>(null)
   const [group, setGroup] = useState<Source | null>(null)
-  const { state, dispatch } = useStore()
-  const rank = { running: 0, failed: 1, waiting: 2, queued: 3, done: 4 }
-  const [showDone, setShowDone] = useState(false)
-  const finished = state.jobs.filter((j) => j.status === 'done').length
-  // What is finished is not news: only what is running, waiting or stuck is listed until asked.
-  const jobs = [...state.jobs].filter((j) => showDone || j.status !== 'done').sort((a, b) => rank[a.status] - rank[b.status])
+  const { state } = useStore()
+  const failed = state.jobs.filter((j) => j.status === 'failed').length
+  const active = state.jobs.filter((j) => j.status === 'running' || j.status === 'queued' || j.status === 'waiting').length
   return (
     <div className="stack">
       <div className="spread">
@@ -826,40 +823,21 @@ function SourcesTab() {
         ))}
       </div>
 
-      <Sheet title={<h3>后台在做的事</h3>} aside={<span className="tiny muted">和你的待办分开；重复导入不会产生重复内容</span>}>
-        {jobs.length === 0 && <p className="hall-empty">现在没有在做或卡住的事。</p>}
-        <div className="list">
-          {jobs.map((job) => (
-            <div key={job.id} className="item">
-              <div className="grow stack-sm" style={{ gap: 4 }}>
-                <div className="spread">
-                  <span className="item-title">{job.title}</span>
-                  <Tag tone={jobStatusLabel[job.status].tone}>{jobStatusLabel[job.status].text}</Tag>
-                </div>
-                <div className="meta" style={{ marginTop: 0 }}>
-                  <span>{triggerLabel[job.trigger]}</span>
-                  <span>{job.detail}</span>
-                  {job.nextRunAt && job.status !== 'done' && <span>下次：{formatWhen(job.nextRunAt, state.settings.timezone ?? 'UTC')}</span>}
-                </div>
-                {job.status === 'running' && job.progress !== undefined && <Progress value={job.progress} />}
-                {job.status === 'failed' && (
-                  <div className="row">
-                    {job.recovery && <span className="small">建议：{job.recovery}</span>}
-                    <Button size="sm" icon={<RotateCw size={13} />} onClick={() => dispatch({ type: 'retryJob', id: job.id })}>
-                      重试
-                    </Button>
-                  </div>
-                )}
+      {(failed > 0 || active > 0 || state.jobs.length > 0) && (
+        <Sheet>
+          <div className="setting">
+            <div className="setting-text">
+              <div className="ink">
+                {failed > 0 ? `后台处理有 ${failed} 项失败` : active > 0 ? `后台正在处理 ${active} 项资料` : '后台处理记录与阶段状态'}
               </div>
+              <div className="small muted">后台任务队列、小时限额与失败重试已统一归入观察面板。</div>
             </div>
-          ))}
-        </div>
-        {finished > 0 && (
-          <button type="button" className="fact add" style={{ margin: '8px 16px 12px' }} aria-expanded={showDone} onClick={() => setShowDone((v) => !v)}>
-            {showDone ? '收起已完成的' : `已完成 ${finished} 项，点开看`}
-          </button>
-        )}
-      </Sheet>
+            <Link className="btn btn-sm" to="/observe?tab=background">
+              去观察面板查看
+            </Link>
+          </div>
+        </Sheet>
+      )}
     </div>
   )
 }

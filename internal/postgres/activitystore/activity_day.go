@@ -42,7 +42,9 @@ const activityDayPage = 500
 // cost and costKnown false; its held reservation is shown separately.
 const activityDaySQL = `WITH calls AS (
  SELECT c.id,c.execution_id,c.root_execution_id,c.causation_id,c.created_at AS at,c.function_name,c.stage,c.outcome,c.error_code,c.accounting_state,
-        c.provider_id,c.model,c.retry_of_id,c.actual_mode->'unsupportedFallback' AS fallback,
+        c.provider_id,c.model,c.prompt_name,c.usage_id,c.attempt_number,c.attempt_limit,c.recovery_state,c.recovery_reason,c.retry_of_id,
+        c.actual_mode->'unsupportedFallback' AS fallback,
+        c.actual_mode->>'applicationOutcome' AS app_outcome,c.actual_mode->>'applicationReason' AS app_reason,
         coalesce(u.cost,CASE WHEN c.accounting_state='not_reserved' THEN 0 END) AS cost,coalesce(u.cost_estimated,false) AS cost_estimated,u.input_tokens,u.output_tokens,(to_jsonb(u)->>'duration_ms')::bigint AS duration_ms,
         CASE WHEN c.accounting_state IN ('held','reserved','pending','failed') THEN b.reserved_cost END AS held
  FROM model_calls c
@@ -57,8 +59,10 @@ const activityDaySQL = `WITH calls AS (
 ), events AS (
  SELECT at,'call' AS kind,id::text AS event_id,execution_id::text AS execution_id,root_execution_id::text AS root_execution_id,function_name AS function,outcome,
         stage AS summary,error_code AS reason,cost,cost IS NOT NULL AS cost_known,
-        jsonb_strip_nulls(jsonb_build_object('provider',provider_id,'model',model,'accounting',accounting_state,'inputTokens',input_tokens,'outputTokens',output_tokens,
-          'durationMs',duration_ms,'costEstimated',NULLIF(cost_estimated,false),'heldReservation',held,'retryOf',retry_of_id,'cause',causation_id,'unsupportedFallback',fallback)) AS evidence
+        jsonb_strip_nulls(jsonb_build_object('provider',provider_id,'model',model,'prompt',prompt_name,'usageId',usage_id,'accounting',accounting_state,'inputTokens',input_tokens,'outputTokens',output_tokens,
+          'durationMs',duration_ms,'costEstimated',NULLIF(cost_estimated,false),'heldReservation',held,'retryOf',retry_of_id,'cause',causation_id,'unsupportedFallback',fallback,
+          'attempt',CASE WHEN attempt_number>1 OR recovery_state<>'active' THEN attempt_number END,'attemptLimit',CASE WHEN attempt_number>1 OR recovery_state<>'active' THEN attempt_limit END,
+          'recoveryState',NULLIF(recovery_state,'active'),'recoveryReason',NULLIF(recovery_reason,''),'applicationOutcome',app_outcome,'applicationReason',NULLIF(app_reason,''))) AS evidence
  FROM calls
  UNION ALL
  SELECT at,'usage',id::text,execution_id::text,execution_id::text,purpose,'recorded','','no_call_record',cost,true,
@@ -68,7 +72,8 @@ const activityDaySQL = `WITH calls AS (
  SELECT a.created_at,'action',a.id::text,t.request_id::text,t.request_id::text,a.source,
         CASE WHEN a.undone_at IS NOT NULL THEN 'undone' ELSE 'executed' END,
         a.summary,'',NULL::numeric,false,
-        jsonb_strip_nulls(jsonb_build_object('changes',jsonb_array_length(a.changes),'undoOf',a.undo_of,'undoneAt',a.undone_at,'turn',a.turn_id))
+        jsonb_strip_nulls(jsonb_build_object('changes',jsonb_array_length(a.changes),'undoOf',a.undo_of,'undoneAt',a.undone_at,'expiredAt',a.expired_at,'turn',a.turn_id,'thing',t.thing_id,
+          'items',(SELECT jsonb_agg(DISTINCT ch->>'id') FROM jsonb_array_elements(a.changes) ch WHERE ch->>'table'='work_items')))
  FROM action_log a LEFT JOIN desk_turns t ON (t.owner_id,t.id)=(a.owner_id,a.turn_id)
  WHERE a.owner_id=$1 AND a.created_at>=$2 AND a.created_at<$3
  UNION ALL

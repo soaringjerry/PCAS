@@ -93,13 +93,13 @@ No production code outside `internal/modelcall` calls a provider.
 
 `GET /v1/workspace/activity/day?date=YYYY-MM-DD` answers what the system did for the owner on one local day, what it cost, and the recorded reasons.
 Only the owner can read it. Without `date` it reads the current local day. `limit` and `offset` page the events.
-One SQL statement, `activityDaySQL` in [the storage package](../internal/postgres/activity_day.go), reads the authoritative records. It writes nothing.
+One SQL statement, `activityDaySQL` in [the activity storage package](../internal/postgres/activitystore/activity_day.go), reads the authoritative records. It writes nothing.
 
 | Kind | Source | Content |
 |---|---|---|
-| `call` | `model_calls` with its usage | Function, stage, outcome, error code, provider, cost, and the cause of a nested call. |
+| `call` | `model_calls` with its usage | Function, stage, outcome, error code, provider, prompt name, usage ID, retry and recovery state, cost, and the cause of a nested call. |
 | `usage` | `model_usage` without a call record | Usage that was written before the call journal. Its reason is `no_call_record`. |
-| `action` | `action_log` | An applied change. The outcome is `undone` when it was reversed. |
+| `action` | `action_log` | An applied change, its affected item IDs, and expiration state. The outcome is `undone` when it was reversed. |
 | `undo` | `action_log.undone_at` | A reversal on the day when it happened, linked to its action. |
 | `run` | `agent_runs` | Deputy work that was created on the day, with its status and error. |
 | `stage` | `background_stage_events` | A background outcome: success, deferred, failure, or overflow, with its reason and count. |
@@ -109,6 +109,7 @@ Cost is summed once for each invocation and is never joined to actions.
 A call that reserved nothing costs zero. Another call without recorded usage has an unknown cost, and its held reservation is shown separately.
 The response reports the events that a page leaves out, and its totals always cover the whole day.
 The response also lists the links that the records do not contain. The query does not derive a link from similar times.
+The web observation panel at `/observe` renders this read model alongside `/v1/workspace/usage`, `/v1/workspace/usage/calls`, and `/v1/workspace/background`.
 The [first live readings](evaluations/2026-10-11-activity-baseline.md) give measured counts for two days.
 
 ### Background Call Evidence

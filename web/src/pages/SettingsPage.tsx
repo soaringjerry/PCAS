@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { NotifySettings, type NotifySummary } from '../components/NotifySettings'
 import { TimezoneSettings } from '../components/TimezoneSettings'
-import { MemoryActivitySettings } from '../components/MemoryActivitySettings'
 import { ConnectorSettings } from '../components/ConnectorSettings'
 import { memoryKindLabel } from '../domain/labels'
 import { spentToday } from '../domain/lines'
@@ -369,12 +368,6 @@ export function SettingsPage() {
             <Setting title="退出 PCAS" now="只退出这个浏览器。资料都还在，ChatGPT 和 Telegram 的连接不受影响。">
               <Button size="sm" onClick={async () => { await api('/v1/session', undefined, 'DELETE'); window.location.reload() }}>退出</Button>
             </Setting>
-          </Sheet>
-        </Group>
-
-        <Group id="settings-advanced" title="高级">
-          <Sheet>
-            <MemoryActivitySettings />
           </Sheet>
         </Group>
       </div>

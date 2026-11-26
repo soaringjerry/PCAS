@@ -108,11 +108,13 @@ func TestDayActivityAnswersWhatHappenedItsCostAndItsReasons(t *testing.T) {
 	if math.Abs(day.Cost.Settled-(secretaryCost+0.0005)) > 1e-9 || day.Cost.Invocations != 3 || day.Cost.UnknownCostInvocations != 1 || day.Cost.HeldReservations != 0.02 {
 		t.Fatalf("%+v secretary=%g", day.Cost, secretaryCost)
 	}
-	var undone, undo, deferral, unknown, linked bool
+	var undone, undo, deferral, unknown, linked, hasItem, hasUsage bool
 	for _, e := range day.Events {
 		switch {
 		case e.Kind == "action" && e.EventID == *turn.Receipts[0].ActionID:
+			items, _ := e.Evidence["items"].([]any)
 			undone = e.Outcome == "undone" && e.ExecutionID != nil && *e.ExecutionID == request.RequestID
+			hasItem = len(items) == 1 && items[0] != ""
 		case e.Kind == "undo":
 			undo = e.Evidence["undoOf"] == *turn.Receipts[0].ActionID
 		case e.Kind == "stage":
@@ -121,10 +123,13 @@ func TestDayActivityAnswersWhatHappenedItsCostAndItsReasons(t *testing.T) {
 			unknown = e.Cost == nil && !e.CostKnown && e.Outcome == "started" && e.Evidence["heldReservation"] == 0.02
 		case e.Kind == "call" && e.Function == "secretary":
 			linked = e.ExecutionID != nil && *e.ExecutionID == request.RequestID && e.CostKnown && e.Outcome == "returned"
+			prompt, _ := e.Evidence["prompt"].(string)
+			usageID, _ := e.Evidence["usageId"].(string)
+			hasUsage = prompt != "" && usageID != ""
 		}
 	}
-	if !undone || !undo || !deferral || !unknown || !linked {
-		t.Fatal("an event lost its outcome, reason, link, or cost state", undone, undo, deferral, unknown, linked)
+	if !undone || !undo || !deferral || !unknown || !linked || !hasItem || !hasUsage {
+		t.Fatal("an event lost its outcome, reason, link, or cost state", undone, undo, deferral, unknown, linked, hasItem, hasUsage)
 	}
 	// A short page reports what it leaves out, and the totals still cover the day.
 	page := readDayActivity(t, s, scope, today, 2, 1)

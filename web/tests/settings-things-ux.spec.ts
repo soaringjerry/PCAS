@@ -122,7 +122,7 @@ test('settings open with the current state and the everyday groups, and keep key
   // A saved key is reported as configured, never as connected or verified.
   await expect(overview.getByRole('button', { name: /^模型/ })).toContainText('1 个已配置')
   await expect(overview.getByRole('button', { name: /^今天的 API 预算/ })).toContainText('¥3.40 / ¥10')
-  await expect(page.getByRole('heading', { level: 2 })).toHaveText(['时间和地点', '提醒', '模型和预算', '资料', '数据', '高级'])
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText(['时间和地点', '提醒', '模型和预算', '资料', '数据'])
   // What used to be spread across the page: no key, URL, token or price field until a row is opened.
   expect(await page.getByRole('textbox').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))).toEqual(['所在城市', '每日额度'])
   await expect(page.locator('input[type=password], input[type=url]')).toHaveCount(0)
@@ -863,13 +863,9 @@ test('the library lists each origin once; what was said opens as a list that can
   // No internal words, and nothing is tagged unless something is wrong.
   await expect(page.locator('.sources-grid')).not.toContainText(/desk|actions|已连接|原文已保存/)
   await expect(cards.nth(2)).toContainText('部分处理未完成')
-  // Finished background work is counted, not listed, until asked for.
-  const work = page.locator('.list').last()
-  await expect(work).toContainText('从资料里读出要点')
-  await expect(work).not.toContainText('建立检索索引')
-  await page.getByRole('button', { name: '已完成 1 项，点开看' }).click()
-  await expect(work).toContainText('建立检索索引')
-  await page.getByRole('button', { name: '收起已完成的' }).click()
+  // Background job management lives in the Observation Panel; the library links straight there.
+  await expect(page.getByText('后台处理有 1 项失败')).toBeVisible()
+  await expect(page.getByRole('link', { name: '去观察面板查看' })).toHaveAttribute('href', '/observe?tab=background')
 
   await page.getByRole('button', { name: '查看：跟秘书说的话，共 61 条' }).click()
   const sheet = page.getByRole('dialog')

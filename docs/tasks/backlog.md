@@ -17,14 +17,14 @@ Examine the current code path and recorded result before assigning or closing an
 | 3 | Undo of adoption does not reverse memory reinforcement. | Record the intended activity effect of undo. Test that effect. | Phase 1 review. |
 | 4 | Adoption records stay after undo. | Examine cleanup and any protection effect. | Phase 1 review. |
 | 8 | The one-sentence card reply relies on the prompt. | Observe real replies before adding a program limit. | Secretary acceptance. |
-| 9, 31 | Internal controls stay in library and settings. | Move applicable controls when the observation panel is delivered. | [Interface principles](../design/principles.md). |
+| 9, 31 | Internal controls stay in library and settings. | Background jobs and memory-activity controls moved to `/observe` in Phase 4 Batch 1; verify remaining library/settings controls on live deployment before closing. | [Interface principles](../design/principles.md). |
 | 10 | Action receipt sources enter indexing and summaries. | Examine retrieval interference and actual processing use. | Postlaunch review. |
 | 14 | Previous content from connected inputs can lack historical classification. | Examine the connector-to-extraction path before enabling a new native input. | Archive-import review. |
 | 15 | Imported relative plans can lose their source statement time. | Do a separate check of statement time and event time. | Archive-import review. |
 | 17 | Historical stabilization live checks are incomplete in the record. | Confirm remaining scope. The previous one-day trial is not a new development prerequisite. | [Stabilization entry](stabilization/README.md). |
 | 20 | Source titles can expose generated internal labels. | Examine titles through the actual source-view path. | Phase 2 source-view acceptance. |
 | 25 | A cancellation test has an intermittent timeout. | Distinguish a timing-sensitive test from a product race. | Phase 2 CI record. |
-| 26 | The activity selector lists only recent memories. | Examine search and pagination when moving it to the observation panel. | Phase 2 interface acceptance. |
+| 26 | The activity selector lists only recent memories. | Server-side search and pagination implemented in `/observe?tab=memory` via `useMemoryList`; verify against live dataset before closing. | Phase 2 interface acceptance. |
 | 27 | Bulk extraction concurrency limits throughput. | Measure call capacity, rate limits, and secretary interference before changing concurrency. | Import review. |
 | 28 | The previous task requested conversation-level extraction. | Phase 2 batch 4b reports delivery. Test the disposition before closing this stale row. | [Batch 4b acceptance](../evaluations/2026-10-03-phase2-batch4b-acceptance.md). |
 | 32, 62 | Previous migration fixtures impose compatibility branches on current production writes. | Examine isolated migration coverage and remove unsupported fixture dependencies. | [Migration tests](../../internal/postgres/phase2_b1_migration_test.go). |

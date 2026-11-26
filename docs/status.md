@@ -21,7 +21,7 @@ The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scope
 | Date closure and background date review | Implemented paths. | [Phase 3.6 rollout](evaluations/2026-10-08-phase3_6-rollout.md). Continue to observe background judgment and undo quality. |
 | Generic input and AI archives | Implemented paths. | [Input reference](connectors.md). Generic input paths do not include native email, calendar, Yufolo, or other IM adapters. |
 | Model providers and manual selection | Implemented paths. | [Deployment](deployment.md). Automatic model selection is a target. |
-| Observation panel | Partial controls; day activity query implemented. | [Day activity query](memory-service.md#day-activity) is implemented. Library and settings contain partial memory, work, and cost views. The visual observation panel stays for Phase 4. |
+| Observation panel | Implemented paths (Phase 4 Batch 1); live deployment acceptance open. | Web panel at `/observe` ([ObservePage](../web/src/pages/ObservePage.tsx)) renders [day activity](memory-service.md#day-activity), usage charts, call references, background stage health with job retry, searchable memory-activity tuning, and agent access controls. Background job list and memory-activity controls moved out of library and settings. |
 | Habit statistics, household finance, and external correspondence | Product targets. | Some input and learning hooks exist. These functions are targets. |
 | Training and personal models | Sample selection and export exist. | Training and model feedback into the active pool stay targets. |
 | Native phone application and screen capture | Product targets. | Web/PWA and Telegram do not include background GPS or microphone collection. |

@@ -3,6 +3,7 @@ import { Shell } from './components/Shell'
 import { HallPage } from './pages/HallPage'
 import { FormerAbout, LibraryPage } from './pages/LibraryPage'
 import { NotFound } from './pages/NotFound'
+import { ObservePage } from './pages/ObservePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { ThingPage } from './pages/ThingPage'
 
@@ -18,6 +19,7 @@ export function App() {
         <Route path="library" element={<LibraryPage />} />
         {/* The former page of its own; its links land on the same memories in the library. */}
         <Route path="about" element={<FormerAbout />} />
+        <Route path="observe" element={<ObservePage />} />
         <Route path="settings" element={<SettingsPage />} />
         {retired.map((p) => (
           <Route key={p} path={p} element={<Navigate to="/" replace />} />

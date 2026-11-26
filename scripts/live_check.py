@@ -62,7 +62,7 @@ try:
         out = call('POST', '/v1/desk/turn', body)
         conversation = out.get('conversationId', conversation)
         turn = out['turn']
-        calls = sql("SELECT coalesce(json_agg(json_build_object('function',function_name,'stage',stage,'provider',provider_id,'outcome',outcome,'accounting',accounting_state,'error',error_code,'fallback',actual_mode->'unsupportedFallback','schema',schema_name) ORDER BY created_at),'[]') FROM model_calls WHERE owner_id='%s' AND (execution_id='%s' OR root_execution_id='%s' OR causation_id='%s')" % (owner, request_id, request_id, request_id))
+        calls = sql("SELECT coalesce(json_agg(json_build_object('function',function_name,'stage',stage,'provider',provider_id,'outcome',outcome,'accounting',accounting_state,'error',error_code,'recovery',recovery_state,'fallback',actual_mode->'unsupportedFallback','schema',schema_name) ORDER BY created_at),'[]') FROM model_calls WHERE owner_id='%s' AND (execution_id='%s' OR root_execution_id='%s' OR causation_id='%s')" % (owner, request_id, request_id, request_id))
         entry = {'label': label, 'seconds': round(time.monotonic() - started, 1), 'reply': turn.get('reply'), 'receipts': [{k: r.get(k) for k in ('op', 'status', 'text')} for r in turn.get('receipts') or []], 'notices': out.get('notices'), 'calls': calls}
         report['turns'].append(entry)
         answers = [c for c in calls if c['stage'] == 'answer']
@@ -70,6 +70,9 @@ try:
             failures.append(label + ': the answer call is not one settled Codex call without fallback')
         if any(c['outcome'] in ('prepared', 'started') or c['accounting'] in ('pending', 'failed') for c in calls):
             failures.append(label + ': a call is unfinished')
+        for c in calls:
+            if c.get('recovery') != 'replaced' and c['outcome'] in ('failed', 'unknown'):
+                failures.append('%s: %s/%s call %s (%s)' % (label, c['function'], c['stage'], c['outcome'], c.get('error') or 'no_error_code'))
         if any(r.get('status') == 'failed' for r in turn.get('receipts') or []):
             failures.append(label + ': a receipt failed')
         if label == 'answer' and (turn.get('reply') or '').strip().strip('。.!！') != '运行正常':
@@ -94,13 +97,16 @@ try:
                 if len(runs) != 1 or runs[0]['status'] != 'done':
                     failures.append('delegation: the run did not finish as done')
                 else:
-                    deputy = sql("SELECT coalesce(json_agg(json_build_object('function',function_name,'stage',stage,'provider',provider_id,'outcome',outcome,'accounting',accounting_state,'error',error_code) ORDER BY created_at),'[]') FROM model_calls WHERE owner_id='%s' AND root_execution_id='%s'" % (owner, runs[0]['id']))
+                    deputy = sql("SELECT coalesce(json_agg(json_build_object('function',function_name,'stage',stage,'provider',provider_id,'outcome',outcome,'accounting',accounting_state,'error',error_code,'recovery',recovery_state) ORDER BY created_at),'[]') FROM model_calls WHERE owner_id='%s' AND root_execution_id='%s'" % (owner, runs[0]['id']))
                     entry['deputyCalls'] = deputy
                     answers = [c for c in deputy if c['function'] == 'deputy' and c['stage'] == 'answer']
                     if not answers or any(c['outcome'] != 'returned' or c['accounting'] != 'settled' for c in answers):
                         failures.append('delegation: the deputy call is not returned and settled')
                     if any(c['outcome'] in ('prepared', 'started') or c['accounting'] in ('pending', 'failed') for c in deputy):
                         failures.append('delegation: a deputy call is unfinished')
+                    for c in deputy:
+                        if c.get('recovery') != 'replaced' and c['outcome'] in ('failed', 'unknown'):
+                            failures.append('delegation: %s/%s call %s (%s)' % (c['function'], c['stage'], c['outcome'], c.get('error') or 'no_error_code'))
 finally:
     try:
         report['cleanup'] = call('DELETE', '/v1/desk/smoke/' + smoke)

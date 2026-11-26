@@ -311,6 +311,16 @@
   word-break: break-word;
 }
 
+.obs-dead-ref {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  color: var(--label-3);
+  font-size: 12px;
+}
+
 /* ---------- Background stage health ---------- */
 
 .obs-stage-row {

@@ -1,4 +1,4 @@
-import { formatCost, formatDurationMs, formatTokens, functionLabel, type UsageDay } from '../../domain/observe'
+import { formatCost, formatDurationMs, formatTokens, functionLabel, type UsageDay, type UsageTiming } from '../../domain/observe'
 import { Empty, Sheet } from '../ui'
 
 export interface DailyCostPoint {
@@ -19,6 +19,7 @@ export interface PurposeAggregate {
   estimatedCostCalls: number
   medianMs: number | null
   maxMs: number | null
+  isRangeMedian?: boolean
 }
 
 /** Vertical SVG bar chart of daily settled/recorded cost. Clicking a day opens that day's activity stream. */
@@ -147,7 +148,8 @@ export function PurposeBreakdownChart({
               </div>
               <div className="tiny muted">
                 输入 {formatTokens(item.inputTokens)} · 输出 {formatTokens(item.outputTokens)}
-                {item.medianMs !== null && ` · 中位耗时 ${formatDurationMs(item.medianMs)}`}
+                {item.medianMs !== null &&
+                  ` · ${item.isRangeMedian === false ? '日均中位耗时' : '中位耗时'} ${formatDurationMs(item.medianMs)}`}
                 {item.maxMs !== null && ` · 最慢 ${formatDurationMs(item.maxMs)}`}
               </div>
             </div>
@@ -158,44 +160,68 @@ export function PurposeBreakdownChart({
   )
 }
 
-/** Aggregates multi-day usage timings by kind and tier. */
-export function ExecutionTimingSheet({ days }: { days: UsageDay[] }) {
-  const rows = new Map<string, { kind: string; tier: string; executions: number; totalMax: number | null; modelMax: number | null; totalMedians: number[] }>()
-  for (const day of days) {
-    for (const t of day.timings ?? []) {
-      const key = `${t.kind}:${t.tier}`
-      const cur = rows.get(key) ?? { kind: t.kind, tier: t.tier, executions: 0, totalMax: null, modelMax: null, totalMedians: [] }
-      cur.executions += t.executions
-      if (t.totalMs.max !== null) cur.totalMax = cur.totalMax === null ? t.totalMs.max : Math.max(cur.totalMax, t.totalMs.max)
-      if (t.modelMs.max !== null) cur.modelMax = cur.modelMax === null ? t.modelMs.max : Math.max(cur.modelMax, t.modelMs.max)
-      if (t.totalMs.median !== null) cur.totalMedians.push(t.totalMs.median)
-      rows.set(key, cur)
-    }
-  }
-  const list = [...rows.values()]
+/** Displays multi-day execution timings using true range medians when supplied by the server. */
+export function ExecutionTimingSheet({ days, rangeTimings }: { days: UsageDay[]; rangeTimings?: UsageTiming[] }) {
+  const list =
+    rangeTimings && rangeTimings.length > 0
+      ? rangeTimings.map((t) => ({
+          kind: t.kind,
+          tier: t.tier,
+          executions: t.executions,
+          medianMs: t.totalMs.median,
+          isRangeMedian: true,
+          totalMax: t.totalMs.max,
+          modelMax: t.modelMs.max,
+        }))
+      : (() => {
+          const rows = new Map<
+            string,
+            { kind: string; tier: string; executions: number; totalMax: number | null; modelMax: number | null; totalMedians: number[] }
+          >()
+          for (const day of days) {
+            for (const t of day.timings ?? []) {
+              const key = `${t.kind}:${t.tier}`
+              const cur = rows.get(key) ?? { kind: t.kind, tier: t.tier, executions: 0, totalMax: null, modelMax: null, totalMedians: [] }
+              cur.executions += t.executions
+              if (t.totalMs.max !== null) cur.totalMax = cur.totalMax === null ? t.totalMs.max : Math.max(cur.totalMax, t.totalMs.max)
+              if (t.modelMs.max !== null) cur.modelMax = cur.modelMax === null ? t.modelMs.max : Math.max(cur.modelMax, t.modelMs.max)
+              if (t.totalMs.median !== null) cur.totalMedians.push(t.totalMs.median)
+              rows.set(key, cur)
+            }
+          }
+          return [...rows.values()].map((r) => ({
+            kind: r.kind,
+            tier: r.tier,
+            executions: r.executions,
+            medianMs: r.totalMedians.length ? r.totalMedians.reduce((a, b) => a + b, 0) / r.totalMedians.length : null,
+            isRangeMedian: false,
+            totalMax: r.totalMax,
+            modelMax: r.modelMax,
+          }))
+        })()
+
   if (list.length === 0) return null
   return (
     <Sheet title={<h3>执行耗时分布</h3>} aside={<span className="tiny muted">按角色与档位汇总</span>}>
       <div className="list">
-        {list.map((r) => {
-          const avgMed = r.totalMedians.length ? r.totalMedians.reduce((a, b) => a + b, 0) / r.totalMedians.length : null
-          return (
-            <div key={`${r.kind}:${r.tier}`} className="item">
-              <div className="grow">
-                <div className="item-title">
-                  {functionLabel(r.kind)}
-                  {r.tier && <span className="muted aside">档位：{r.tier}</span>}
-                </div>
-                <div className="meta">
-                  <span>{r.executions} 次执行</span>
-                  <span>日均中位总耗时 {formatDurationMs(avgMed)}</span>
-                  <span>最慢总耗时 {formatDurationMs(r.totalMax)}</span>
-                  <span>最慢模型耗时 {formatDurationMs(r.modelMax)}</span>
-                </div>
+        {list.map((r) => (
+          <div key={`${r.kind}:${r.tier}`} className="item">
+            <div className="grow">
+              <div className="item-title">
+                {functionLabel(r.kind)}
+                {r.tier && <span className="muted aside">档位：{r.tier}</span>}
+              </div>
+              <div className="meta">
+                <span>{r.executions} 次执行</span>
+                <span>
+                  {r.isRangeMedian ? '中位总耗时' : '日均中位总耗时'} {formatDurationMs(r.medianMs)}
+                </span>
+                <span>最慢总耗时 {formatDurationMs(r.totalMax)}</span>
+                <span>最慢模型耗时 {formatDurationMs(r.modelMax)}</span>
               </div>
             </div>
-          )
-        })}
+          </div>
+        ))}
       </div>
     </Sheet>
   )

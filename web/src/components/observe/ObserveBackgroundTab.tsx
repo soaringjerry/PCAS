@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { AlertTriangle, ArrowUpRight, RotateCw } from 'lucide-react'
+import { ArrowUpRight, RotateCw } from 'lucide-react'
 import { jobStatusLabel, sourceStatusLabel, triggerLabel } from '../../domain/labels'
 import { functionLabel, reasonLabel } from '../../domain/observe'
 import { formatAgo, formatWhen } from '../../domain/time'
 import { useStore } from '../../store/context'
 import { useBackgroundHealth } from '../../store/observe'
 import { SourceSheet } from '../SourceSheet'
-import { Button, Empty, Progress, Sheet, Spinner, Tag } from '../ui'
+import { Button, Empty, Fold, Progress, Sheet, Spinner, Tag } from '../ui'
 
 const jobRank = { failed: 0, running: 1, waiting: 2, queued: 3, done: 4 } as const
 
@@ -39,7 +39,7 @@ export function ObserveBackgroundTab() {
   return (
     <div className="stack">
       <div className="obs-toolbar">
-        <span className="small muted">最近 1 小时各后台阶段执行情况与队列恢复；延后等待与真实失败分开显示。</span>
+        <span className="small muted">最近 1 小时各后台阶段执行情况与队列恢复；延后等待、正常预算裁剪与真实失败分开显示。</span>
         <Button size="sm" variant="quiet" icon={<RotateCw size={13} />} onClick={health.reload}>
           刷新健康状态
         </Button>
@@ -61,12 +61,16 @@ export function ObserveBackgroundTab() {
           <span className="v">{totalDeferred} 次</span>
           <span className="d">受小时限额或日预算保护</span>
         </div>
-        <div className={`obs-tile${totalStageFailures > 0 || totalOverflow > 0 ? ' danger' : ''}`}>
-          <span className="k">近 1 小时阶段失败 / 溢出</span>
-          <span className="v">
-            {totalStageFailures} / {totalOverflow}
+        <div className={`obs-tile${totalStageFailures > 0 ? ' danger' : ''}`}>
+          <span className="k">近 1 小时阶段失败</span>
+          <span className="v">{totalStageFailures} 次</span>
+          <span className="d">
+            {totalOverflow > 0
+              ? `另有 ${totalOverflow} 次正常预算裁剪`
+              : state.organize
+                ? `整理进度 ${state.organize.done}/${state.organize.total}`
+                : '按阶段限流运行'}
           </span>
-          <span className="d">{state.organize ? `整理进度 ${state.organize.done}/${state.organize.total}` : '按阶段限流运行'}</span>
         </div>
       </div>
 
@@ -76,16 +80,6 @@ export function ObserveBackgroundTab() {
           <Button size="sm" onClick={health.reload}>
             重试
           </Button>
-        </div>
-      )}
-
-      {health.data && health.data.overflow.length > 0 && (
-        <div className="callout callout-danger" role="alert">
-          <AlertTriangle size={15} />
-          <div>
-            最近 1 小时出现超出上限记录：
-            {health.data.overflow.map((o) => `${functionLabel(o.stage)}（${reasonLabel(o.reason)} × ${o.count}）`).join('；')}
-          </div>
         </div>
       )}
 
@@ -164,7 +158,7 @@ export function ObserveBackgroundTab() {
                         <Tag tone={s.success > 0 ? 'success' : 'neutral'}>成功 {s.success}</Tag>
                         <Tag tone={s.deferred > 0 ? 'warning' : 'neutral'}>延后等待 {s.deferred}</Tag>
                         <Tag tone={s.failure > 0 ? 'danger' : 'neutral'}>失败 {s.failure}</Tag>
-                        {s.overflow > 0 && <Tag tone="danger">溢出 {s.overflow}</Tag>}
+                        {s.overflow > 0 && <Tag tone="neutral">预算裁剪 {s.overflow}</Tag>}
                       </div>
                     </div>
                     <div className="obs-stage-budget">
@@ -178,7 +172,7 @@ export function ObserveBackgroundTab() {
                         延后原因：{deferredEntries.map(([r, n]) => `${reasonLabel(r)}（${n}）`).join('、')}
                       </div>
                     )}
-                    {s.lastFailure && <div className="small warn-text">最近失败：{reasonLabel(s.lastFailure)}</div>}
+                    {s.lastFailure && <div className="small warn-text">近 1 小时最近失败：{reasonLabel(s.lastFailure)}</div>}
                     {(s.withdrawn.deadlines > 0 || s.withdrawn.requirements > 0) && (
                       <div className="tiny muted">
                         重整理撤回：期限 {s.withdrawn.deadlines} · 助手要求 {s.withdrawn.requirements}
@@ -191,6 +185,20 @@ export function ObserveBackgroundTab() {
           </div>
         )}
       </Sheet>
+
+      {health.data && health.data.overflow.length > 0 && (
+        <Sheet>
+          <Fold title="近 1 小时预算与上下文裁剪记录" summary={`${totalOverflow} 次（正常上下文配额保护，非异常）`}>
+            <ul className="obs-gaps">
+              {health.data.overflow.map((o, i) => (
+                <li key={`${o.stage}:${o.reason}:${i}`}>
+                  {functionLabel(o.stage)}：{reasonLabel(o.reason)}（× {o.count}）
+                </li>
+              ))}
+            </ul>
+          </Fold>
+        </Sheet>
+      )}
 
       {attentionSources.length > 0 && (
         <Sheet

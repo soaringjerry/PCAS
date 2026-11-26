@@ -14,9 +14,12 @@ import {
   functionLabel,
   gapLabel,
   isEventDeferred,
+  isEventOverflow,
   isEventProblem,
+  isTerminalRecovery,
   outcomeBadge,
   reasonLabel,
+  recoveryStateLabel,
   shiftCivilDate,
   type ActivityEvent,
   type ActivityEventKind,
@@ -51,14 +54,24 @@ export function ObserveActivityTab({
   const events = useMemo(() => data?.events ?? [], [data])
 
   const counts = useMemo(() => {
+    if (data?.summary) {
+      return {
+        failures: data.summary.failures,
+        deferrals: data.summary.deferrals,
+        overflows: data.summary.overflows,
+        partial: false,
+      }
+    }
     let failures = 0
     let deferrals = 0
+    let overflows = 0
     for (const e of events) {
       if (isEventProblem(e)) failures++
       if (isEventDeferred(e)) deferrals++
+      if (isEventOverflow(e)) overflows++
     }
-    return { failures, deferrals }
-  }, [events])
+    return { failures, deferrals, overflows, partial: (data?.omittedEvents ?? 0) > 0 }
+  }, [data, events])
 
   const visibleEvents = useMemo(() => {
     return events.filter((e) => {
@@ -190,12 +203,13 @@ export function ObserveActivityTab({
               <span className="d">{data.cost.heldReservations > 0 ? '额度保护，非实际账单' : '当前无未结算预占'}</span>
             </div>
             <div className={`obs-tile${counts.failures > 0 ? ' danger' : counts.deferrals > 0 ? ' warn' : ''}`}>
-              <span className="k">异常与延后</span>
+              <span className="k">异常与延后{counts.partial ? '（已加载页）' : ''}</span>
               <span className="v">
                 {counts.failures > 0 ? `${counts.failures} 项异常` : counts.deferrals > 0 ? `${counts.deferrals} 项延后` : '全部正常'}
               </span>
               <span className="d">
                 失败/未知 {counts.failures} · 延后等待 {counts.deferrals}
+                {counts.overflows > 0 ? ` · 预算裁剪 ${counts.overflows}` : ''}
               </span>
             </div>
           </div>
@@ -343,8 +357,12 @@ function ActivityRow({
             <Tag tone={event.kind === 'call' ? 'info' : 'neutral'}>{activityKindLabel[event.kind]}</Tag>
             <Tag tone={badge.tone}>{badge.text}</Tag>
             <span className="item-title">{headline}</span>
-            {ev.unsupportedFallback !== undefined && <Tag tone="warning">降级模式</Tag>}
-            {ev.recoveryState && <Tag tone="danger">恢复：{ev.recoveryState}</Tag>}
+            {ev.unsupportedFallback !== undefined && <Tag tone="info">兼容模式</Tag>}
+            {ev.recoveryState && (
+              <Tag tone={isTerminalRecovery(ev.recoveryState) ? 'danger' : 'neutral'}>
+                {recoveryStateLabel(ev.recoveryState)}
+              </Tag>
+            )}
           </div>
           <div className="row" style={{ gap: 8 }}>
             {(event.kind === 'call' || event.kind === 'usage') && (
@@ -402,9 +420,16 @@ function ActivityRow({
           )}
           {thingIds.map((id) => {
             const label = resolveThingTitle(id)
+            if (!label) {
+              return (
+                <span key={id} className="obs-dead-ref">
+                  原事项已删除（{id.slice(0, 6)}）
+                </span>
+              )
+            }
             return (
               <Link key={id} className="obs-link-pill" to={`/t/${id}`}>
-                {label ? `事项：${label}` : `打开事项 ${id.slice(0, 6)}`}
+                事项：{label}
                 <ArrowUpRight size={12} />
               </Link>
             )

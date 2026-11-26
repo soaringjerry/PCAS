@@ -7,12 +7,11 @@ import { memoryKindLabel } from '../domain/labels'
 import { spentToday } from '../domain/lines'
 import { clockTime } from '../domain/time'
 import type { Agent, MemoryKind } from '../domain/types'
-import { ChevronDown, Clock } from 'lucide-react'
+import { Clock } from 'lucide-react'
 import { Button, Progress, SaveMark, Sheet, Switch, Tag, type SaveState } from '../components/ui'
-import { Chip, Select, Stepper } from '../components/controls'
+import { Select, Stepper } from '../components/controls'
 import { useToast } from '../store/toast'
 import { useStore } from '../store/context'
-import { useMemoryCount } from '../store/memories'
 import { ChatGPTConnection } from '../components/ChatGPTConnection'
 import { OpenAIConnection } from '../components/OpenAIConnection'
 import { api, downloadExport } from '../store/api'
@@ -178,14 +177,12 @@ function Group({ id, title, note, children }: { id: string; title: string; note?
 
 const channelText = { mcp: 'MCP', api: '按量计费', manual: '不调用模型' } as const
 
-/** One model: whether work may be handed to it, and which memories it is given. */
+/** One model: whether work may be handed to it; memory access rules live in the observation panel. */
 function AgentRow({ agent }: { agent: Agent }) {
   const { dispatch } = useStore()
-  const [open, setOpen] = useState(false)
   const [mark, run] = useSaving()
   const update = (patch: Partial<Agent>) => run(() => dispatch({ type: 'updateAgent', id: agent.id, patch }))
   const kinds = (Object.keys(memoryKindLabel) as MemoryKind[]).filter((k) => agent.memoryKinds.includes(k))
-  const seen = useMemoryCount(agent)
   const scope = kinds.length ? `能看 ${kinds.map((k) => memoryKindLabel[k]).join('、')}${agent.includeInferred ? '，含未确认的推测' : ''}` : '不给它看记忆'
   const use = !agent.enabled
     ? '已停用，秘书和副手不会用它'
@@ -207,39 +204,13 @@ function AgentRow({ agent }: { agent: Agent }) {
         </div>
         <Switch label={`启用 ${agent.name}`} checked={agent.enabled} disabled={mark === 'saving'} onChange={(v) => void update({ enabled: v })} />
       </div>
-      <button type="button" className="scope-toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <div className="scope-toggle" style={{ cursor: 'default' }}>
         <span>记忆范围</span>
-        <span className="muted">{scope}</span>
-        <ChevronDown size={14} aria-hidden />
-      </button>
-      {open && (
-        <div className="scope-body">
-          {agent.note && <p className="small muted">{agent.note}</p>}
-          <div className="row" style={{ gap: 6 }} role="group" aria-label={`${agent.name} 能看到的记忆`}>
-            {(Object.keys(memoryKindLabel) as MemoryKind[]).map((kind) => {
-              const on = agent.memoryKinds.includes(kind)
-              return (
-                <Chip
-                  key={kind}
-                  on={on}
-                  disabled={!agent.enabled || mark === 'saving'}
-                  onToggle={() => void update({ memoryKinds: on ? agent.memoryKinds.filter((k) => k !== kind) : [...agent.memoryKinds, kind] })}
-                >
-                  {memoryKindLabel[kind]}
-                </Chip>
-              )
-            })}
-          </div>
-          <div className="spread">
-            <span className="small">
-              也给还没确认的推测
-              <span className="muted aside">{agent.includeInferred ? '现在：连推测出来、你还没确认的也给' : '现在：只给你确认过或亲口说过的'}</span>
-            </span>
-            <Switch label="包含推测" checked={agent.includeInferred} disabled={!agent.enabled || mark === 'saving'} onChange={(v) => void update({ includeInferred: v })} />
-          </div>
-          <span className="tiny muted">按现在的范围，它最多能用到 {seen} 条记忆。</span>
-        </div>
-      )}
+        <span className="muted grow">{scope}</span>
+        <Link className="btn btn-quiet btn-sm" to="/observe?tab=memory">
+          去观察面板调整
+        </Link>
+      </div>
     </div>
   )
 }

@@ -65,7 +65,7 @@ func (s *Store) ScheduleStatus(ctx context.Context, now time.Time) (int, error) 
 			if err != nil {
 				return err
 			}
-			n, err = enqueueEffortTx(ctx, tx, owner, anchor, now)
+			n, err = workspacestore.EnqueueEffortTx(ctx, tx, owner, anchor, now)
 			count += n
 			return err
 		})

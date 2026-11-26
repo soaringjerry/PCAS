@@ -11,11 +11,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soaringjerry/PCAS/internal/interpretation/organize"
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/kernel"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
+
+type cardRule struct {
+	N         int    `json:"n"`
+	AppliesTo string `json:"appliesTo"`
+}
+type cardOutput struct {
+	Fields    map[string][]int    `json:"fields"`
+	Rules     []cardRule          `json:"rules"`
+	Deadlines []organize.Deadline `json:"deadlines"`
+}
 
 func statusTestMemories(t *testing.T, s *Store, scope memory.Scope, n int) []memory.Ref {
 	t.Helper()

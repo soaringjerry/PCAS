@@ -8,14 +8,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode"
 )
 
-// A domain package holds business rules. It reaches storage through its own
-// interface, so it cannot depend on the PostgreSQL adapter or its driver.
-// Add each package here when its domain leaves the storage package.
+// A domain or adapter package outside internal/app and internal/postgres reaches
+// storage through its own interfaces, so it cannot depend on the PostgreSQL
+// adapter or its driver.
 var domainPackages = []string{
 	"./internal/workspace/...",
 	"./internal/currentstate/...",
@@ -27,6 +29,13 @@ var domainPackages = []string{
 	"./internal/prompts",
 	"./internal/connectors",
 	"./internal/notify",
+	"./internal/httpapi",
+	"./internal/telegram",
+	"./internal/worker",
+	"./internal/memory",
+	"./internal/ai/...",
+	"./internal/blob",
+	"./internal/config",
 }
 
 func TestDomainPackagesDoNotDependOnThePostgreSQLAdapter(t *testing.T) {
@@ -68,25 +77,57 @@ func TestTheKernelDependsOnTheVocabularyOnly(t *testing.T) {
 	}
 }
 
-// A storage package keeps the records of model calls. It must not make a
-// model call: the domain package that owns a flow builds the request and
-// calls the gateway, and internal/app builds the gateway. Add each storage
-// package here when the PostgreSQL adapter is split.
-var storagePackages = []string{"../postgres", "../postgres/kernel", "../postgres/memoryread", "../postgres/deskstore", "../postgres/commandstore", "../postgres/deputystore", "../postgres/usestore", "../postgres/interpstore", "../postgres/workspacestore", "../postgres/intakestore", "../postgres/callstore", "../postgres/statestore", "../postgres/evidencestore", "../postgres/workstore", "../postgres/budgetstore", "../postgres/claimstore", "../postgres/accessstore", "../postgres/sourcestore", "../postgres/actionlog", "../postgres/itemstore", "../postgres/ownerstore", "../postgres/activitystore", "../postgres/schedulestore", "../postgres/usagelog", "../postgres/memorystore"}
+// discoverStoragePackages returns every directory under internal/postgres that
+// contains at least one non-test Go source file. Walking dynamically ensures no
+// newly added storage package can bypass boundary checks.
+func discoverStoragePackages(t *testing.T) []string {
+	t.Helper()
+	seen := map[string]bool{}
+	err := filepath.Walk("../postgres", func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return err
+		}
+		seen[filepath.Dir(path)] = true
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirs := make([]string, 0, len(seen))
+	for dir := range seen {
+		dirs = append(dirs, dir)
+	}
+	sort.Strings(dirs)
+	if len(dirs) == 0 {
+		t.Fatal("no storage packages discovered under ../postgres")
+	}
+	return dirs
+}
+
+func nonTestGoFiles(t *testing.T, dir string) []string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		t.Fatal(dir, err)
+	}
+	files := make([]string, 0, len(matches))
+	for _, file := range matches {
+		if !strings.HasSuffix(file, "_test.go") {
+			files = append(files, file)
+		}
+	}
+	return files
+}
 
 // gatewayCalls are the methods of the gateway that submit a model call.
 var gatewayCalls = map[string]bool{"Call": true, "CallEmbedding": true, "CallVision": true, "CallTranscription": true}
 
+// A storage package keeps the records of model calls. It must not make a
+// model call: the domain package that owns a flow builds the request and
+// calls the gateway, and internal/app builds the gateway.
 func TestStoragePackagesDoNotMakeModelCalls(t *testing.T) {
-	for _, dir := range storagePackages {
-		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
-		if err != nil || len(files) == 0 {
-			t.Fatal(dir, err, len(files))
-		}
-		for _, file := range files {
-			if strings.HasSuffix(file, "_test.go") {
-				continue
-			}
+	for _, dir := range discoverStoragePackages(t) {
+		for _, file := range nonTestGoFiles(t, dir) {
 			source, err := os.ReadFile(file)
 			if err != nil {
 				t.Fatal(err)
@@ -126,15 +167,8 @@ func TestStoragePackagesDoNotMakeModelCalls(t *testing.T) {
 // call. A storage package does not import the prompt registry, so no
 // instruction, schema, or sentence of a model input is kept in storage.
 func TestStoragePackagesHoldNoInstructions(t *testing.T) {
-	for _, dir := range storagePackages {
-		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
-		if err != nil || len(files) == 0 {
-			t.Fatal(dir, err, len(files))
-		}
-		for _, file := range files {
-			if strings.HasSuffix(file, "_test.go") {
-				continue
-			}
+	for _, dir := range discoverStoragePackages(t) {
+		for _, file := range nonTestGoFiles(t, dir) {
 			parsed, err := parser.ParseFile(token.NewFileSet(), file, nil, parser.ImportsOnly)
 			if err != nil {
 				t.Fatal(err)
@@ -183,8 +217,9 @@ func TestStorageWritesNoNewSentences(t *testing.T) {
 	}
 }
 
-// itemWrite matches an SQL statement that writes the items table.
-var itemWrite = regexp.MustCompile(`(?i)\b(insert\s+into|update|delete\s+from)\s+work_items\b`)
+// itemWrite matches an SQL statement that writes the items table, including
+// multi-line raw string queries.
+var itemWrite = regexp.MustCompile(`(?is)\b(insert\s+into|update|delete\s+from)\s+work_items\b`)
 
 // The items table has one owner: internal/postgres/itemstore. Each other
 // storage package changes an item through that package, so that the plan
@@ -192,27 +227,102 @@ var itemWrite = regexp.MustCompile(`(?i)\b(insert\s+into|update|delete\s+from)\s
 // statement that takes its table name from a variable is not seen by this
 // test; the two such statements send the items table to the owner.
 func TestOnlyTheItemOwnerWritesTheItemsTable(t *testing.T) {
-	for _, dir := range storagePackages {
+	for _, dir := range discoverStoragePackages(t) {
 		if filepath.Base(dir) == "itemstore" {
 			continue
 		}
-		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, file := range files {
-			if strings.HasSuffix(file, "_test.go") {
-				continue
-			}
-			source, err := os.ReadFile(file)
+		for _, file := range nonTestGoFiles(t, dir) {
+			set := token.NewFileSet()
+			parsed, err := parser.ParseFile(set, file, nil, 0)
 			if err != nil {
 				t.Fatal(err)
 			}
-			for number, line := range strings.Split(string(source), "\n") {
-				if itemWrite.MatchString(line) {
-					t.Errorf("%s:%d writes work_items outside the item owner", file, number+1)
+			ast.Inspect(parsed, func(node ast.Node) bool {
+				lit, ok := node.(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					return true
 				}
+				value, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					return true
+				}
+				if itemWrite.MatchString(value) {
+					t.Errorf("%s writes work_items outside the item owner", set.Position(lit.Pos()))
+				}
+				return true
+			})
+		}
+	}
+}
+
+var (
+	modelCallsTable  = regexp.MustCompile(`(?i)\bmodel_calls\b`)
+	paidResultsTable = regexp.MustCompile(`(?i)\bbackground_model_results\b`)
+)
+
+// callstore owns model_calls and background_model_results. Only the declared
+// read/cleanup consumers may reference those tables in SQL: budgetstore checks
+// recovery eligibility in ReserveModelCostID, activitystore reads model_calls
+// for the owner day-activity query, and kernel discards paid results on ack.
+func TestOnlyCallStoreOwnsModelCallsAndResults(t *testing.T) {
+	allowedModelCalls := map[string]bool{
+		"callstore":     true,
+		"budgetstore":   true,
+		"activitystore": true,
+	}
+	allowedPaidResults := map[string]bool{
+		"callstore": true,
+		"kernel":    true,
+	}
+	for _, dir := range discoverStoragePackages(t) {
+		pkg := filepath.Base(dir)
+		for _, file := range nonTestGoFiles(t, dir) {
+			set := token.NewFileSet()
+			parsed, err := parser.ParseFile(set, file, nil, 0)
+			if err != nil {
+				t.Fatal(err)
 			}
+			ast.Inspect(parsed, func(node ast.Node) bool {
+				lit, ok := node.(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					return true
+				}
+				value, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					return true
+				}
+				if !allowedModelCalls[pkg] && modelCallsTable.MatchString(value) {
+					t.Errorf("%s references model_calls outside its declared storage boundaries", set.Position(lit.Pos()))
+				}
+				if !allowedPaidResults[pkg] && paidResultsTable.MatchString(value) {
+					t.Errorf("%s references background_model_results outside its declared storage boundaries", set.Position(lit.Pos()))
+				}
+				return true
+			})
+		}
+	}
+}
+
+// Business content hashing belongs to domain checks (such as deputy and effort),
+// not storage adapters.
+func TestStoragePackagesDoNotHashItemContentDirectly(t *testing.T) {
+	for _, dir := range discoverStoragePackages(t) {
+		for _, file := range nonTestGoFiles(t, dir) {
+			set := token.NewFileSet()
+			parsed, err := parser.ParseFile(set, file, nil, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ast.Inspect(parsed, func(node ast.Node) bool {
+				sel, ok := node.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "workspace" && sel.Sel.Name == "ContentHash" {
+					t.Errorf("%s calls workspace.ContentHash directly in storage", set.Position(sel.Pos()))
+				}
+				return true
+			})
 		}
 	}
 }

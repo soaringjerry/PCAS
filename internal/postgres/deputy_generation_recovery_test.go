@@ -208,7 +208,7 @@ func TestDeputyAbandonedInputRecordsSkippedApplication(t *testing.T) {
 	})
 	request := leasedDeputyAnswer(t, s, scope)
 	ctx := context.Background()
-	adapter := callstore.InteractiveCalls{Store: s.Calls}
+	adapter := s.Journal()
 	provider, _ := registryOf(s).Get(request.ProviderID)
 	id, err := adapter.Prepare(ctx, request, provider)
 	if err != nil {

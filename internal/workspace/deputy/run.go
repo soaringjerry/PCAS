@@ -22,6 +22,18 @@ func CheckRequest(kind, prompt string) error {
 	return nil
 }
 
+// CheckPromptCurrent reports whether the run's agent is enabled and its target
+// item still matches the content hash recorded when the run was admitted.
+func CheckPromptCurrent(agent workspace.Agent, item workspace.Item, run workspace.Run) error {
+	if !agent.Enabled {
+		return memory.ErrForbidden
+	}
+	if run.TargetHash != "" && workspace.ContentHash(item) != run.TargetHash {
+		return memory.ErrConflict
+	}
+	return nil
+}
+
 // OrderMemories returns the memories that a run is given, in their order:
 // the structured matches of the recall, the memories that the secretary
 // prepared for the delegation, each preference and decision, and the other

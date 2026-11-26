@@ -194,9 +194,9 @@ func newStore(db *kernel.DB) *Store {
 	statePart := &statestore.State{DB: db, Reader: readerPart}
 	usePart := &usestore.Use{DB: db, Reader: readerPart, Owners: ownersPart, State: statePart}
 	workspacePart := &workspacestore.Workspace{DB: db, Claims: claimsPart, Intake: intakePart, Reader: readerPart, Owners: ownersPart, Sources: sourcesPart, State: statePart}
-	deputyPart := &deputystore.Deputy{DB: db, Budgets: budgetsPart, Intake: intakePart, Reader: readerPart, Usage: usagePart, Use: usePart, Workspace: workspacePart}
-	commandsPart := &commandstore.Commands{DB: db, Claims: claimsPart, Owners: ownersPart, Deputy: deputyPart, Intake: intakePart, Sources: sourcesPart, Workspace: workspacePart}
-	deskPart := &deskstore.Desk{DB: db, Budgets: budgetsPart, Commands: commandsPart, Intake: intakePart, Reader: readerPart, Sources: sourcesPart, Use: usePart, Workspace: workspacePart}
+	deputyPart := &deputystore.Deputy{DB: db, Budgets: budgetsPart, Calls: callsPart, Intake: intakePart, Reader: readerPart, Usage: usagePart, Use: usePart, Workspace: workspacePart}
+	commandsPart := &commandstore.Commands{DB: db, Calls: callsPart, Claims: claimsPart, Owners: ownersPart, Deputy: deputyPart, Intake: intakePart, Sources: sourcesPart, Workspace: workspacePart}
+	deskPart := &deskstore.Desk{DB: db, Budgets: budgetsPart, Calls: callsPart, Commands: commandsPart, Intake: intakePart, Reader: readerPart, Sources: sourcesPart, Use: usePart, Workspace: workspacePart}
 	evidencePart := &evidencestore.Evidence{DB: db}
 	interpPart := &interpstore.Interp{DB: db, Budgets: budgetsPart, Owners: ownersPart}
 	itemsPart := &itemstore.Items{DB: db}

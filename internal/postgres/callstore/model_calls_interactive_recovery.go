@@ -44,7 +44,7 @@ func (s *Calls) RecoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 		status.CountsKnown = true
 		return status, nil
 	}
-	adapter := InteractiveCalls{Store: s}
+	journal := s.Journal()
 	var failures []error
 	var oldest *PendingInteractiveResult
 	s.PendingInteractive.Range(func(_, value any) bool {
@@ -56,9 +56,9 @@ func (s *Calls) RecoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 	})
 	if oldest != nil {
 		paid := cloneInteractivePaid(oldest.paid)
-		err := adapter.Save(persist, oldest.Request, paid)
+		err := journal.Save(persist, oldest.Request, paid)
 		if err == nil {
-			err = modelcall.SettleReceipt(persist, s.records(), s.records(), oldest.Request, paid)
+			err = modelcall.SettleReceipt(persist, journal, journal, oldest.Request, paid)
 		}
 		if err != nil {
 			failures = append(failures, err)
@@ -67,7 +67,7 @@ func (s *Calls) RecoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 		}
 	}
 	if persist.Err() == nil {
-		recovered, err := adapter.recoverAccountingReceipt(persist)
+		recovered, err := journal.recoverAccountingReceipt(persist)
 		if err != nil {
 			failures = append(failures, err)
 		} else if recovered {
@@ -75,7 +75,7 @@ func (s *Calls) RecoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 		}
 	}
 	if persist.Err() == nil {
-		interrupted, err := adapter.RecordInterruptedExecution(persist)
+		interrupted, err := journal.RecordInterruptedExecution(persist)
 		if err != nil {
 			failures = append(failures, err)
 		} else if interrupted {
@@ -107,7 +107,7 @@ func (s *Calls) RecoverInteractiveCallsOnce(ctx context.Context) (interactiveRec
 
 // Billing recovery needs only the original immutable receipt. Source deletion
 // can remove every private body without preventing original usage settlement.
-func (a InteractiveCalls) recoverAccountingReceipt(ctx context.Context) (bool, error) {
+func (a Journal) recoverAccountingReceipt(ctx context.Context) (bool, error) {
 	var row InteractiveCallRow
 	err := a.Store.Pool.QueryRow(ctx, `SELECT to_jsonb(c) FROM model_calls c WHERE input_manifest->>'version'='interactive-input-v1' AND accounting_state IN ('pending','failed','reserved') AND result_receipt->'billing' IS NOT NULL AND result_receipt->'billing'<>'null'::jsonb ORDER BY updated_at,id LIMIT 1`).Scan(&row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -130,7 +130,7 @@ func (a InteractiveCalls) recoverAccountingReceipt(ctx context.Context) (bool, e
 		return false, errors.Join(fmt.Errorf("interactive_billing_receipt_invalid: %w", memory.ErrConflict), markErr)
 	}
 	request := modelcall.Request{OwnerID: row.OwnerID, ExecutionID: row.ExecutionID, RootExecutionID: row.RootExecutionID, CausationID: row.CausationID, Function: row.Function, Stage: row.Stage, ProviderID: row.Provider, Policy: InteractiveCallPolicy{Kind: row.Manifest.Kind, Origin: row.Manifest.Origin, BudgetOwner: row.Manifest.BudgetOwner, Usage: row.Mode.Usage}}
-	if err := modelcall.SettleReceipt(ctx, a.Store.records(), a.Store.records(), request, paid); err != nil {
+	if err := modelcall.SettleReceipt(ctx, a, a, request, paid); err != nil {
 		return false, err
 	}
 	_, err = a.Store.Pool.Exec(ctx, `UPDATE model_calls c SET result_receipt=jsonb_set(result_receipt,'{availableForApplication}','false'::jsonb),updated_at=clock_timestamp() WHERE owner_id=$1 AND id=$2 AND input_manifest->>'budgetOwner' IS DISTINCT FROM 'deputy_run' AND (`+inactiveInteractiveExecutionSQL+`)`, string(row.OwnerID), string(row.ID))
@@ -139,7 +139,7 @@ func (a InteractiveCalls) recoverAccountingReceipt(ctx context.Context) (bool, e
 
 // An expired execution cannot start its prepared call. A started call has an
 // unknown outcome until an actual response arrives. Neither state is retried.
-func (a InteractiveCalls) RecordInterruptedExecution(ctx context.Context) (bool, error) {
+func (a Journal) RecordInterruptedExecution(ctx context.Context) (bool, error) {
 	recorded := false
 	var owner memory.ID
 	err := a.Store.Pool.QueryRow(ctx, `SELECT owner_id FROM model_calls c WHERE input_manifest->>'version'='interactive-input-v1' AND outcome IN ('prepared','started') AND (`+inactiveInteractiveExecutionSQL+`) ORDER BY updated_at,id LIMIT 1`).Scan(&owner)

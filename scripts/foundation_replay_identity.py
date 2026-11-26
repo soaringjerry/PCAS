@@ -34,7 +34,17 @@ def reference_locations(table, row, schema):
     elif table == 'model_calls':
         manifest = row.get('input_manifest') or {}
         containers.extend((ref, ('id',)) for ref in manifest.get('memoryRefs') or [])
-        containers.append((row.get('result_receipt'), ('jobId', 'reservationId')))
+        receipt = row.get('result_receipt') or {}
+        containers.append((receipt, ('jobId', 'reservationId', 'invocationId')))
+        if isinstance(receipt, dict):
+            billing = receipt.get('billing') or {}
+            containers.append((billing, ('invocationId', 'Reservation')))
+            if isinstance(billing, dict):
+                containers.extend((ref, ('id',)) for ref in billing.get('Refs') or [])
+        mode = row.get('actual_mode') or {}
+        if isinstance(mode, dict):
+            containers.append((mode.get('deputySelection'), ('main', 'output', 'review')))
+            containers.append((mode.get('originalUsage'), ('ID', 'TurnID', 'RunID', 'JobID')))
     elif table == 'model_usage':
         containers.extend((ref, ('id',)) for ref in row.get('memory_refs') or [])
     elif table == 'desk_turns':
@@ -135,6 +145,41 @@ def value_differences(left, right, path=()):
                    'right_value': comparison.canonical(right[key]) if rp else None}
 
 
+RUNTIME_TIMESTAMP_COLUMNS = {
+    'at', 'created_at', 'updated_at', 'started_at', 'finished_at',
+    'occurred_at', 'lease_until', 'expires_at', 'available_at',
+    'written_at', 'built_at', 'refreshed_at', 'synced_at', 'checked_at',
+    'last_attempt_at', 'next_attempt_at', 'delivered_at', 'undone_at',
+}
+RUNTIME_SCALAR_COLUMNS = {'duration_ms'}
+RUNTIME_TIMESTAMP_TYPES = {
+    'timestamptz', 'timestamp with time zone', 'timestamp without time zone', 'timestamp',
+}
+RUNTIME_NESTED_PATHS = {
+    ('actual_mode', 'leaseToken'),
+    ('actual_mode', 'executionToken'),
+    ('actual_mode', 'interruptedAt'),
+    ('actual_mode', 'originalUsage', 'At'),
+    ('result_receipt', 'billing', 'DurationMS'),
+    ('document', 'createdAt'),
+    ('document', 'updatedAt'),
+    ('document', 'startedAt'),
+    ('document', 'finishedAt'),
+    ('response', 'turn', 'at'),
+}
+
+
+def is_runtime_metadata_path(table, path, column_types):
+    if len(path) == 1:
+        col = path[0]
+        if col in RUNTIME_SCALAR_COLUMNS:
+            return True
+        if col in RUNTIME_TIMESTAMP_COLUMNS and column_types.get((table, col)) in RUNTIME_TIMESTAMP_TYPES:
+            return True
+        return False
+    return tuple(path) in RUNTIME_NESTED_PATHS
+
+
 def column_metadata(columns):
     schema, primary = defaultdict(set), defaultdict(list)
     names = defaultdict(set)
@@ -154,6 +199,8 @@ def column_metadata(columns):
 
 def field_comparison(phases, columns, mapping):
     schema, primary, names = column_metadata(columns)
+    column_types = {(c['table'], c['column']): c['type'] for c in columns}
+    runtime_diffs, business_diffs = [], []
     report = {'paired_rows': 0, 'identical_paired_rows': 0, 'field_differences': [],
               'unpaired_rows': [], 'excluded_fields': [], 'value_format': 'typed_canonical'}
     for phase, sides in phases.items():
@@ -186,11 +233,24 @@ def field_comparison(phases, columns, mapping):
                 report['paired_rows'] += 1
                 differences = list(value_differences(left[0], right[0]))
                 if differences:
-                    report['field_differences'].append({'phase': phase, 'table': table,
-                                                      'primary_key_sha256': key, 'primary_key': primary_value,
-                                                      'differences': differences})
+                    entry = {'phase': phase, 'table': table,
+                             'primary_key_sha256': key, 'primary_key': primary_value,
+                             'differences': differences}
+                    report['field_differences'].append(entry)
+                    for diff in differences:
+                        item = {'phase': phase, 'table': table, 'primary_key_sha256': key, 'path': diff['path']}
+                        if is_runtime_metadata_path(table, diff['path'], column_types):
+                            runtime_diffs.append(item)
+                        else:
+                            business_diffs.append(item)
                 else:
                     report['identical_paired_rows'] += 1
+    report['difference_classification'] = {
+        'runtime_metadata_differences': runtime_diffs,
+        'business_state_differences': business_diffs,
+        'runtime_only': bool(report['field_differences']) and not business_diffs and not report['unpaired_rows'],
+        'rule': 'Wall-clock execution timestamps, durations, and per-attempt execution tokens are classified as runtime metadata; business dates, versions, actions, costs, and outputs remain business state. Every difference remains in field_differences.',
+    }
     return report
 
 
@@ -238,6 +298,7 @@ def establish(sides, schema, existing_ids):
         fields = sorted(set(next(iter(sides['record'].get('claim_revisions') or sides['replay']['claim_revisions']))) - {'claim_id'})
         pair('claim_revisions', 'claim_id', fields, 'complete claim revision with mapped subject')
     pair('memory_jobs', 'id', ['owner_id', 'record_id', 'record_version', 'stage'], 'job unique owner, record version, and stage')
+    pair('recorded_events', 'id', ['owner_id', 'type', 'stage', 'object_id', 'object_version', 'trigger_source', 'job_id', 'root_id', 'cause_id', 'chain_depth'], 'recorded queue event causal identity')
     pair('evidence', 'id', ['owner_id', 'source_id', 'source_version', 'target_id', 'target_version', 'locator', 'stance', 'acquisition'], 'complete evidence relation')
 
     def candidate(row):
@@ -342,10 +403,13 @@ def main():
     result['same_initial_data'] = True
     with comparison.new_private_file(output) as dest:
         json.dump(result, dest, ensure_ascii=False)
+    classification = result['field_comparison']['difference_classification']
     print(json.dumps({'comparison': result['comparison'], 'mapped_identities': len(result['mapping']),
                       'unresolved': len(result['unresolved']), 'unmapped_identities': len(result['unmapped_identities']), 'remaining_differences': len(result['remaining_differences']),
                       'paired_rows': result['field_comparison']['paired_rows'],
                       'unpaired_groups': len(result['field_comparison']['unpaired_rows']),
+                      'business_state_differences': len(classification['business_state_differences']),
+                      'runtime_metadata_differences': len(classification['runtime_metadata_differences']),
                       'full_owner_data_checked': result['full_owner_data_checked'],
                       'state_equivalence_certified': False}))
     return 1 if (result['unresolved'] or result['unmapped_identities'] or result['remaining_differences']

@@ -120,7 +120,7 @@ func TestDeputyInterruptedReservationDistinguishesUnsubmittedAndUnknown(t *testi
 			request := leasedDeputyAnswer(t, s, scope)
 			ctx := context.Background()
 			provider, _ := registryOf(s).Get("model")
-			adapter := callstore.InteractiveCalls{Store: s.Calls}
+			adapter := s.Journal()
 			invocation, err := adapter.Prepare(ctx, request, provider)
 			if err != nil {
 				t.Fatal(err)

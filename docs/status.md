@@ -1,7 +1,7 @@
 # PCAS Project Status
 
 Capability snapshot base: repository commit `c9ac3fd`, recorded 2026-10-08.
-Foundation delivery records updated 2026-10-09.
+Foundation delivery records updated for Phase 3.9 wrap-up (base `4473ba7`, PR #398–#404 and final wrap-up).
 
 This page gives product targets, implemented functions, and recorded deployment evidence with different status labels.
 Each delivery record identifies its checks. Historical results apply to their stated data, channel, and date.
@@ -14,14 +14,14 @@ The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scope
 |---|---|---|
 | Source storage, structured records, vectors, and versioned evidence | Implemented paths. | [Memory service](memory-service.md). A real-model recall baseline stays outstanding. |
 | Memory groups, comparison, aliases, and current-state views | Implemented paths. | [Phase 2.6 rollout](evaluations/2026-10-07-phase2_6-rollout.md). Per-group status cards were removed. |
-| Secretary actions and deputy work | Implemented paths. | [Desk processing](../internal/postgres/desk_turn.go) and [deputy processing](../internal/postgres/runs.go). Model quality must have scenario checks. |
+| Secretary actions and deputy work | Implemented paths. | [Secretary domain](../internal/workspace/secretary), [deputy domain](../internal/workspace/deputy), [desk storage](../internal/postgres/deskstore/desk_turn.go), and [deputy storage](../internal/postgres/deputystore/runs.go). Model quality must have scenario checks. |
 | Undo, reminders, and Telegram input | Implemented paths. | [Service reference](memory-service.md). Physical-device notification acceptance stays incomplete in the recorded backlog. |
 | Project handovers, file area, document versions, effort, and start dates | Implemented paths. | [Phase 3 rollout](evaluations/2026-10-08-phase3-rollout.md). Calendar conflict detection is a future function. |
 | Automatic tasks, ideas, and projects | Implemented paths. | [Phase 3.5 rollout](evaluations/2026-10-08-phase3_5-rollout.md). The quality of automatic topic projects is under review. |
 | Date closure and background date review | Implemented paths. | [Phase 3.6 rollout](evaluations/2026-10-08-phase3_6-rollout.md). Continue to observe background judgment and undo quality. |
 | Generic input and AI archives | Implemented paths. | [Input reference](connectors.md). Generic input paths do not include native email, calendar, Yufolo, or other IM adapters. |
 | Model providers and manual selection | Implemented paths. | [Deployment](deployment.md). Automatic model selection is a target. |
-| Observation panel | Partial controls. | Library and settings contain memory, work, and cost information. The complete panel is not delivered. |
+| Observation panel | Partial controls; day activity query implemented. | [Day activity query](memory-service.md#day-activity) is implemented. Library and settings contain partial memory, work, and cost views. The visual observation panel stays for Phase 4. |
 | Habit statistics, household finance, and external correspondence | Product targets. | Some input and learning hooks exist. These functions are targets. |
 | Training and personal models | Sample selection and export exist. | Training and model feedback into the active pool stay targets. |
 | Native phone application and screen capture | Product targets. | Web/PWA and Telegram do not include background GPS or microphone collection. |
@@ -68,6 +68,8 @@ The [Roadmap](whitepaper.md#10-roadmap) gives the phase sequence, delivery scope
 | Phase 3.9 storage split by domain | Released at `c9658b7` on 2026-10-12. The PostgreSQL adapter is 25 storage packages over a kernel; the main package keeps the composition, the migrations, the queue, and the schedulers. The items table has one owner. The order of a deputy run is still in its storage package. The nightly real-model evaluation and the limits of event chains are not done. Phase 3.9 remains incomplete. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#twenty-third-release). |
 | Phase 3.9 deputy run in the domain | Released at `a39eacf` on 2026-10-12. The order of a deputy run is in `deputy.Conduct`. Not done: the nightly real-model evaluation (it waits for a dedicated signed-in Codex home), and the limits and the retention of event chains (no event is recorded on live yet). | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#twenty-fourth-release). |
 | Phase 3.9 chain limit, event retention, nightly evaluation | Released at `f47e9f8` on 2026-10-12. A causal chain of jobs has a depth limit with its basis from the live job history; recorded events have a retention. The nightly real-model evaluation is scheduled and has had a rehearsal with the fake model; its first real night ran on 2026-10-12: 60 tasks, 180 calls, an estimated cost of 0.54 USD, must rate 86.8%, usable rate 65% ([results](tasks/foundation-nightly-evaluation.md#first-real-night)). Since this release, live ran one handover job and eight topic project calls without a failure, and recorded its first event at depth 0. The owner's first three turns after the release (2026-10-13) ran extraction, embedding, summary, index, organize, and compare jobs; each finished at its first attempt, and the deepest event chain has depth 3 against a limit of 200. Not yet observed: an attachment job. | [Release and live check](evaluations/2026-10-11-foundation-review-release.md#twenty-fifth-release). [First real background jobs](evaluations/2026-10-11-foundation-review-release.md#first-real-background-jobs-after-this-release). |
+| Phase 3.9 domain completion and boundary hardening (PR #398–#404) | Merged to `main` through `4473ba7`. Kernel imports only `memory` and `worker`; storage holds no prompt instructions; deputy run request and adoption, secretary context assembly, workspace commands and undo, conversation extraction, reminders, notifications, connectors, schedule view, erasure, run access, statement deduplication, and background schedules decide outside storage; handover and deadline test fixtures anchor to relative UTC dates. | PR #398–#404 on `main`, [pilot record](tasks/foundation-domain-pilot.md). |
+| Phase 3.9 wrap-up | Unified `callstore.Journal` for background and interactive calls; cleaned `deputystore` recovery and `budgetstore.SpentSinceTx` boundaries; removed temporary migration parts (`enqueueEffortTx` moved to `workspacestore.EnqueueEffortTx` with `effort.Due`, `workspace.ContentHash` removed from storage via `deputy.CheckPromptCurrent`, dead `prompts.FromText` and unused card types removed); tightened dynamic architecture boundary tests; added `recorded_events` pairing, nested `model_calls` refs, and runtime-versus-business field classification in replay diagnostics; aligned Phase 3.9 documentation for closure review. | [Pilot record](tasks/foundation-domain-pilot.md), [handoff record](tasks/foundation-sol-handoff.md). |
 
 Phase 2.0 was rolled back on 2026-10-01.
 Its design is stored under the recorded `archive/phase2-0/*` tags.
@@ -86,32 +88,16 @@ The earlier implementation is on the `legacy` branch. These histories are not cu
 
 ## Current Architecture Direction
 
-The agreed next phase is [Phase 3.9 Foundation](whitepaper.md#phase-39-foundation), before further business repairs and Phase 4.
+[Phase 3.9 Foundation](whitepaper.md#phase-39-foundation) built the domain boundaries, model gateway, prompt registry, unified call journal, day activity query, central event-response table, causal-chain limit, and five-layer verification harness before Phase 4 and post-foundation business repairs.
 The [System Architecture](architecture.md) defines its scope and completion criteria.
-The foundation is not complete or accepted.
-The [shared skeleton](tasks/foundation-shared-skeleton.md) adds the first background gateway, prompt registry, and call metadata path.
-Its [acceptance record](evaluations/2026-10-08-foundation-shared-skeleton.md) separates checks from deployment and remaining work.
+Phase 3.9 implementation is complete in the repository and ready for coordinator closure review; formal closure requires coordinator sign-off against [Foundation Acceptance](architecture.md#10-foundation-acceptance).
 
 The user reports incorrect projects, timelines, and tasks, with increasing model use, cost, and duration.
 These reports need attributed cases and measurements. They do not establish a measured trend or a single cause.
-Keep the cases for diagnosis through the new architecture.
+Keep the cases for diagnosis and post-foundation repair through the new boundaries.
 
-The architecture's code findings use revision `6b62f27`.
-They do not update this page's implementation snapshot or supply new deployment evidence.
-
-The [foundation inventory](evaluations/2026-10-08-foundation-inventory.md) records production paths and an existing-record baseline at code revision `4af34cd`.
-It includes exclusions before model calls and missing expected actions.
-At that inventory revision, no architecture code had changed.
-Controlled scenario baselines remain necessary before the corresponding production paths change.
-
-The [event contract](architecture.md#event-records-and-triggers) uses the existing queue for declared specialist processing and causal records.
-Central event responses and chain limits remain targets.
-The shared skeleton does not implement them.
-
-The [five-layer test contract](architecture.md#five-test-layers) is required for Phase 3.9 acceptance.
-Architecture checks come first. Recorded production-copy replay comes second, before further business-domain migration.
-Owner contracts, fixed concurrency scenarios, and nightly real-model score trends remain required work.
-These requirements are not a claim that the five layers are complete.
+The architecture's code findings use revision `6b62f27` as their historical baseline, with resolution records updated through Phase 3.9.
+The [foundation inventory](evaluations/2026-10-08-foundation-inventory.md) records the pre-foundation baseline at revision `4af34cd`.
 
 ### Foundation Delivery Milestones
 
@@ -121,64 +107,22 @@ The [architecture acceptance](architecture.md#10-foundation-acceptance) governs 
 
 | Order | Delivery | Current state |
 |---|---|---|
-| First | Architecture documents, responsibilities, and existing-path inventory. | Initial direction and inventory recorded. Refresh affected paths before each migration. |
-| Second | Shared gateway, registered prompts, and architecture checks. | Background skeleton released at `935ad5b`; interactive calls at `022a912`; main deputy generation and revision at `f0ee817`. Complete provider and owner coverage remains outstanding. |
-| Third | Recorded production-copy replay. | [Diagnostics and clock extension released](evaluations/2026-10-08-foundation-recorded-replay.md#release-verification) at `b39a9ea`. Background and secretary transport replay work without live calls. Complete state equivalence remains incomplete. |
-| Fourth | Owner pilot, then complete business paths and remaining model calls. | Domain extraction has not started. Keep temporary adapters until their named callers migrate. |
-| Fifth | Unified activity queries, declared event responses, and causal-chain limits. | Targets. Existing records and queue supply their starting mechanisms. |
-| Sixth | Complete five-layer and whole-system acceptance. | Outstanding. Include resource comparisons and traces for incorrect and missing expected actions. |
+| First | Architecture documents, responsibilities, and existing-path inventory. | Complete. Architecture, inventory, and domain ownership records are aligned with the repository. |
+| Second | Shared gateway, registered prompts, unified call journal, and architecture checks. | Complete. All production generation, embedding, vision, and transcription calls enter `internal/modelcall`; all production prompts and schemas live in `internal/prompts` (`FromText` removed); `callstore.Journal` unifies background and interactive journals; dynamic boundary tests enforce every rule on each commit. |
+| Third | Recorded production-copy replay. | Complete as a diagnostic layer. Transport replay works without live calls; exact comparison, declared identity mapping (including `recorded_events` and nested `model_calls` refs), and runtime-versus-business field classification are tested in CI. Fresh production-copy replays remain an operational check for behavior changes. |
+| Fourth | Owner pilot, complete business paths, and storage split. | Complete for Phase 3.9. All production business workflows and schedulers decide in domain packages outside storage; `internal/postgres` is split into 25 focused packages over `kernel`; all temporary pilot parts are removed; `itemstore` owns `work_items` and `callstore` owns `model_calls` and paid results. |
+| Fifth | Unified activity queries, declared event responses, and causal-chain limits. | Delivered for Phase 3.9 scope. The owner-scoped day activity query, central `app.Responses` table, `recorded_events` causal tracking (`work.queued`), 200-depth chain limit, and 90-day retention are implemented and live. Committed-change events beyond `work.queued` and per-event response limits stay deferred to follow-up work. |
+| Sixth | Five-layer verification and phase closure review. | Ready for coordinator closure review. Architecture tests, owner contracts, replay diagnostics, concurrency/undo suites, and scheduled nightly real-model evaluation on Codex are active. Multi-night score trends, live attachment-job observation, and post-foundation business-quality repairs continue after Phase 3.9 closure. |
 
-The order identifies dependencies. Compatible scopes can proceed together after their prerequisites are established.
-Start nightly evaluation after complete gateway coverage under the architecture's [test contract](architecture.md#five-test-layers).
+### Completed in Phase 3.9 vs Deferred to Phase 4 / Follow-up
 
-The coordinator approved the [interactive gateway scope](tasks/foundation-interactive-gateway.md) before owner extraction.
-Its [final acceptance](tasks/foundation-interactive-gateway.md#final-acceptance) records release at `022a912`.
-Secretary generation, heavy readers, secretary self-check, and deputy self-check now use the existing gateway.
+| Scope | Items |
+|---|---|
+| Completed in Phase 3.9 | Single model gateway (`internal/modelcall`) with zero direct provider exceptions; embedded prompt and schema registry (`internal/prompts`) with zero prompts in storage; unified `callstore.Journal` and clean `deputystore`/`budgetstore` boundaries; 25-package storage split over vocabulary-only `kernel`; all production workflows, commands, undo, erasure, access, and schedulers decided in domain packages; removal of legacy routing/answer, unused card generation, and temporary migration parts; owner day-activity query; single `app.Responses` table; `recorded_events` with 200-depth chain limit and retention; tightened five-layer test suites and nightly Codex evaluation. |
+| Deferred to Phase 4 | Visual observation panel, interactive explanations, cost dashboards, and user-facing recovery controls over the day-activity read model; moving remaining internal controls out of library and settings. |
+| Deferred to post-foundation repairs and follow-up | Business-quality defects kept separate from migration (automatic topic projects, check-mode date-skip wording, recall quality baseline, backlog items); committed-change events beyond `work.queued` and per-event response limits; splitting broad storage packages such as `intakestore` or moving storage tests into subpackages when those packages change; observing a live attachment job and tracking multi-night evaluation trends. |
 
-The [deputy batch](tasks/foundation-deputy-gateway.md#release-verification) was integrated and released at `f0ee817`.
-Main generation and revision use the gateway, preserve saved results, and link application to the original invocation.
-Ordinary and revision replay pass strict input checks without live provider calls.
-Every observed owner-data difference remains recorded and reviewed. Exact equality of complete owner state is not established.
-Actual Codex generation and the requested revision pass on isolated production-data copies.
-
-Main CI and both synthetic evaluation workflows pass. Backup, release, and live default Codex checks pass.
-Claim counts remain unchanged after cleanup by the check's identities.
-The first release attempt failed during a disk-space incident. The delivery record retains that failure, recovery, and the corrected release space check.
-This delivery does not complete Phase 3.9.
-
-The [unused generation cleanup](tasks/foundation-unused-generation.md#release-verification) was integrated and released at `6411b4e`.
-The old card queue handler retains its original bytes. Current-state contracts and complete branch and main CI pass.
-Backup, readiness, live default Codex accounting, and cleanup checks pass. Claim counts remain unchanged.
-
-The coordinator reviewed the Phase 3.9 work on 2026-10-10.
-The review found a regression in the released interactive gateway: the secretary and the deputy failed on every provider without output schema or web search.
-The [correction](tasks/foundation-interactive-gateway.md#correction-2026-10-10) restores ordinary generation for callers that validate their own output and records the submitted mode.
-The review also removed the unused legacy routing and answer interfaces.
-
-The review replaced the query embedding candidate `9f80205`.
-That candidate saved query text and vectors for recovery. It was not merged or released.
-The [revised query embedding path](tasks/foundation-query-embedding.md) keeps the call record and the accounting only.
-Its gateway and storage contracts pass on an isolated database.
-
-The [revised background embedding path](tasks/foundation-background-embedding.md) uses the same gateway entry with the leased job.
-It replaces the earlier scope. The partial implementation in Sol's worktree did not compile and is not used.
-The existing queue rule already refuses a second paid attempt, so this revision adds no saved batch results.
-
-Registered instructions and four output schemas preserve their original bytes and field order.
-The secretary keeps its original shared deadline and two-attempt retry policy.
-
-Invocations link their inputs, results, reservations, usage, and application outcomes.
-Unknown outcomes remain visible and retain their reservations. Accounting recovery uses the existing worker without another provider call.
-Each reader page has its own stage identity. Failed checks preserve accepted draft data and show their incomplete state.
-
-Complete integration-branch and main CI passed. Strict secretary and extraction replay started no live provider.
-The comparisons retained all owner columns. Remaining timing, capture timestamp, and legacy identity findings prevent a complete equivalence claim.
-
-Real default Codex passed on the isolated copy and after release. Backup, live claim counts, and own-request cleanup passed.
-The additional local serial check was interrupted in an existing snapshot query; its cause remains unconfirmed.
-
-Audio, vision, embeddings, routing, and legacy entry points still need complete migration or retirement.
-Domain extraction, unified activity, event responses, and the remaining test layers stay outstanding.
+Historical delivery details for the earlier Phase 3.9 batches stay recorded in [Shared Skeleton](evaluations/2026-10-08-foundation-shared-skeleton.md), [Recorded Replay](evaluations/2026-10-08-foundation-recorded-replay.md), [Interactive Gateway](tasks/foundation-interactive-gateway.md), [Deputy Gateway](tasks/foundation-deputy-gateway.md), [Unused Generation Cleanup](tasks/foundation-unused-generation.md), [Query Embedding](tasks/foundation-query-embedding.md), [Background Embedding](tasks/foundation-background-embedding.md), and the [Review Release Record](evaluations/2026-10-11-foundation-review-release.md).
 
 ## Documentation Changes
 

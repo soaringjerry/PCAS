@@ -9,7 +9,6 @@ import (
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/postgres/accessstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/actionlog"
-	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/claimstore"
 	"github.com/soaringjerry/PCAS/internal/postgres/intakestore"
 	"github.com/soaringjerry/PCAS/internal/postgres/itemstore"
@@ -185,7 +184,7 @@ func (u *commandUnit) RetryJob(ctx context.Context, id string) (bool, error) {
 }
 
 func (u *commandUnit) AuthorizeRecovery(ctx context.Context, job, request string) error {
-	return (callstore.BackgroundCalls{Store: u.store.Calls}).AuthorizeRecoveryTx(ctx, u.tx, u.scope.OwnerID, memory.ID(job), request)
+	return u.store.Journal().AuthorizeRecoveryTx(ctx, u.tx, u.scope.OwnerID, memory.ID(job), request)
 }
 
 func (w *commandUnit) Remember(ctx context.Context, text, nature, projectID string, source workspace.SourceRef) (string, error) {

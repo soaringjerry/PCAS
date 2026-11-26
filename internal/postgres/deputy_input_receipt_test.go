@@ -10,7 +10,6 @@ import (
 
 	"github.com/soaringjerry/PCAS/internal/app/stagelimits"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
-	"github.com/soaringjerry/PCAS/internal/postgres/callstore"
 	"github.com/soaringjerry/PCAS/internal/worker"
 )
 
@@ -91,7 +90,7 @@ func TestDeputyInterruptedInputCannotBecomeARecoveredResult(t *testing.T) {
 	})
 	request := leasedDeputyAnswer(t, s, scope)
 	provider, _ := registryOf(s).Get("model")
-	adapter := callstore.InteractiveCalls{Store: s.Calls}
+	adapter := s.Journal()
 	invocation, err := adapter.Prepare(ctx, request, provider)
 	if err != nil {
 		t.Fatal(err)

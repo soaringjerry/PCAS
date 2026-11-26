@@ -15,12 +15,10 @@ import (
 	"github.com/soaringjerry/PCAS/internal/postgres/memoryread"
 	"github.com/soaringjerry/PCAS/internal/worker"
 	"github.com/soaringjerry/PCAS/internal/workspace"
-	"github.com/soaringjerry/PCAS/internal/workspace/effort"
 	"github.com/soaringjerry/PCAS/internal/workspace/projecthandover"
 )
 
 const ProjectHandoverStage = projecthandover.Stage
-const EffortStage = effort.Stage
 
 // The input assembly below is the context builder of the project handover service.
 type projectInputPart = projecthandover.Part

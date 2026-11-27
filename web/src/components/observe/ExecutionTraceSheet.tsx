@@ -10,6 +10,7 @@ import {
   formatDurationMs,
   formatTokens,
   functionLabel,
+  isTerminalRecovery,
   outcomeBadge,
   reasonLabel,
   recoveryStateLabel,
@@ -59,8 +60,12 @@ function CallTraceCard({
           <span className="item-title">
             {functionLabel(call.function)} · {call.stage}
           </span>
-          {fallback && <Tag tone="warning">降级模式</Tag>}
-          {call.recoveryState !== 'active' && <Tag tone="danger">{recoveryStateLabel(call.recoveryState)}</Tag>}
+          {fallback && <Tag tone="info">兼容模式</Tag>}
+          {call.recoveryState !== 'active' && (
+            <Tag tone={isTerminalRecovery(call.recoveryState) ? 'danger' : 'neutral'}>
+              {recoveryStateLabel(call.recoveryState)}
+            </Tag>
+          )}
         </div>
         <div className="row" style={{ gap: 8 }}>
           <span className="obs-event-cost">
@@ -224,9 +229,16 @@ export function ExecutionTraceSheet({
                   <div className="obs-event-actions">
                     {thingIds.map((id) => {
                       const found = findThing(state, id)
+                      if (!found) {
+                        return (
+                          <span key={id} className="obs-dead-ref">
+                            原事项已删除（{id.slice(0, 6)}）
+                          </span>
+                        )
+                      }
                       return (
                         <Link key={id} className="obs-link-pill" to={`/t/${id}`} onClick={onClose}>
-                          {found ? `事项：${thingTitle(found)}` : `打开事项 ${id.slice(0, 6)}`}
+                          事项：{thingTitle(found)}
                           <ArrowUpRight size={12} />
                         </Link>
                       )
@@ -267,10 +279,14 @@ export function ExecutionTraceSheet({
                   </div>
                   {run.error && <div className="small warn-text">错误：{run.error}</div>}
                   <div className="obs-event-actions">
-                    <Link className="obs-link-pill" to={`/t/${run.thingId}`} onClick={onClose}>
-                      {found ? `事项：${thingTitle(found)}` : `打开事项 ${run.thingId.slice(0, 6)}`}
-                      <ArrowUpRight size={12} />
-                    </Link>
+                    {found ? (
+                      <Link className="obs-link-pill" to={`/t/${run.thingId}`} onClick={onClose}>
+                        事项：{thingTitle(found)}
+                        <ArrowUpRight size={12} />
+                      </Link>
+                    ) : (
+                      <span className="obs-dead-ref">原事项已删除（{run.thingId.slice(0, 6)}）</span>
+                    )}
                   </div>
                 </div>
               )

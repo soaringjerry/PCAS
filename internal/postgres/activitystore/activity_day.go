@@ -102,6 +102,12 @@ SELECT jsonb_build_object(
  'events',coalesce((SELECT jsonb_agg(jsonb_build_object('at',at,'kind',kind,'eventId',event_id,'executionId',execution_id,'rootExecutionId',root_execution_id,'function',function,
    'outcome',outcome,'summary',summary,'reason',reason,'cost',cost,'costKnown',cost_known,'evidence',evidence) ORDER BY at,kind,event_id) FROM page),'[]'::jsonb),
  'eventCount',(SELECT count(*) FROM events),
+ 'summary',jsonb_build_object(
+   'failures',(SELECT count(*) FROM events WHERE
+     (outcome IN ('failed','failure','unknown') AND NOT (kind='call' AND coalesce(evidence->>'recoveryState','')='replaced'))
+     OR (kind='call' AND coalesce(evidence->>'recoveryState','') IN ('exhausted','budget_exhausted'))),
+   'deferrals',(SELECT count(*) FROM events WHERE outcome IN ('deferred','waiting')),
+   'overflows',(SELECT count(*) FROM events WHERE outcome='overflow')),
  'kinds',coalesce((SELECT jsonb_object_agg(kind,n) FROM (SELECT kind,count(*) AS n FROM events GROUP BY kind) k),'{}'::jsonb),
  'cost',jsonb_build_object(
    'settled',coalesce((SELECT sum(cost) FROM invocations),0),

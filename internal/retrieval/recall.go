@@ -3,6 +3,7 @@ package retrieval
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/soaringjerry/PCAS/internal/memory"
 	"github.com/soaringjerry/PCAS/internal/modelcall"
@@ -40,7 +41,12 @@ func (r Recaller) Embed(ctx context.Context, scope memory.Scope, query string) (
 	if r.Providers == nil || r.Providers.EmbeddingID() == "" {
 		return nil, "", "未配置语义索引；模糊措辞的覆盖尚不完整", nil
 	}
-	provider, _ := r.Providers.Get(r.Providers.EmbeddingID())
+	embeddingID := r.Providers.EmbeddingID()
+	provider, ok := r.Providers.Get(embeddingID)
+	if !ok {
+		slog.WarnContext(ctx, "query embedding provider missing", "provider", embeddingID)
+		return nil, "", "语义检索暂不可用，已使用原文与属性检索", nil
+	}
 	reserved := float64(len(query)+16) * provider.InputPerMillion / 1e6
 	// A query inside a secretary or deputy execution keeps that root.
 	// Its own execution identity lets concurrent queries stay separate.
@@ -52,10 +58,52 @@ func (r Recaller) Embed(ctx context.Context, scope memory.Scope, query string) (
 	embeddings, err := r.Calls.CallEmbedding(ctx, request, []string{provider.EmbeddingQueryPrefix + query})
 	var persistence *modelcall.PersistenceError
 	if errors.As(err, &persistence) {
+		slog.ErrorContext(ctx, "query embedding persistence failed", "provider", provider.ID, "model", provider.Model, "execution_id", string(request.ExecutionID), "root_execution_id", string(request.RootExecutionID), "error", err)
 		return nil, "", "", err
 	}
 	if err == nil && len(embeddings) == 1 {
 		return embeddings[0].Values, embeddings[0].Model, "", nil
 	}
+	logQueryEmbeddingFailure(ctx, request, err, len(embeddings))
 	return nil, "", "语义检索暂不可用，已使用原文与属性检索", nil
+}
+
+func logQueryEmbeddingFailure(ctx context.Context, request modelcall.DirectRequest, err error, vectors int) {
+	attrs := []any{
+		"provider", request.Provider.ID,
+		"model", request.Provider.Model,
+		"execution_id", string(request.ExecutionID),
+		"root_execution_id", string(request.RootExecutionID),
+	}
+	if err == nil {
+		attrs = append(attrs, "vectors", vectors)
+		slog.WarnContext(ctx, "query embedding returned unexpected vector count", attrs...)
+		return
+	}
+	var failure *modelcall.Failure
+	if errors.As(err, &failure) {
+		attrs = append(attrs, "error_code", failure.Code)
+		if failure.InvocationID != "" {
+			attrs = append(attrs, "invocation_id", string(failure.InvocationID))
+		}
+		if failure.Details != nil {
+			if failure.Details.HTTPStatus != 0 {
+				attrs = append(attrs, "http_status", failure.Details.HTTPStatus)
+			}
+			if failure.Details.Cancellation != "" {
+				attrs = append(attrs, "cancellation", failure.Details.Cancellation)
+			}
+			if failure.Details.OutcomeUnknown {
+				attrs = append(attrs, "outcome_unknown", true)
+			}
+			if failure.Details.Codex != nil && failure.Details.Codex.Category != "" {
+				attrs = append(attrs, "codex_category", failure.Details.Codex.Category)
+				if failure.Details.Codex.HTTPStatus != 0 {
+					attrs = append(attrs, "codex_http_status", failure.Details.Codex.HTTPStatus)
+				}
+			}
+		}
+	}
+	attrs = append(attrs, "error", err.Error())
+	slog.WarnContext(ctx, "query embedding failed", attrs...)
 }

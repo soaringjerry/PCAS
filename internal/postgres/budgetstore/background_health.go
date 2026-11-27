@@ -75,7 +75,7 @@ func (s *Budgets) BackgroundHealth(ctx context.Context, scope memory.Scope) (jso
  'failure',coalesce((SELECT n FROM totals WHERE stage=s.stage AND outcome='failure'),0),
  'overflow',coalesce((SELECT n FROM totals WHERE stage=s.stage AND outcome='overflow'),0),
  'deferredBy',coalesce((SELECT jsonb_object_agg(reason,n) FROM (SELECT reason,sum(count) AS n FROM background_stage_events e WHERE (e.owner_id=$1 OR e.owner_id IS NULL) AND e.stage=s.stage AND e.outcome='deferred' AND e.at>now()-interval '1 hour' GROUP BY reason) why),'{}'::jsonb),
- 'lastFailure',coalesce((SELECT reason FROM background_stage_events e WHERE (e.owner_id=$1 OR e.owner_id IS NULL) AND e.stage=s.stage AND e.outcome='failure' ORDER BY at DESC,id DESC LIMIT 1),''),
+ 'lastFailure',coalesce((SELECT reason FROM background_stage_events e WHERE (e.owner_id=$1 OR e.owner_id IS NULL) AND e.stage=s.stage AND e.outcome='failure' AND e.at>now()-interval '1 hour' ORDER BY at DESC,id DESC LIMIT 1),''),
  'withdrawn',jsonb_build_object(
  'deadlines',coalesce((SELECT sum(count) FROM background_stage_events e WHERE e.owner_id=$1 AND e.stage=s.stage AND e.reason='reorganize_deadlines_withdrawn' AND e.at>now()-interval '1 hour'),0),
  'requirements',coalesce((SELECT sum(count) FROM background_stage_events e WHERE e.owner_id=$1 AND e.stage=s.stage AND e.reason='reorganize_requirements_withdrawn' AND e.at>now()-interval '1 hour'),0)),

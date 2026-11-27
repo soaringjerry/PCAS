@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { AlertTriangle, ArrowUpRight, GitBranch, RotateCw, ShieldAlert } from 'lucide-react'
+import { ArrowUpRight, GitBranch, RotateCw, ShieldAlert } from 'lucide-react'
 import { jobStatusLabel, sourceStatusLabel, triggerLabel } from '../../domain/labels'
+import { findThing } from '../../domain/things'
 import {
   dateClassLabel,
   dateDecisionBadge,
@@ -17,7 +18,7 @@ import { useActivityExplanations, useBackgroundHealth } from '../../store/observ
 import { useToast } from '../../store/toast'
 import { Modal } from '../Overlay'
 import { SourceSheet } from '../SourceSheet'
-import { Button, Empty, Progress, Seg, Sheet, Spinner, Tag } from '../ui'
+import { Button, Empty, Fold, Progress, Seg, Sheet, Spinner, Tag } from '../ui'
 
 const jobRank = { failed: 0, running: 1, waiting: 2, queued: 3, done: 4 } as const
 
@@ -67,7 +68,7 @@ export function ObserveBackgroundTab({ onOpenTrace }: { onOpenTrace: (id: string
   return (
     <div className="stack">
       <div className="obs-toolbar">
-        <span className="small muted">后台阶段健康、需要你授权恢复的暂停链路，以及「为什么没建项目 / 如何处理日期」的判定记录。</span>
+        <span className="small muted">后台阶段健康、需要你授权恢复的暂停链路，以及「为什么没建项目 / 如何处理日期」的判定记录；正常预算裁剪与真实失败分开显示。</span>
         <Button size="sm" variant="quiet" icon={<RotateCw size={13} />} onClick={reloadAll}>
           刷新状态
         </Button>
@@ -91,12 +92,16 @@ export function ObserveBackgroundTab({ onOpenTrace }: { onOpenTrace: (id: string
           <span className="v">{totalDeferred} 次</span>
           <span className="d">受小时限额或日预算保护</span>
         </div>
-        <div className={`obs-tile${totalStageFailures > 0 || totalOverflow > 0 ? ' danger' : ''}`}>
-          <span className="k">近 1 小时阶段失败 / 溢出</span>
-          <span className="v">
-            {totalStageFailures} / {totalOverflow}
+        <div className={`obs-tile${totalStageFailures > 0 ? ' danger' : ''}`}>
+          <span className="k">近 1 小时阶段失败</span>
+          <span className="v">{totalStageFailures} 次</span>
+          <span className="d">
+            {totalOverflow > 0
+              ? `另有 ${totalOverflow} 次正常预算裁剪`
+              : state.organize
+                ? `整理进度 ${state.organize.done}/${state.organize.total}`
+                : '按阶段限流运行'}
           </span>
-          <span className="d">{state.organize ? `整理进度 ${state.organize.done}/${state.organize.total}` : '按阶段限流运行'}</span>
         </div>
       </div>
 
@@ -115,16 +120,6 @@ export function ObserveBackgroundTab({ onOpenTrace }: { onOpenTrace: (id: string
           <Button size="sm" onClick={explanations.reload}>
             重试
           </Button>
-        </div>
-      )}
-
-      {health.data && health.data.overflow.length > 0 && (
-        <div className="callout callout-danger" role="alert">
-          <AlertTriangle size={15} />
-          <div>
-            最近 1 小时出现超出上限记录：
-            {health.data.overflow.map((o) => `${functionLabel(o.stage)}（${reasonLabel(o.reason)} × ${o.count}）`).join('；')}
-          </div>
         </div>
       )}
 
@@ -192,7 +187,6 @@ export function ObserveBackgroundTab({ onOpenTrace }: { onOpenTrace: (id: string
           </div>
         </Sheet>
       )}
-
       <Sheet title={<h3>后台在做的事</h3>} aside={<span className="tiny muted">和你的待办分开；失败任务可原地重试</span>}>
         {jobs.length === 0 ? (
           <Empty>现在没有在做或卡住的后台任务。</Empty>
@@ -296,12 +290,15 @@ export function ObserveBackgroundTab({ onOpenTrace }: { onOpenTrace: (id: string
                           看主题记忆
                           <ArrowUpRight size={12} />
                         </Link>
-                        {item.projectId && (
-                          <Link className="obs-link-pill" to={`/t/${item.projectId}`}>
-                            打开对应项目
-                            <ArrowUpRight size={12} />
-                          </Link>
-                        )}
+                        {item.projectId &&
+                          (findThing(state, item.projectId) ? (
+                            <Link className="obs-link-pill" to={`/t/${item.projectId}`}>
+                              打开对应项目
+                              <ArrowUpRight size={12} />
+                            </Link>
+                          ) : (
+                            <span className="obs-dead-ref">原项目已删除（{item.projectId.slice(0, 6)}）</span>
+                          ))}
                         {item.actionId && (
                           <button type="button" className="obs-link-pill" onClick={() => onOpenTrace(item.actionId!)}>
                             <GitBranch size={12} />
@@ -340,12 +337,15 @@ export function ObserveBackgroundTab({ onOpenTrace }: { onOpenTrace: (id: string
                           看来源记忆（v{d.claimVersion}）
                           <ArrowUpRight size={12} />
                         </Link>
-                        {d.itemId && (
-                          <Link className="obs-link-pill" to={`/t/${d.itemId}`}>
-                            打开生成的事项
-                            <ArrowUpRight size={12} />
-                          </Link>
-                        )}
+                        {d.itemId &&
+                          (findThing(state, d.itemId) ? (
+                            <Link className="obs-link-pill" to={`/t/${d.itemId}`}>
+                              打开生成的事项
+                              <ArrowUpRight size={12} />
+                            </Link>
+                          ) : (
+                            <span className="obs-dead-ref">原事项已删除（{d.itemId.slice(0, 6)}）</span>
+                          ))}
                         {d.actionId && (
                           <button type="button" className="obs-link-pill" onClick={() => onOpenTrace(d.actionId!)}>
                             <GitBranch size={12} />
@@ -388,7 +388,7 @@ export function ObserveBackgroundTab({ onOpenTrace }: { onOpenTrace: (id: string
                         <Tag tone={s.success > 0 ? 'success' : 'neutral'}>成功 {s.success}</Tag>
                         <Tag tone={s.deferred > 0 ? 'warning' : 'neutral'}>延后等待 {s.deferred}</Tag>
                         <Tag tone={s.failure > 0 ? 'danger' : 'neutral'}>失败 {s.failure}</Tag>
-                        {s.overflow > 0 && <Tag tone="danger">溢出 {s.overflow}</Tag>}
+                        {s.overflow > 0 && <Tag tone="neutral">预算裁剪 {s.overflow}</Tag>}
                       </div>
                     </div>
                     <div className="obs-stage-budget">
@@ -402,7 +402,7 @@ export function ObserveBackgroundTab({ onOpenTrace }: { onOpenTrace: (id: string
                         延后原因：{deferredEntries.map(([r, n]) => `${reasonLabel(r)}（${n}）`).join('、')}
                       </div>
                     )}
-                    {s.lastFailure && <div className="small warn-text">最近失败：{reasonLabel(s.lastFailure)}</div>}
+                    {s.lastFailure && <div className="small warn-text">近 1 小时最近失败：{reasonLabel(s.lastFailure)}</div>}
                     {(s.withdrawn.deadlines > 0 || s.withdrawn.requirements > 0) && (
                       <div className="tiny muted">
                         重整理撤回：期限 {s.withdrawn.deadlines} · 助手要求 {s.withdrawn.requirements}
@@ -415,6 +415,20 @@ export function ObserveBackgroundTab({ onOpenTrace }: { onOpenTrace: (id: string
           </div>
         )}
       </Sheet>
+
+      {health.data && health.data.overflow.length > 0 && (
+        <Sheet>
+          <Fold title="近 1 小时预算与上下文裁剪记录" summary={`${totalOverflow} 次（正常上下文配额保护，非异常）`}>
+            <ul className="obs-gaps">
+              {health.data.overflow.map((o, i) => (
+                <li key={`${o.stage}:${o.reason}:${i}`}>
+                  {functionLabel(o.stage)}：{reasonLabel(o.reason)}（× {o.count}）
+                </li>
+              ))}
+            </ul>
+          </Fold>
+        </Sheet>
+      )}
 
       {attentionSources.length > 0 && (
         <Sheet
@@ -486,6 +500,11 @@ export function ObserveBackgroundTab({ onOpenTrace }: { onOpenTrace: (id: string
           <p className="small muted">
             确认后会保留原有历史调用与计费记录，并以本次请求 ID 关联授权新一轮有界恢复重试。
           </p>
+          {authorizingJob.errorCode === 'chain_limit' && (
+            <p className="small warn-text">
+              注意：该任务链深已超过 200，重新入队仍保留原链深；请先排查循环原因，否则下轮巡检会再次按链深上限拦截。
+            </p>
+          )}
         </Modal>
       )}
 

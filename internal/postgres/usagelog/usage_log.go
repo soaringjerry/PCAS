@@ -122,10 +122,42 @@ percentile_cont(0.5) WITHIN GROUP(ORDER BY other_ms) AS other_median, max(other_
 'modelMs',jsonb_build_object('median',model_median,'max',model_max),
 'totalMs',jsonb_build_object('median',total_median,'max',total_max),
 'otherMs',jsonb_build_object('median',other_median,'max',other_max)) ORDER BY kind,tier) AS timings FROM timings GROUP BY day
- ), day_keys AS (SELECT day FROM days UNION SELECT day FROM timing_days)
- SELECT jsonb_build_object('days',coalesce(jsonb_agg(jsonb_build_object('date',k.day::text,
- 'purposes',coalesce(d.purposes,'[]'::jsonb),'timings',coalesce(t.timings,'[]'::jsonb)) ORDER BY k.day),'[]'::jsonb))
- FROM day_keys k LEFT JOIN days d USING(day) LEFT JOIN timing_days t USING(day)`,
+ ), day_keys AS (SELECT day FROM days UNION SELECT day FROM timing_days),
+ range_purposes AS (
+ SELECT purpose,count(*) AS calls,
+ sum(input_tokens) AS input,sum(output_tokens) AS output,sum(cost) AS cost,
+ count(*) FILTER(WHERE input_estimated OR output_estimated) AS estimated_tokens,
+ count(*) FILTER(WHERE cost_estimated) AS estimated_cost,
+ count((to_jsonb(model_usage)->>'duration_ms')::bigint) AS measured_calls,
+ percentile_cont(0.5) WITHIN GROUP(ORDER BY (to_jsonb(model_usage)->>'duration_ms')::bigint) AS duration_median,
+ max((to_jsonb(model_usage)->>'duration_ms')::bigint) AS duration_max
+ FROM model_usage WHERE owner_id=$1 AND at >= $3 AND at < $4 GROUP BY purpose
+ ), range_timings AS (
+ SELECT kind,tier,count(*) AS executions,
+ percentile_cont(0.5) WITHIN GROUP(ORDER BY prepare_ms) AS prepare_median, max(prepare_ms) AS prepare_max,
+ percentile_cont(0.5) WITHIN GROUP(ORDER BY answer_ms) AS answer_median, max(answer_ms) AS answer_max,
+ percentile_cont(0.5) WITHIN GROUP(ORDER BY selfcheck_ms) AS selfcheck_median, max(selfcheck_ms) AS selfcheck_max,
+ percentile_cont(0.5) WITHIN GROUP(ORDER BY writeback_ms) AS writeback_median, max(writeback_ms) AS writeback_max,
+ percentile_cont(0.5) WITHIN GROUP(ORDER BY model_ms) AS model_median, max(model_ms) AS model_max,
+ percentile_cont(0.5) WITHIN GROUP(ORDER BY total_ms) AS total_median, max(total_ms) AS total_max,
+ percentile_cont(0.5) WITHIN GROUP(ORDER BY other_ms) AS other_median, max(other_ms) AS other_max
+ FROM execution_timings WHERE owner_id=$1 AND at >= $3 AND at < $4 GROUP BY kind,tier
+ )
+ SELECT jsonb_build_object(
+ 'days',coalesce((SELECT jsonb_agg(jsonb_build_object('date',k.day::text,
+ 'purposes',coalesce(d.purposes,'[]'::jsonb),'timings',coalesce(t.timings,'[]'::jsonb)) ORDER BY k.day)
+ FROM day_keys k LEFT JOIN days d USING(day) LEFT JOIN timing_days t USING(day)),'[]'::jsonb),
+ 'purposes',coalesce((SELECT jsonb_agg(jsonb_build_object('purpose',purpose,'calls',calls,
+ 'inputTokens',input,'outputTokens',output,'cost',cost,'estimatedTokenCalls',estimated_tokens,'estimatedCostCalls',estimated_cost,
+ 'durationMs',jsonb_build_object('measuredCalls',measured_calls,'median',duration_median,'max',duration_max)) ORDER BY cost DESC,calls DESC,purpose) FROM range_purposes),'[]'::jsonb),
+ 'timings',coalesce((SELECT jsonb_agg(jsonb_build_object('kind',kind,'tier',tier,'executions',executions,
+ 'prepareMs',jsonb_build_object('median',prepare_median,'max',prepare_max),
+ 'answerMs',jsonb_build_object('median',answer_median,'max',answer_max),
+ 'selfcheckMs',jsonb_build_object('median',selfcheck_median,'max',selfcheck_max),
+ 'writebackMs',jsonb_build_object('median',writeback_median,'max',writeback_max),
+ 'modelMs',jsonb_build_object('median',model_median,'max',model_max),
+ 'totalMs',jsonb_build_object('median',total_median,'max',total_max),
+ 'otherMs',jsonb_build_object('median',other_median,'max',other_max)) ORDER BY kind,tier) FROM range_timings),'[]'::jsonb))`,
 			string(scope.OwnerID), settings.Timezone, start, end).Scan(&out)
 	})
 	return out, err
@@ -199,6 +231,52 @@ func ParseUsageCursor(before string) (UsageCursor, error) {
 	return cursor, nil
 }
 
+// UsageCallByID returns one usage call owned by scope with resolved reference
+// previews, so links from older days can locate a call outside the latest page.
+func (s *Usage) UsageCallByID(ctx context.Context, scope memory.Scope, id string) (json.RawMessage, error) {
+	if err := kernel.RequireOwner(scope); err != nil {
+		return nil, err
+	}
+	if !memory.ID(id).Valid() {
+		return nil, memory.ErrInvalid
+	}
+	var call usageCall
+	err := pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		var refs []memory.Ref
+		err := tx.QueryRow(ctx, `SELECT u.id::text,u.at,u.purpose,u.agent_id,u.model,u.input_tokens,u.output_tokens,u.cost,
+ u.turn_id::text,u.run_id::text,u.job_id::text,u.memory_refs,u.tier,u.plan,u.input_estimated,u.output_estimated,u.cost_estimated,(to_jsonb(u)->>'duration_ms')::bigint,
+ CASE WHEN e.id IS NOT NULL THEN jsonb_build_object('kind',e.kind,'tier',e.tier,'prepareMs',e.prepare_ms,'answerMs',e.answer_ms,'selfcheckMs',e.selfcheck_ms,'writebackMs',e.writeback_ms,'modelMs',e.model_ms,'totalMs',e.total_ms,'otherMs',e.other_ms) END
+ FROM model_usage u LEFT JOIN execution_timings e ON e.owner_id=u.owner_id AND e.id=coalesce(u.turn_id,u.run_id)
+ AND e.kind=CASE WHEN u.turn_id IS NOT NULL THEN 'secretary' ELSE 'deputy' END
+ WHERE u.owner_id=$1 AND u.id=$2`, string(scope.OwnerID), id).Scan(
+			&call.ID, &call.At, &call.Purpose, &call.AgentID, &call.Model, &call.InputTokens,
+			&call.OutputTokens, &call.Cost, &call.TurnID, &call.RunID, &call.JobID, &refs, &call.Tier, &call.Plan, &call.InputEstimated, &call.OutputEstimated, &call.CostEstimated, &call.DurationMS, &call.ExecutionTiming,
+		)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return memory.ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		ids := make([]string, 0, len(refs))
+		call.Refs = make([]usageCallRef, 0, len(refs))
+		for _, ref := range refs {
+			call.Refs = append(call.Refs, usageCallRef{Ref: ref, Deleted: true})
+			ids = append(ids, string(ref.ID))
+		}
+		items := []usageCall{call}
+		if err := resolveUsageCallRefsTx(ctx, tx, scope.OwnerID, items, ids); err != nil {
+			return err
+		}
+		call = items[0]
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(call)
+}
+
 // UsageCalls resolves all reference previews with one set query. The logged
 // version stays unchanged, while text comes from the record's current version.
 func (s *Usage) UsageCalls(ctx context.Context, scope memory.Scope, limit int, before string) (json.RawMessage, error) {
@@ -257,44 +335,7 @@ func (s *Usage) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 			last := items[len(items)-1]
 			next = base64.RawURLEncoding.EncodeToString(kernel.JSON(UsageCursor{At: last.At, ID: last.ID}))
 		}
-		if len(ids) == 0 {
-			return nil
-		}
-		rows, err = tx.Query(ctx, `SELECT r.id::text,r.kind,
-   CASE r.kind WHEN 'claim' THEN left(c.value #>> '{}',80) WHEN 'source' THEN left(sv.body,80) END
-   FROM memory_records r
-   JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version) AND v.state='active'
-   LEFT JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
-   LEFT JOIN source_versions sv ON (sv.owner_id,sv.source_id,sv.version)=(r.owner_id,r.id,r.version)
-   WHERE r.owner_id=$1 AND r.id=ANY($2::uuid[]) AND r.state='active' AND r.kind IN ('claim','source')`, string(scope.OwnerID), ids)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		texts := map[string]string{}
-		for rows.Next() {
-			var id, kind string
-			var text *string
-			if err := rows.Scan(&id, &kind, &text); err != nil {
-				return err
-			}
-			if text != nil {
-				texts[id+":"+kind] = *text
-			}
-		}
-		if err := rows.Err(); err != nil {
-			return err
-		}
-		for i := range items {
-			for j := range items[i].Refs {
-				ref := &items[i].Refs[j]
-				if text, ok := texts[string(ref.ID)+":"+string(ref.Kind)]; ok {
-					ref.Text = text
-					ref.Deleted = false
-				}
-			}
-		}
-		return nil
+		return resolveUsageCallRefsTx(ctx, tx, scope.OwnerID, items, ids)
 	})
 	if err != nil {
 		return nil, err
@@ -303,6 +344,47 @@ func (s *Usage) UsageCalls(ctx context.Context, scope memory.Scope, limit int, b
 		Items []usageCall `json:"items"`
 		Next  string      `json:"next"`
 	}{Items: items, Next: next})
+}
+
+func resolveUsageCallRefsTx(ctx context.Context, tx pgx.Tx, owner memory.ID, items []usageCall, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `SELECT r.id::text,r.kind,
+   CASE r.kind WHEN 'claim' THEN left(c.value #>> '{}',80) WHEN 'source' THEN left(sv.body,80) END
+   FROM memory_records r
+   JOIN record_versions v ON (v.owner_id,v.record_id,v.version)=(r.owner_id,r.id,r.version) AND v.state='active'
+   LEFT JOIN claim_revisions c ON (c.owner_id,c.claim_id,c.version)=(r.owner_id,r.id,r.version)
+   LEFT JOIN source_versions sv ON (sv.owner_id,sv.source_id,sv.version)=(r.owner_id,r.id,r.version)
+   WHERE r.owner_id=$1 AND r.id=ANY($2::uuid[]) AND r.state='active' AND r.kind IN ('claim','source')`, string(owner), ids)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	texts := map[string]string{}
+	for rows.Next() {
+		var id, kind string
+		var text *string
+		if err := rows.Scan(&id, &kind, &text); err != nil {
+			return err
+		}
+		if text != nil {
+			texts[id+":"+kind] = *text
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for i := range items {
+		for j := range items[i].Refs {
+			ref := &items[i].Refs[j]
+			if text, ok := texts[string(ref.ID)+":"+string(ref.Kind)]; ok {
+				ref.Text = text
+				ref.Deleted = false
+			}
+		}
+	}
+	return nil
 }
 
 func usageBefore(cursor UsageCursor) any {

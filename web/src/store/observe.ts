@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { civilDate } from '../domain/time'
 import type { BackgroundHealth, DayActivity, UsageCall, UsageCallsPage, UsageSummary } from '../domain/observe'
-import { api } from './api'
+import { APIError, api } from './api'
 import { readProblem } from './memories'
 
 const DAY_PAGE_LIMIT = 500
@@ -87,7 +87,12 @@ export function useDayActivity(date: string, enabled: boolean): DayActivityState
   }
 }
 
-export function useUsageSummary(days: number, timezone: string, enabled: boolean): AsyncData<UsageSummary> {
+export interface UsageSummaryState extends AsyncData<UsageSummary> {
+  from: string
+  to: string
+}
+
+export function useUsageSummary(days: number, timezone: string, enabled: boolean): UsageSummaryState {
   const to = civilDate(0, timezone)
   const from = civilDate(-(days - 1), timezone)
   const key = `${from}:${to}`
@@ -115,8 +120,50 @@ export function useUsageSummary(days: number, timezone: string, enabled: boolean
 
   const current = state.key === key ? state : undefined
   return {
+    from,
+    to,
     phase: current ? current.phase : 'loading',
     data: current?.data ?? null,
+    problem: current?.problem ?? '',
+    reload,
+  }
+}
+
+export interface UsageCallLookupState extends AsyncData<UsageCall> {
+  notFound: boolean
+}
+
+export function useUsageCallById(callId: string, enabled: boolean): UsageCallLookupState {
+  const [state, setState] = useState<{ key: string; phase: 'loading' | 'ready' | 'failed'; data: UsageCall | null; notFound: boolean; problem: string }>({
+    key: '',
+    phase: 'loading',
+    data: null,
+    notFound: false,
+    problem: '',
+  })
+  const [tick, setTick] = useState(0)
+  const reload = useCallback(() => setTick((n) => n + 1), [])
+
+  useEffect(() => {
+    if (!enabled || !callId) return
+    let alive = true
+    api<UsageCall>(`/v1/workspace/usage/calls/${encodeURIComponent(callId)}`)
+      .then((data) => {
+        if (alive) setState({ key: callId, phase: 'ready', data, notFound: false, problem: '' })
+      })
+      .catch((e: unknown) => {
+        if (!alive) return
+        const isNotFound = e instanceof APIError && (e.status === 404 || e.status === 400)
+        setState({ key: callId, phase: 'failed', data: null, notFound: isNotFound, problem: readProblem(e) })
+      })
+    return () => { alive = false }
+  }, [callId, enabled, tick])
+
+  const current = state.key === callId ? state : undefined
+  return {
+    phase: current ? current.phase : 'loading',
+    data: current?.data ?? null,
+    notFound: current?.notFound ?? false,
     problem: current?.problem ?? '',
     reload,
   }

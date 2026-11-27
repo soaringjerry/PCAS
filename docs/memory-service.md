@@ -107,9 +107,13 @@ One SQL statement, `activityDaySQL` in [the activity storage package](../interna
 
 Cost is summed once for each invocation and is never joined to actions.
 A call that reserved nothing costs zero. Another call without recorded usage has an unknown cost, and its held reservation is shown separately.
-The response reports the events that a page leaves out, and its totals always cover the whole day.
+The response reports the events that a page leaves out, and its `summary` and cost totals always cover the whole day.
+`summary.failures` counts unresolved failures, unknown call outcomes, and terminal recovery pauses, excluding normal `overflow` clippings and `replaced` retries.
 The response also lists the links that the records do not contain. The query does not derive a link from similar times.
-The web observation panel at `/observe` renders this read model alongside `/v1/workspace/usage`, `/v1/workspace/usage/calls`, and `/v1/workspace/background`.
+The web observation panel at `/observe` renders this read model alongside `/v1/workspace/usage`, `/v1/workspace/usage/calls`, `/v1/workspace/usage/calls/{id}`, and `/v1/workspace/background`.
+`GET /v1/workspace/usage` also returns whole-range `purposes` and `timings` medians alongside `days`.
+`GET /v1/workspace/usage/calls/{id}` returns one owner-scoped call and its resolved reference previews by ID.
+`GET /v1/workspace/background` scopes `lastFailure` to the same one-hour window as stage counts.
 The [first live readings](evaluations/2026-10-11-activity-baseline.md) give measured counts for two days.
 
 ### Background Call Evidence

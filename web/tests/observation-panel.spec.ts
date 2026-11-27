@@ -369,6 +369,34 @@ async function setupObserveMock(page: Page, state = baseState()) {
     })
   })
 
+  await page.route((url) => url.pathname.startsWith('/v1/workspace/usage/calls/'), (route) => {
+    const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '')
+    if (id === 'usage-old-99') {
+      return route.fulfill({
+        json: {
+          id: 'usage-old-99',
+          at: '2026-11-10T01:00:00Z',
+          purpose: 'query_embedding',
+          agentId: 'embed',
+          model: 'text-embedding-3-small',
+          inputTokens: 42,
+          outputTokens: 0,
+          cost: 0.0001,
+          turnId: null,
+          runId: null,
+          jobId: null,
+          tier: '',
+          inputEstimated: false,
+          outputEstimated: false,
+          costEstimated: false,
+          durationMs: 145,
+          refs: [{ id: 'src-orig-1', version: 1, kind: 'source', text: '十天前的历史检索引用', deleted: false }],
+        },
+      })
+    }
+    return route.fulfill({ status: 404, json: { error: 'not_found' } })
+  })
+
   await on('/v1/memory/sources/src-orig-1', (route) =>
     route.fulfill({
       json: {
@@ -403,12 +431,12 @@ async function setupObserveMock(page: Page, state = baseState()) {
             failure: 1,
             overflow: 2,
             deferredBy: {},
-            lastFailure: 'model_call_failed',
+            lastFailure: 'schedule_background_write_busy',
             withdrawn: { deadlines: 1, requirements: 0 },
             calls: 13,
           },
         ],
-        overflow: [{ stage: 'memory.organize', reason: 'chain_limit', count: 2 }],
+        overflow: [{ stage: 'secretary', reason: 'recall_budget', count: 6 }],
       },
     }),
   )
@@ -511,6 +539,7 @@ test('top navigation and command palette open the Observation Panel, and daily a
   // Jump from a call row directly to Usage tab highlighting its cited memory/source refs.
   await page.getByRole('button', { name: '查看引用记忆' }).click()
   await expect(page).toHaveURL(/\/observe\?tab=usage&call=usage-sec-1/)
+  await expect(page.locator('.obs-trace-banner')).toContainText('已定位调用记录：usage-se')
   await expect(page.getByText('周五前把周报发给组长')).toBeVisible()
   await expect(page.getByText('原记录已删除，仅保留当时引用编号。')).toBeVisible()
 
@@ -518,6 +547,10 @@ test('top navigation and command palette open the Observation Panel, and daily a
   await page.getByRole('button', { name: '看原文' }).click()
   await expect(page.getByRole('dialog')).toContainText('周五前把周报发给组长')
   await page.keyboard.press('Escape')
+
+  // Daily cost chart fills zero-usage days across the continuous 14-day window.
+  expect(await page.locator('.obs-bar-hit').count()).toBeGreaterThanOrEqual(14)
+  expect(await page.locator('.obs-bar-rect.zero').count()).toBeGreaterThanOrEqual(12)
 
   // Clicking a bar in the daily cost chart navigates straight to that day's activity stream.
   await page.getByRole('button', { name: new RegExp(`^${dayZero}`) }).click()
@@ -531,14 +564,111 @@ test('top navigation and command palette open the Observation Panel, and daily a
   expect(m.errors).toEqual([])
 })
 
-test('background health separates deferrals from failures, lists overflow, and retries failed jobs', async ({ page }) => {
+test('usage tab locates historical calls outside the newest 50 directly by ID and reports missing calls cleanly', async ({ page }) => {
+  const m = await setupObserveMock(page)
+  await page.goto('/observe?tab=usage&call=usage-old-99')
+
+  await expect(page.getByRole('status')).toContainText('已定位调用记录：usage-ol')
+  await expect(page.getByRole('status')).toContainText('早于最近 50 条，已按 ID 直接调取')
+  await expect(page.getByText('检索向量化')).toBeVisible()
+  await expect(page.getByText('十天前的历史检索引用')).toBeVisible()
+
+  await page.goto('/observe?tab=usage&call=usage-missing-00')
+  await expect(page.getByRole('status')).toContainText('未找到编号 usage-mi 的调用记录')
+  expect(m.errors).toEqual([])
+})
+
+test('daily activity keeps normal overflow, replaced retries, and deleted things calm and accurate across pagination', async ({ page }) => {
+  const m = await setupObserveMock(page)
+  await page.route((url) => url.pathname === '/v1/workspace/activity/day', (route) =>
+    route.fulfill({
+      json: {
+        date: dayOne,
+        timezone: 'Asia/Shanghai',
+        eventCount: 520,
+        omittedEvents: 517,
+        summary: { failures: 0, deferrals: 1, overflows: 48 },
+        kinds: { call: 1, stage: 49, action: 1 },
+        events: [
+          {
+            at: '2026-11-26T01:09:00Z',
+            kind: 'call',
+            eventId: 'call-retried',
+            executionId: 'exec-r',
+            rootExecutionId: 'exec-r',
+            function: 'secretary',
+            outcome: 'failed',
+            summary: 'answer',
+            reason: 'model_call_failed',
+            cost: 0,
+            costKnown: true,
+            evidence: { provider: 'chatgpt', model: 'gpt-fake', accounting: 'not_reserved', recoveryState: 'replaced', recoveryReason: 'secretary_transient_retry' },
+          },
+          {
+            at: '2026-11-26T01:09:05Z',
+            kind: 'stage',
+            eventId: 'st-overflow',
+            executionId: null,
+            rootExecutionId: null,
+            function: 'secretary',
+            outcome: 'overflow',
+            summary: '',
+            reason: 'recall_budget',
+            cost: null,
+            costKnown: false,
+            evidence: { count: 6 },
+          },
+          {
+            at: '2026-11-26T01:09:10Z',
+            kind: 'action',
+            eventId: 'act-deleted-item',
+            executionId: 'exec-r',
+            rootExecutionId: 'exec-r',
+            function: 'desk',
+            outcome: 'executed',
+            summary: '修改临时事项',
+            reason: '',
+            cost: null,
+            costKnown: false,
+            evidence: { changes: 1, items: ['deleted-task-999'] },
+          },
+        ],
+        cost: { settled: 0, invocations: 1, estimatedCostInvocations: 0, unknownCostInvocations: 0, heldReservations: 0, byFunction: [] },
+        gaps: [],
+      },
+    }),
+  )
+  await page.goto('/observe?date=' + dayOne)
+
+  const overview = page.getByRole('group', { name: '当日概览' })
+  // Whole-day summary is shown cleanly: 0 anomalies, 1 deferral, 48 calm budget truncations; no danger tile.
+  await expect(overview).toContainText('1 项延后')
+  await expect(overview).toContainText('失败/未知 0 · 延后等待 1 · 预算裁剪 48')
+  await expect(overview.locator('.obs-tile.danger')).toHaveCount(0)
+  // Real backend reason labels render in Chinese.
+  await expect(page.getByText('已重试替换')).toBeVisible()
+  await expect(page.getByText('秘书遇到临时错误，已自动重试一次')).toBeVisible()
+  await expect(page.getByText('回忆到的记忆超出本次上下文预算，已按相关性裁剪')).toBeVisible()
+  // Deleted work item renders a non-clickable badge instead of a dead /t/:id link.
+  await expect(page.getByText('原事项已删除（delete）')).toBeVisible()
+  await expect(page.locator('a[href="/t/deleted-task-999"]')).toHaveCount(0)
+  expect(m.errors).toEqual([])
+})
+
+test('background health separates deferrals from failures, keeps normal overflow folded calmly, and retries failed jobs', async ({ page }) => {
   const m = await setupObserveMock(page)
   await page.goto('/observe?tab=background')
 
-  // Overflow callout and stage health rows distinguish deferred vs failure clearly.
-  await expect(page.getByRole('alert')).toContainText('超过因果链深度上限（200）')
+  // Overflow is NOT shown as a scary red role="alert" banner; it lives in a calm folded info panel.
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.getByText('近 1 小时阶段失败')).toBeVisible()
+  await expect(page.getByText('另有 6 次正常预算裁剪')).toBeVisible()
+  await page.getByRole('button', { name: /近 1 小时预算与上下文裁剪记录/ }).click()
+  await expect(page.getByText('回忆到的记忆超出本次上下文预算，已按相关性裁剪')).toBeVisible()
+
   await expect(page.getByText('延后等待 3')).toBeVisible()
   await expect(page.getByText('失败 1')).toBeVisible()
+  await expect(page.getByText('近 1 小时最近失败：调度让行：正在等待你的操作写入提交')).toBeVisible()
   await expect(page.getByText('小时调用 2 / 2')).toBeVisible()
 
   // Completed jobs stay collapsed until requested; failed job retries via retryJob command.
@@ -552,7 +682,7 @@ test('background health separates deferrals from failures, lists overflow, and r
   expect(m.errors).toEqual([])
 })
 
-test('memory and access tab searches across all server memories with pagination and saves activity and agent access settings', async ({ page }) => {
+test('memory and access tab debounces server-side memory search, paginates, and saves activity and agent access settings', async ({ page }) => {
   const m = await setupObserveMock(page)
   await page.goto('/observe?tab=memory')
 
@@ -561,10 +691,14 @@ test('memory and access tab searches across all server memories with pagination 
   await page.getByRole('button', { name: '再看 50 条' }).click()
   await expect(page.getByRole('option', { name: /分页第二页的记忆/ })).toBeVisible()
 
-  // Server-side search finds an older memory outside the snapshot and saves activity weights.
-  await page.getByRole('searchbox', { name: '搜索要调节权重的记忆' }).fill('成都')
+  // Rapid typing is debounced rather than firing on every keystroke.
+  const beforeSearchCount = m.memoryQueries.length
+  const box = page.getByRole('searchbox', { name: '搜索要调节权重的记忆' })
+  await box.pressSequentially('成都', { delay: 30 })
   const hit = page.getByRole('option', { name: /去年说过想去成都吃火锅/ })
   await expect(hit).toBeVisible()
+  expect(m.memoryQueries.length - beforeSearchCount).toBe(1)
+
   await hit.click()
   await page.getByRole('button', { name: '保存权重设置' }).click()
   await expect.poll(() => m.activityPosts.length).toBe(1)

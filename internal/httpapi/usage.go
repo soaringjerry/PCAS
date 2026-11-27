@@ -14,6 +14,10 @@ type usageReader interface {
 	UsageCalls(context.Context, memory.Scope, int, string) (json.RawMessage, error)
 }
 
+type usageCallByIDReader interface {
+	UsageCallByID(context.Context, memory.Scope, string) (json.RawMessage, error)
+}
+
 type dayActivityReader interface {
 	DayActivity(context.Context, memory.Scope, string, int, int) (json.RawMessage, error)
 }
@@ -21,6 +25,23 @@ type dayActivityReader interface {
 func (s *Server) usageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/workspace/usage", s.authorize(s.usageSummary))
 	mux.HandleFunc("GET /v1/workspace/usage/calls", s.authorize(s.usageCalls))
+	mux.HandleFunc("GET /v1/workspace/usage/calls/{id}", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
+		if !scope.IsOwner {
+			s.fail(w, memory.ErrForbidden)
+			return
+		}
+		reader, ok := s.options.Workspace.(usageCallByIDReader)
+		if !ok {
+			s.fail(w, memory.ErrUnavailable)
+			return
+		}
+		out, err := reader.UsageCallByID(r.Context(), scope, r.PathValue("id"))
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, out)
+	}))
 	// One local day of recorded work: events, cost, and reasons.
 	mux.HandleFunc("GET /v1/workspace/activity/day", s.authorize(func(w http.ResponseWriter, r *http.Request, scope memory.Scope) {
 		reader, ok := s.options.Workspace.(dayActivityReader)

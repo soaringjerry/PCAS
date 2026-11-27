@@ -138,7 +138,6 @@ for (const width of [1440, 390]) {
       { name: /Codex 登录/, content: page.getByRole('heading', { name: 'Codex App Server', exact: true }) },
       { name: /按量计费接口/, content: page.getByLabel('文本 API Base URL', { exact: true }) },
       { name: /接入其他应用/, content: page.getByRole('heading', { name: '资料接入', exact: true }) },
-      { name: /记忆范围/, content: page.getByText('事实', { exact: true }) },
     ]
     for (const {name, content} of folds) {
       const fold = page.getByRole('button', { name })
@@ -150,6 +149,7 @@ for (const width of [1440, 390]) {
       await fold.press('Enter')
       await expect(content).toBeHidden()
     }
+    await expect(page.getByRole('link', { name: '去观察面板调整' })).toHaveAttribute('href', '/observe?tab=memory')
     await assertNoOverflow(page, width)
     expect(backend.writes).toEqual([])
     expect(backend.state).toEqual(before)
@@ -296,16 +296,16 @@ test('accepted candidate without a matching server target cannot navigate to a g
 
 
 for (const permission of [
- { field:'enabled', name:/启用 独立验收模型/, open:false },
- { field:'includeInferred', name:/推测/, open:true },
+ { field:'enabled', name:/启用 独立验收模型/, path:'/settings' },
+ { field:'includeInferred', name:/推测/, path:'/observe?tab=memory' },
 ] as const) {
  test(`explicit ${permission.field} changes only that model field`,async({page})=>{
   const initial=workspace()
   // Edit permissions for an enabled model; the separate fold test keeps disabled defaults untouched.
-  if(permission.open) initial.agents[0].enabled=true
+  if(permission.field==='includeInferred') initial.agents[0].enabled=true
   const backend=await mock(page,initial),before=structuredClone(backend.state)
-  await page.goto('/settings')
-  if(permission.open) await page.getByRole('button',{name:/记忆范围/}).click()
+  await page.route((url)=>url.pathname==='/v1/workspace/memories',(route)=>route.fulfill({json:{items:[],total:0,next:''}}))
+  await page.goto(permission.path)
   const control=page.getByRole('switch',{name:permission.name})
   await expect(control).toHaveAttribute('aria-checked','false')
   expect(backend.writes).toEqual([])

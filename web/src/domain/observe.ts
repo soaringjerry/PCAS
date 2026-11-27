@@ -1,4 +1,5 @@
 import type { Tone } from './labels'
+import observeLabels from './observe-labels.json'
 
 export type ActivityEventKind = 'call' | 'usage' | 'action' | 'undo' | 'run' | 'stage' | 'decision'
 
@@ -73,11 +74,18 @@ export interface ActivityCost {
   byFunction: ActivityFunctionCost[]
 }
 
+export interface ActivityDaySummary {
+  failures: number
+  deferrals: number
+  overflows: number
+}
+
 export interface DayActivity {
   date: string
   timezone: string
   eventCount: number
   omittedEvents: number
+  summary?: ActivityDaySummary
   kinds: Partial<Record<ActivityEventKind, number>>
   events: ActivityEvent[]
   cost: ActivityCost
@@ -122,6 +130,8 @@ export interface UsageDay {
 
 export interface UsageSummary {
   days: UsageDay[]
+  purposes?: UsagePurpose[]
+  timings?: UsageTiming[]
 }
 
 export interface UsageCallRef {
@@ -208,51 +218,9 @@ export const activityKindLabel: Record<ActivityEventKind, string> = {
   decision: '日期复查',
 }
 
-const functionLabels: Record<string, string> = {
-  secretary: '秘书回答',
-  deputy: '副手工作',
-  desk: '秘书动作',
-  command: '手动命令',
-  worker: '后台执行',
-  background_extraction: '后台抽取',
-  background_topic: '自动主题项目',
-  extraction: '记忆抽取',
-  organize: '记忆整理',
-  compare: '陈述对比',
-  entity_candidates: '别名扫描',
-  entity_compare: '实体合并',
-  handover: '全局交接',
-  project_handover: '项目交接',
-  date_tidy: '日期复查',
-  effort: '工时估算',
-  topic_project: '自动主题项目',
-  embed: '向量索引',
-  embedding: '向量索引',
-  query_embed: '检索向量化',
-  vision: '模型读图',
-  transcription: '语音转写',
-  reader: '记忆细读',
-  selfcheck: '输出自查',
-  revise: '文档修订',
-  'source.parse': '附件解析',
-  'source.chunk': '原文切分',
-  'source.extract': '记忆抽取',
-  'source.tokenize': '原文分词索引',
-  'source.embed': '原文向量索引',
-  'memory.index': '记忆检索索引',
-  'memory.embed': '记忆向量索引',
-  'memory.organize': '记忆整理',
-  'memory.compare': '陈述对比',
-  'memory.entity_candidates': '别名扫描',
-  'memory.entity_compare': '实体合并',
-  'memory.summary': '情景摘要',
-  'memory.card': '旧卡片槽位清理',
-  'memory.handover': '全局交接',
-  'memory.date_tidy': '日期复查',
-  'memory.project_handover': '项目交接',
-  'memory.effort': '工时估算',
-  'memory.topic_project': '自动主题项目',
-}
+const functionLabels: Record<string, string> = observeLabels.functions
+const reasonLabels: Record<string, string> = observeLabels.reasons
+const reasonPrefixes: Record<string, string> = observeLabels.reasonPrefixes
 
 export function functionLabel(name: string): string {
   if (!name) return '未命名环节'
@@ -276,9 +244,13 @@ const outcomeLabels: Record<string, { text: string; tone: Tone }> = {
   started: { text: '调用中', tone: 'accent' },
   failed: { text: '失败', tone: 'danger' },
   failure: { text: '失败', tone: 'danger' },
-  overflow: { text: '超出上限', tone: 'danger' },
+  overflow: { text: '预算裁剪', tone: 'neutral' },
   unknown: { text: '结果未知', tone: 'warning' },
   kept: { text: '保持不变', tone: 'neutral' },
+  keep: { text: '保持不变', tone: 'neutral' },
+  drop: { text: '已关闭日期', tone: 'info' },
+  task: { text: '转为待办', tone: 'success' },
+  idea: { text: '转为想法', tone: 'accent' },
   closed: { text: '已关闭日期', tone: 'info' },
   converted: { text: '已转为事项', tone: 'success' },
   skipped: { text: '已跳过', tone: 'neutral' },
@@ -288,30 +260,17 @@ export function outcomeBadge(outcome: string): { text: string; tone: Tone } {
   return outcomeLabels[outcome] ?? { text: outcome || '未知', tone: 'neutral' }
 }
 
-const reasonLabels: Record<string, string> = {
-  no_call_record: '网关上线前的历史用量，无调用流水',
-  budget_deferred: '今日额度已满，延后至次日继续',
-  topic_project_hourly_limit: '达到自动主题项目每小时限额，延后等待',
-  organize_hourly_limit: '达到记忆整理每小时限额，延后等待',
-  compare_hourly_limit: '达到陈述对比每小时限额，延后等待',
-  entity_candidates_hourly_limit: '达到别名扫描每小时限额，延后等待',
-  entity_compare_hourly_limit: '达到实体合并每小时限额，延后等待',
-  date_tidy_hourly_limit: '达到日期复查每小时限额，延后等待',
-  effort_hourly_limit: '达到工时估算每小时限额，延后等待',
-  project_handover_hourly_limit: '达到项目交接每小时限额，延后等待',
-  'memory.handover_hourly_limit': '达到全局交接每小时限额，延后等待',
-  provider_outcome_unknown: '模型响应中断，结果未知',
-  provider_recovery_exhausted: '自动恢复次数已用尽，已暂停',
-  provider_recovery_budget_exhausted: '恢复预算不足，已暂停',
-  chain_limit: '超过因果链深度上限（200），已停止自动继续',
-  deputy_execution_interrupted: '副手运行中途中断',
-  model_call_failed: '模型调用失败',
-  background_write_busy: '等待其他写入提交，延后至下次调度',
-}
-
 export function reasonLabel(reason: string): string {
   if (!reason) return ''
-  return reasonLabels[reason] ?? reason
+  if (reasonLabels[reason]) return reasonLabels[reason]
+  for (const [prefix, label] of Object.entries(reasonPrefixes)) {
+    if (reason.startsWith(prefix)) {
+      const rest = reason.slice(prefix.length)
+      if (!rest) return label.replace(/：$/, '')
+      return `${label}${reasonLabels[rest] ?? rest}`
+    }
+  }
+  return reason
 }
 
 const accountingLabels: Record<string, string> = {
@@ -325,6 +284,25 @@ const accountingLabels: Record<string, string> = {
 
 export function accountingLabel(state: string): string {
   return accountingLabels[state] ?? state
+}
+
+export function recoveryStateLabel(state: string): string {
+  switch (state) {
+    case 'exhausted':
+      return '自动恢复耗尽（已暂停）'
+    case 'budget_exhausted':
+      return '恢复预算不足（已暂停）'
+    case 'replaced':
+      return '已重试替换'
+    case 'active':
+      return '正常'
+    default:
+      return state
+  }
+}
+
+export function isTerminalRecovery(state?: string): boolean {
+  return state === 'exhausted' || state === 'budget_exhausted'
 }
 
 const gapLabels: Record<string, string> = {
@@ -371,20 +349,23 @@ export function shiftCivilDate(date: string, deltaDays: number): string {
   return new Date(utc).toISOString().slice(0, 10)
 }
 
-/** Whether an event represents a failure, unknown state, or overflow worth highlighting. */
+/**
+ * Genuine unresolved failure, unknown call outcome, or terminal recovery pause.
+ * Normal budget truncation (overflow), superseded transient retries (replaced),
+ * and compatibility fallbacks are intentionally NOT treated as anomalies.
+ */
 export function isEventProblem(e: ActivityEvent): boolean {
-  return (
-    e.outcome === 'failed' ||
-    e.outcome === 'failure' ||
-    e.outcome === 'overflow' ||
-    e.outcome === 'unknown' ||
-    Boolean(e.evidence.recoveryState) ||
-    Boolean(e.evidence.unsupportedFallback)
-  )
+  if (e.kind === 'call' && e.evidence.recoveryState === 'replaced') return false
+  if (e.kind === 'call' && isTerminalRecovery(e.evidence.recoveryState)) return true
+  return e.outcome === 'failed' || e.outcome === 'failure' || e.outcome === 'unknown'
 }
 
 export function isEventDeferred(e: ActivityEvent): boolean {
   return e.outcome === 'deferred' || e.outcome === 'waiting'
+}
+
+export function isEventOverflow(e: ActivityEvent): boolean {
+  return e.outcome === 'overflow'
 }
 
 /** Whether an action row is eligible to offer the undo button (server still enforces all invariants). */

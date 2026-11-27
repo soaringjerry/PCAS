@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowUpRight, Search } from 'lucide-react'
 import { memoryKindLabel } from '../domain/labels'
@@ -18,19 +18,28 @@ const baseFilter: Omit<MemoryFilter, 'q'> = {
   retired: '',
 }
 
+const SEARCH_DEBOUNCE_MS = 250
+
 /**
  * Tunes how long one memory keeps its everyday recall priority.
  * Searches across all memories on the server with pagination rather than only recent snapshot entries.
  */
 export function MemoryActivitySettings() {
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [selected, setSelected] = useState<Memory | null>(null)
   const [days, setDays] = useState(30)
   const [limit, setLimit] = useState(8)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ text: string; failed?: boolean } | null>(null)
 
-  const list = useMemoryList({ ...baseFilter, q: query.trim() }, true)
+  useEffect(() => {
+    const trimmed = query.trim()
+    const timer = window.setTimeout(() => setDebouncedQuery(trimmed), trimmed ? SEARCH_DEBOUNCE_MS : 0)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  const list = useMemoryList({ ...baseFilter, q: debouncedQuery }, true)
 
   const pick = (m: Memory) => {
     setSelected(m)

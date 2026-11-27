@@ -1,15 +1,85 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowUpRight, FileText, RotateCw } from 'lucide-react'
 import { formatShortWhen } from '../../domain/time'
-import { formatCost, formatDurationMs, formatTokens, functionLabel, type UsageCallRef } from '../../domain/observe'
+import { formatCost, formatDurationMs, formatTokens, functionLabel, shiftCivilDate, type UsageCall, type UsageCallRef } from '../../domain/observe'
 import { useStore } from '../../store/context'
-import { useUsageCalls, useUsageSummary } from '../../store/observe'
+import { useUsageCallById, useUsageCalls, useUsageSummary } from '../../store/observe'
 import { SourceSheet } from '../SourceSheet'
 import { Button, Empty, Seg, Sheet, Spinner, Tag } from '../ui'
 import { DailyCostChart, ExecutionTimingSheet, PurposeBreakdownChart, type DailyCostPoint, type PurposeAggregate } from './ObserveCharts'
 
 type RangeDays = '7' | '14' | '30'
+
+function buildDateRange(from: string, to: string): string[] {
+  if (!from || !to || from > to) return []
+  const out: string[] = []
+  let cur = from
+  while (cur <= to && out.length < 90) {
+    out.push(cur)
+    cur = shiftCivilDate(cur, 1)
+  }
+  return out
+}
+
+function UsageCallCard({
+  call,
+  tz,
+  focused,
+  cardRef,
+  onOpenSource,
+}: {
+  call: UsageCall
+  tz: string
+  focused: boolean
+  cardRef?: React.Ref<HTMLDivElement>
+  onOpenSource: (id: string, version: number) => void
+}) {
+  return (
+    <div ref={cardRef} className={`item${focused ? ' obs-call-highlight' : ''}`}>
+      <div className="grow stack-sm" style={{ gap: 4 }}>
+        <div className="obs-event-head">
+          <div className="obs-event-title">
+            <span className="item-title">{functionLabel(call.purpose)}</span>
+            <Tag tone="info">{call.model || '未记录模型'}</Tag>
+            {call.tier && <Tag>{call.tier}</Tag>}
+            {(call.costEstimated || call.inputEstimated || call.outputEstimated) && <Tag tone="warning">含估算</Tag>}
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <span className="obs-event-cost">{formatCost(call.cost)}</span>
+            <span className="obs-event-time">{formatShortWhen(call.at, tz)}</span>
+          </div>
+        </div>
+
+        <div className="meta" style={{ marginTop: 0 }}>
+          <span>
+            Token：{formatTokens(call.inputTokens)} / {formatTokens(call.outputTokens)}
+          </span>
+          {call.durationMs !== null && <span>耗时：{formatDurationMs(call.durationMs)}</span>}
+          {call.executionTiming && (
+            <span>
+              准备 {formatDurationMs(call.executionTiming.prepareMs)} · 回答 {formatDurationMs(call.executionTiming.answerMs)}
+              {call.executionTiming.selfcheckMs > 0 ? ` · 自查 ${formatDurationMs(call.executionTiming.selfcheckMs)}` : ''}
+            </span>
+          )}
+          {call.agentId && <span>渠道：{call.agentId}</span>}
+        </div>
+
+        {call.refs.length > 0 && (
+          <div className="obs-refs">
+            {call.refs.map((ref) => (
+              <CallRefRow
+                key={`${ref.kind}:${ref.id}:${ref.version}`}
+                refItem={ref}
+                onOpenSource={onOpenSource}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export function ObserveUsageTab({
   highlightedCallId,
@@ -24,12 +94,34 @@ export function ObserveUsageTab({
   const tz = state.settings.timezone ?? 'UTC'
   const [range, setRange] = useState<RangeDays>('14')
   const [sourceRef, setSourceRef] = useState<{ id: string; version: number } | null>(null)
+  const focusedRef = useRef<HTMLDivElement | null>(null)
 
   const summary = useUsageSummary(Number(range), tz, true)
   const calls = useUsageCalls(true)
 
+  const inLoadedPage = useMemo(
+    () => (highlightedCallId ? calls.items.find((c) => c.id === highlightedCallId) ?? null : null),
+    [calls.items, highlightedCallId],
+  )
+  const needDirectLookup = Boolean(highlightedCallId) && calls.phase !== 'loading' && !inLoadedPage
+  const lookedUp = useUsageCallById(highlightedCallId, needDirectLookup)
+  const locatedCall = inLoadedPage ?? (needDirectLookup ? lookedUp.data : null)
+
+  useEffect(() => {
+    if (locatedCall && focusedRef.current) {
+      focusedRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [locatedCall])
+
   const aggregated = useMemo(() => {
     const days = summary.data?.days ?? []
+    const byDate = new Map(days.map((d) => [d.date, d]))
+    const dates = buildDateRange(summary.from, summary.to)
+    for (const d of days) {
+      if (!dates.includes(d.date)) dates.push(d.date)
+    }
+    dates.sort()
+
     const points: DailyCostPoint[] = []
     const byPurpose = new Map<string, PurposeAggregate & { medians: number[] }>()
     let totalCost = 0
@@ -37,59 +129,97 @@ export function ObserveUsageTab({
     let totalInput = 0
     let totalOutput = 0
     let estimatedCostCalls = 0
+    let activeDays = 0
 
-    for (const day of days) {
+    for (const date of dates) {
+      const day = byDate.get(date)
       let dCost = 0
       let dCalls = 0
       let dIn = 0
       let dOut = 0
       let dEst = 0
-      for (const p of day.purposes) {
-        dCost += p.cost
-        dCalls += p.calls
-        dIn += p.inputTokens
-        dOut += p.outputTokens
-        dEst += p.estimatedCostCalls
+      if (day) {
+        for (const p of day.purposes) {
+          dCost += p.cost
+          dCalls += p.calls
+          dIn += p.inputTokens
+          dOut += p.outputTokens
+          dEst += p.estimatedCostCalls
 
-        const cur = byPurpose.get(p.purpose) ?? {
-          purpose: p.purpose,
-          calls: 0,
-          cost: 0,
-          inputTokens: 0,
-          outputTokens: 0,
-          estimatedCostCalls: 0,
-          medianMs: null,
-          maxMs: null,
-          medians: [],
+          const cur = byPurpose.get(p.purpose) ?? {
+            purpose: p.purpose,
+            calls: 0,
+            cost: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            estimatedCostCalls: 0,
+            medianMs: null,
+            maxMs: null,
+            isRangeMedian: false,
+            medians: [],
+          }
+          cur.calls += p.calls
+          cur.cost += p.cost
+          cur.inputTokens += p.inputTokens
+          cur.outputTokens += p.outputTokens
+          cur.estimatedCostCalls += p.estimatedCostCalls
+          if (p.durationMs?.median !== null && p.durationMs?.median !== undefined) cur.medians.push(p.durationMs.median)
+          if (p.durationMs?.max !== null && p.durationMs?.max !== undefined) {
+            cur.maxMs = cur.maxMs === null ? p.durationMs.max : Math.max(cur.maxMs, p.durationMs.max)
+          }
+          byPurpose.set(p.purpose, cur)
         }
-        cur.calls += p.calls
-        cur.cost += p.cost
-        cur.inputTokens += p.inputTokens
-        cur.outputTokens += p.outputTokens
-        cur.estimatedCostCalls += p.estimatedCostCalls
-        if (p.durationMs?.median !== null && p.durationMs?.median !== undefined) cur.medians.push(p.durationMs.median)
-        if (p.durationMs?.max !== null && p.durationMs?.max !== undefined) {
-          cur.maxMs = cur.maxMs === null ? p.durationMs.max : Math.max(cur.maxMs, p.durationMs.max)
-        }
-        byPurpose.set(p.purpose, cur)
       }
+      if (dCalls > 0) activeDays++
       totalCost += dCost
       totalCalls += dCalls
       totalInput += dIn
       totalOutput += dOut
       estimatedCostCalls += dEst
-      points.push({ date: day.date, cost: dCost, calls: dCalls, inputTokens: dIn, outputTokens: dOut, estimatedCalls: dEst })
+      points.push({ date, cost: dCost, calls: dCalls, inputTokens: dIn, outputTokens: dOut, estimatedCalls: dEst })
     }
 
-    const purposes: PurposeAggregate[] = [...byPurpose.values()]
-      .map(({ medians, ...rest }) => ({
-        ...rest,
-        medianMs: medians.length ? medians.reduce((a, b) => a + b, 0) / medians.length : null,
-      }))
-      .sort((a, b) => b.cost - a.cost || b.calls - a.calls)
+    const serverPurposes = summary.data?.purposes
+    const purposes: PurposeAggregate[] =
+      serverPurposes && serverPurposes.length > 0
+        ? serverPurposes.map((p) => ({
+            purpose: p.purpose,
+            calls: p.calls,
+            cost: p.cost,
+            inputTokens: p.inputTokens,
+            outputTokens: p.outputTokens,
+            estimatedCostCalls: p.estimatedCostCalls,
+            medianMs: p.durationMs?.median ?? null,
+            maxMs: p.durationMs?.max ?? null,
+            isRangeMedian: true,
+          }))
+        : [...byPurpose.values()]
+            .map(({ medians, ...rest }) => ({
+              ...rest,
+              medianMs: medians.length ? medians.reduce((a, b) => a + b, 0) / medians.length : null,
+              isRangeMedian: false,
+            }))
+            .sort((a, b) => b.cost - a.cost || b.calls - a.calls)
 
-    return { points, purposes, totalCost, totalCalls, totalInput, totalOutput, estimatedCostCalls }
-  }, [summary.data])
+    return {
+      points: activeDays > 0 ? points : [],
+      activeDays,
+      windowDays: points.length,
+      purposes,
+      totalCost,
+      totalCalls,
+      totalInput,
+      totalOutput,
+      estimatedCostCalls,
+    }
+  }, [summary.data, summary.from, summary.to])
+
+  const displayCalls = useMemo(() => {
+    if (locatedCall && !inLoadedPage) {
+      return [locatedCall, ...calls.items]
+    }
+    return calls.items
+  }, [calls.items, inLoadedPage, locatedCall])
 
   return (
     <div className="stack">
@@ -111,6 +241,7 @@ export function ObserveUsageTab({
           onClick={() => {
             summary.reload()
             calls.reload()
+            if (needDirectLookup) lookedUp.reload()
           }}
         >
           刷新
@@ -147,7 +278,9 @@ export function ObserveUsageTab({
             <div className="obs-tile">
               <span className="k">记录调用次数</span>
               <span className="v">{aggregated.totalCalls} 次</span>
-              <span className="d">{aggregated.points.length} 个活跃日</span>
+              <span className="d">
+                {aggregated.activeDays} 个活跃日（共 {aggregated.windowDays} 天）
+              </span>
             </div>
             <div className="obs-tile">
               <span className="k">输入 Token</span>
@@ -163,14 +296,31 @@ export function ObserveUsageTab({
 
           <DailyCostChart points={aggregated.points} onSelectDate={onSelectDate} />
           <PurposeBreakdownChart items={aggregated.purposes} title={`近 ${range} 天按功能分摊`} />
-          <ExecutionTimingSheet days={summary.data.days} />
+          <ExecutionTimingSheet days={summary.data.days} rangeTimings={summary.data.timings} />
         </>
       )}
 
       {highlightedCallId && (
         <div className="obs-trace-banner" role="status">
           <span>
-            正在定位调用记录：<span className="obs-mono">{highlightedCallId.slice(0, 8)}</span>
+            {locatedCall ? (
+              <>
+                已定位调用记录：<span className="obs-mono">{highlightedCallId.slice(0, 8)}</span>
+                {!inLoadedPage && <span className="tiny muted aside">（早于最近 50 条，已按 ID 直接调取）</span>}
+              </>
+            ) : needDirectLookup && lookedUp.phase === 'failed' ? (
+              lookedUp.notFound ? (
+                <>
+                  未找到编号 <span className="obs-mono">{highlightedCallId.slice(0, 8)}</span> 的调用记录（可能已清理或无权限）。
+                </>
+              ) : (
+                <>定位调用记录失败：{lookedUp.problem}</>
+              )
+            ) : (
+              <>
+                正在定位调用记录：<span className="obs-mono">{highlightedCallId.slice(0, 8)}</span>
+              </>
+            )}
           </span>
           <Button size="sm" variant="quiet" onClick={onClearHighlight}>
             取消高亮
@@ -192,61 +342,27 @@ export function ObserveUsageTab({
             </div>
           </div>
         )}
-        {calls.phase === 'loading' && calls.items.length === 0 && (
+        {calls.phase === 'loading' && displayCalls.length === 0 && (
           <div className="sheet-pad">
             <p className="row muted">
               <Spinner /> 正在读取调用明细…
             </p>
           </div>
         )}
-        {calls.phase === 'ready' && calls.items.length === 0 && <Empty>还没有记录到模型调用。</Empty>}
-        {calls.items.length > 0 && (
+        {calls.phase === 'ready' && displayCalls.length === 0 && <Empty>还没有记录到模型调用。</Empty>}
+        {displayCalls.length > 0 && (
           <div className="list">
-            {calls.items.map((call) => {
+            {displayCalls.map((call) => {
               const focused = highlightedCallId === call.id
               return (
-                <div key={call.id} className={`item${focused ? ' obs-call-highlight' : ''}`}>
-                  <div className="grow stack-sm" style={{ gap: 4 }}>
-                    <div className="obs-event-head">
-                      <div className="obs-event-title">
-                        <span className="item-title">{functionLabel(call.purpose)}</span>
-                        <Tag tone="info">{call.model || '未记录模型'}</Tag>
-                        {call.tier && <Tag>{call.tier}</Tag>}
-                        {(call.costEstimated || call.inputEstimated || call.outputEstimated) && <Tag tone="warning">含估算</Tag>}
-                      </div>
-                      <div className="row" style={{ gap: 8 }}>
-                        <span className="obs-event-cost">{formatCost(call.cost)}</span>
-                        <span className="obs-event-time">{formatShortWhen(call.at, tz)}</span>
-                      </div>
-                    </div>
-
-                    <div className="meta" style={{ marginTop: 0 }}>
-                      <span>
-                        Token：{formatTokens(call.inputTokens)} / {formatTokens(call.outputTokens)}
-                      </span>
-                      {call.durationMs !== null && <span>耗时：{formatDurationMs(call.durationMs)}</span>}
-                      {call.executionTiming && (
-                        <span>
-                          准备 {formatDurationMs(call.executionTiming.prepareMs)} · 回答 {formatDurationMs(call.executionTiming.answerMs)}
-                          {call.executionTiming.selfcheckMs > 0 ? ` · 自查 ${formatDurationMs(call.executionTiming.selfcheckMs)}` : ''}
-                        </span>
-                      )}
-                      {call.agentId && <span>渠道：{call.agentId}</span>}
-                    </div>
-
-                    {call.refs.length > 0 && (
-                      <div className="obs-refs">
-                        {call.refs.map((ref) => (
-                          <CallRefRow
-                            key={`${ref.kind}:${ref.id}:${ref.version}`}
-                            refItem={ref}
-                            onOpenSource={(id, version) => setSourceRef({ id, version })}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <UsageCallCard
+                  key={call.id}
+                  call={call}
+                  tz={tz}
+                  focused={focused}
+                  cardRef={focused ? focusedRef : undefined}
+                  onOpenSource={(id, version) => setSourceRef({ id, version })}
+                />
               )
             })}
           </div>

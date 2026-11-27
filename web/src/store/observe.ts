@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { civilDate } from '../domain/time'
-import type { BackgroundHealth, DayActivity, UsageCall, UsageCallsPage, UsageSummary } from '../domain/observe'
+import type { ActivityExplanations, BackgroundHealth, DayActivity, ExecutionTrace, UsageCall, UsageCallsPage, UsageSummary } from '../domain/observe'
 import { APIError, api } from './api'
 import { readProblem } from './memories'
 
@@ -256,6 +256,69 @@ export function useBackgroundHealth(enabled: boolean): AsyncData<BackgroundHealt
     if (!enabled) return
     let alive = true
     api<BackgroundHealth>('/v1/workspace/background')
+      .then((data) => {
+        if (alive) setState({ loaded: true, phase: 'ready', data, problem: '' })
+      })
+      .catch((e: unknown) => {
+        if (alive) setState({ loaded: true, phase: 'failed', data: null, problem: readProblem(e) })
+      })
+    return () => { alive = false }
+  }, [enabled, tick])
+
+  return {
+    phase: state.loaded ? state.phase : 'loading',
+    data: state.data,
+    problem: state.problem,
+    reload,
+  }
+}
+
+export function useExecutionTrace(anchorId: string): AsyncData<ExecutionTrace> {
+  const [state, setState] = useState<{ key: string; phase: 'loading' | 'ready' | 'failed'; data: ExecutionTrace | null; problem: string }>({
+    key: '',
+    phase: 'loading',
+    data: null,
+    problem: '',
+  })
+  const [tick, setTick] = useState(0)
+  const reload = useCallback(() => setTick((n) => n + 1), [])
+
+  useEffect(() => {
+    if (!anchorId) return
+    let alive = true
+    api<ExecutionTrace>(`/v1/workspace/activity/trace/${encodeURIComponent(anchorId)}`)
+      .then((data) => {
+        if (alive) setState({ key: anchorId, phase: 'ready', data, problem: '' })
+      })
+      .catch((e: unknown) => {
+        if (alive) setState({ key: anchorId, phase: 'failed', data: null, problem: readProblem(e) })
+      })
+    return () => { alive = false }
+  }, [anchorId, tick])
+
+  const current = state.key === anchorId ? state : undefined
+  return {
+    phase: current ? current.phase : 'loading',
+    data: current?.data ?? null,
+    problem: current?.problem ?? '',
+    reload,
+  }
+}
+
+export function useActivityExplanations(enabled: boolean): AsyncData<ActivityExplanations> {
+  const [state, setState] = useState<{ loaded: boolean; phase: 'loading' | 'ready' | 'failed'; data: ActivityExplanations | null; problem: string }>({
+    loaded: false,
+    phase: 'loading',
+    data: null,
+    problem: '',
+  })
+  const [tick, setTick] = useState(0)
+  const reload = useCallback(() => setTick((n) => n + 1), [])
+
+  useEffect(() => {
+    if (!enabled) return
+    let alive = true
+    api<ActivityExplanations>('/v1/workspace/activity/explanations')
       .then((data) => {
         if (alive) setState({ loaded: true, phase: 'ready', data, problem: '' })
       })

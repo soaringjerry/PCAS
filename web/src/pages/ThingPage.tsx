@@ -814,6 +814,9 @@ function RunRow({ thing, run, asked }: { thing: Thing; run: Run; asked: boolean 
               撤销
             </button>
           )}
+          <Link className="act-btn" to={`/observe?trace=${encodeURIComponent(run.id)}`}>
+            溯源
+          </Link>
           {look}
           {when}
         </div>
@@ -877,6 +880,9 @@ function RunRow({ thing, run, asked }: { thing: Thing; run: Run; asked: boolean 
               换 {retryAgent.name} 重试
             </button>
           )}
+          <Link className="act-btn" to={`/observe?trace=${encodeURIComponent(run.id)}`}>
+            溯源
+          </Link>
           {when}
         </div>
         {used}

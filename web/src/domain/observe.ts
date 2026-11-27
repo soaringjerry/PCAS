@@ -375,3 +375,229 @@ export function canOfferUndo(e: ActivityEvent): boolean {
   const ageMs = Date.now() - Date.parse(e.at)
   return Number.isFinite(ageMs) && ageMs < 30 * 24 * 60 * 60 * 1000
 }
+
+export interface TraceCall {
+  id: string
+  executionId: string
+  rootExecutionId: string
+  causationId?: string
+  retryOfId?: string
+  attempt: number
+  attemptLimit: number
+  recoveryState: string
+  recoveryReason?: string
+  function: string
+  stage: string
+  provider: string
+  model: string
+  promptName?: string
+  instructionHash?: string
+  schemaName?: string
+  schemaHash?: string
+  contextBuilderVersion?: string
+  requiredCapabilities?: string[]
+  actualMode?: Record<string, unknown>
+  inputManifest?: Record<string, unknown>
+  outcome: string
+  errorCode?: string
+  accountingState: string
+  usageId?: string
+  cost?: number | null
+  costKnown: boolean
+  costEstimated?: boolean
+  heldReservation?: number
+  inputTokens?: number
+  outputTokens?: number
+  durationMs?: number
+  createdAt: string
+  startedAt?: string
+  finishedAt?: string
+}
+
+export interface TraceEvent {
+  id: string
+  type: string
+  stage: string
+  objectId: string
+  objectVersion: number
+  triggerSource: 'job' | 'schedule_or_request' | string
+  jobId: string
+  rootId: string
+  causeId?: string
+  chainDepth: number
+  occurredAt: string
+  jobState?: string
+  jobErrorCode?: string
+  jobAttempts?: number
+}
+
+export interface TraceAction {
+  id: string
+  source: string
+  summary: string
+  outcome: 'executed' | 'undone' | string
+  createdAt: string
+  undoneAt?: string
+  expiredAt?: string
+  undoOf?: string
+  turnId?: string
+  thingId?: string
+  changes: number
+  items?: string[]
+}
+
+export interface TraceRun {
+  id: string
+  thingId: string
+  agentId: string
+  status: string
+  kind?: string
+  prompt?: string
+  error?: string
+  staleContext: boolean
+  cost: number
+  createdAt: string
+  finishedAt?: string
+}
+
+export interface TraceStage {
+  id: string
+  at: string
+  stage: string
+  outcome: string
+  reason?: string
+  count: number
+  jobId: string
+}
+
+export interface ExecutionTrace {
+  anchorId: string
+  calls: TraceCall[]
+  events: TraceEvent[]
+  actions: TraceAction[]
+  runs: TraceRun[]
+  stages: TraceStage[]
+  gaps: string[]
+}
+
+export interface PausedJob {
+  jobId: string
+  stage: string
+  baseStage: string
+  recordId: string
+  recordVersion: number
+  state: 'failed' | 'blocked' | string
+  errorCode?: string
+  attempts: number
+  chainDepth: number
+  rootJobId?: string
+  causeJobId?: string
+  createdAt: string
+  updatedAt: string
+  recoveryState?: string
+  recoveryReason?: string
+  attempt?: number
+  attemptLimit?: number
+  requiresOwnerRecovery: boolean
+}
+
+export interface TopicDecision {
+  topicId: string
+  topicName?: string
+  topicKind: string
+  page: number
+  decision: string
+  reason?: string
+  proposedName?: string
+  projectId?: string
+  actionId?: string
+  createdProject: boolean
+  undoneAt?: string
+  linkedAt?: string
+}
+
+export interface DateDecision {
+  claimId: string
+  claimVersion: number
+  class: 'unclear' | 'habit' | 'past' | string
+  decision: 'keep' | 'drop' | 'task' | 'idea' | string
+  reason?: string
+  entryTitle?: string
+  title?: string
+  itemId?: string
+  actionId?: string
+  createdAt: string
+}
+
+export interface ActivityExplanations {
+  pausedJobs: PausedJob[]
+  topicDecisions: TopicDecision[]
+  dateDecisions: DateDecision[]
+}
+
+const traceGapLabels: Record<string, string> = {
+  'this action has no recorded execution link to a model call':
+    '该动作未记录对应的模型调用执行 ID，不会按相近时间强行关联。',
+  'input_manifest stores reference identities and coverage counts only; private prompt text stays outside the call journal':
+    '输入清单仅记录引用 ID 与覆盖/省略统计，不保存私密提示词原文。',
+}
+
+export function traceGapLabel(gap: string): string {
+  return traceGapLabels[gap] ?? gapLabel(gap)
+}
+
+export function topicDecisionBadge(decision: string): { text: string; tone: Tone } {
+  switch (decision) {
+    case 'skip':
+      return { text: '跳过未建项目', tone: 'neutral' }
+    case 'new':
+    case 'create':
+      return { text: '新建项目', tone: 'success' }
+    case 'match':
+    case 'attach':
+      return { text: '归入已有项目', tone: 'info' }
+    case 'uncertain':
+      return { text: '拿不准（未操作）', tone: 'warning' }
+    default:
+      return { text: decision || '已记录', tone: 'neutral' }
+  }
+}
+
+export function dateDecisionBadge(decision: string): { text: string; tone: Tone } {
+  switch (decision) {
+    case 'keep':
+      return { text: '保持不变', tone: 'neutral' }
+    case 'drop':
+      return { text: '已关闭日期', tone: 'info' }
+    case 'task':
+      return { text: '转为待办', tone: 'success' }
+    case 'idea':
+      return { text: '转为想法', tone: 'accent' }
+    default:
+      return { text: decision || '已记录', tone: 'neutral' }
+  }
+}
+
+export function dateClassLabel(cls: string): string {
+  switch (cls) {
+    case 'past':
+      return '已过日期'
+    case 'unclear':
+      return '日期不明'
+    case 'habit':
+      return '习惯安排'
+    default:
+      return cls
+  }
+}
+
+export function triggerSourceLabel(src: string): string {
+  return src === 'job' ? '上游任务触发' : '调度或用户请求'
+}
+
+export function canOfferTraceActionUndo(a: TraceAction): boolean {
+  if (a.outcome !== 'executed' || a.undoneAt || a.expiredAt || a.undoOf) return false
+  const ageMs = Date.now() - Date.parse(a.createdAt)
+  return Number.isFinite(ageMs) && ageMs < 30 * 24 * 60 * 60 * 1000
+}
+

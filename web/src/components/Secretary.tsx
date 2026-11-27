@@ -103,6 +103,11 @@ function ReceiptRow({ receipt, onEdit }: { receipt: Receipt; onEdit: (title: str
               改
             </button>
           )}
+          {receipt.actionId && (
+            <Link to={`/observe?trace=${encodeURIComponent(receipt.actionId)}`}>
+              溯源
+            </Link>
+          )}
           {receipt.undoable && receipt.actionId && (
             <button
               type="button"

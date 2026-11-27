@@ -424,6 +424,9 @@ function FeedRow({ item, fresh }: { item: FeedItem; fresh: boolean }) {
           text
         )}
         {dot}
+        <Link className="hall-btn quiet hall-undo" to={`/observe?trace=${encodeURIComponent(actionId)}`}>
+          溯源
+        </Link>
         <button
           type="button"
           className="hall-btn quiet hall-undo"
@@ -466,6 +469,9 @@ function FeedGroup({ item, when, dot }: { item: FeedItem; when: ReactNode; dot: 
                 {it.text}
                 {it.note && <span className="h-why"> · {it.note}</span>}
               </span>
+              <Link className="hall-btn quiet hall-undo" to={`/observe?trace=${encodeURIComponent(it.actionId)}`}>
+                溯源
+              </Link>
               <button
                 type="button"
                 className="hall-btn quiet hall-undo"

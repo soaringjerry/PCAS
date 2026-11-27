@@ -207,9 +207,14 @@ export function MemorySheet({ memory, entity, group, onClose, onPick, onPickGrou
         )}
 
         <div className="stack-sm">
-          <p className="small muted">
-            AI 用过它 {runs.length} 次，{samples.length} 条训练样本来自它。
-          </p>
+          <div className="spread">
+            <p className="small muted">
+              AI 用过它 {runs.length} 次，{samples.length} 条训练样本来自它。
+            </p>
+            <Link className="btn btn-quiet btn-sm" to="/observe?tab=memory" onClick={onClose}>
+              观察调用与权重
+            </Link>
+          </div>
           <div>
             <Button size="sm" variant="danger" icon={<Trash2 size={14} />} onClick={() => setDeleting(true)}>
               删掉这条

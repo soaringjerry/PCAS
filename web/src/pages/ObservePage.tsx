@@ -1,4 +1,5 @@
 import { useSearchParams } from 'react-router'
+import { ExecutionTraceSheet } from '../components/observe/ExecutionTraceSheet'
 import { ObserveActivityTab } from '../components/observe/ObserveActivityTab'
 import { ObserveBackgroundTab } from '../components/observe/ObserveBackgroundTab'
 import { ObserveMemoryTab } from '../components/observe/ObserveMemoryTab'
@@ -27,6 +28,7 @@ export function ObservePage() {
   const dateParam = params.get('date')
   const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : civilDate(0, tz)
   const highlightedCallId = params.get('call') ?? ''
+  const traceId = params.get('trace') ?? ''
 
   const failedJobs = state.jobs.filter((j) => j.status === 'failed').length
 
@@ -57,9 +59,28 @@ export function ObservePage() {
   }
 
   const inspectCall = (usageId: string) => {
+    setParams({ tab: 'usage', call: usageId }, { replace: false })
+  }
+
+  const openTrace = (anchorId: string) => {
     setParams(
-      { tab: 'usage', call: usageId },
+      (current) => {
+        const updated = new URLSearchParams(current)
+        updated.set('trace', anchorId)
+        return updated
+      },
       { replace: false },
+    )
+  }
+
+  const closeTrace = () => {
+    setParams(
+      (current) => {
+        const updated = new URLSearchParams(current)
+        updated.delete('trace')
+        return updated
+      },
+      { replace: true },
     )
   }
 
@@ -97,7 +118,7 @@ export function ObservePage() {
         />
       </div>
 
-      {tab === 'activity' && <ObserveActivityTab date={date} onDateChange={setDate} onInspectCall={inspectCall} />}
+      {tab === 'activity' && <ObserveActivityTab date={date} onDateChange={setDate} onInspectCall={inspectCall} onOpenTrace={openTrace} />}
       {tab === 'usage' && (
         <ObserveUsageTab
           highlightedCallId={highlightedCallId}
@@ -105,8 +126,16 @@ export function ObservePage() {
           onClearHighlight={clearHighlight}
         />
       )}
-      {tab === 'background' && <ObserveBackgroundTab />}
+      {tab === 'background' && <ObserveBackgroundTab onOpenTrace={openTrace} />}
       {tab === 'memory' && <ObserveMemoryTab />}
+
+      {traceId && (
+        <ExecutionTraceSheet
+          anchorId={traceId}
+          onClose={closeTrace}
+          onInspectCall={inspectCall}
+        />
+      )}
     </main>
   )
 }
